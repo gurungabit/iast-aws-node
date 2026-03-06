@@ -7,6 +7,6 @@ export const config = {
     rows: 43,
     cols: 80,
     fontSize: 14,
-    fontFamily: "'IBM Plex Mono', 'Courier New', monospace",
+    fontFamily: "Menlo, Monaco, 'Courier New', monospace",
   },
 } as const
