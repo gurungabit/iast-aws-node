@@ -9,29 +9,6 @@ interface TerminalProps {
   sessionId: string
 }
 
-const KEY_MAP: Record<string, string> = {
-  Enter: 'enter',
-  Escape: 'reset',
-  Tab: 'keyTab',
-  Backspace: 'keyBackspace',
-  Delete: 'keyDelete',
-  Home: 'keyHome',
-  End: 'keyEnd',
-  ArrowUp: 'keyCurUp',
-  ArrowDown: 'keyCurDown',
-  ArrowLeft: 'keyCurLeft',
-  ArrowRight: 'keyCurRight',
-  F1: 'pf1', F2: 'pf2', F3: 'pf3', F4: 'pf4', F5: 'pf5', F6: 'pf6',
-  F7: 'pf7', F8: 'pf8', F9: 'pf9', F10: 'pf10', F11: 'pf11', F12: 'pf12',
-  F13: 'pf13', F14: 'pf14', F15: 'pf15', F16: 'pf16', F17: 'pf17', F18: 'pf18',
-  F19: 'pf19', F20: 'pf20', F21: 'pf21', F22: 'pf22', F23: 'pf23', F24: 'pf24',
-}
-
-const SHIFT_KEY_MAP: Record<string, string> = {
-  F1: 'pf13', F2: 'pf14', F3: 'pf15', F4: 'pf16', F5: 'pf17', F6: 'pf18',
-  F7: 'pf19', F8: 'pf20', F9: 'pf21', F10: 'pf22', F11: 'pf23', F12: 'pf24',
-}
-
 const PF_KEYS = [
   'PF1', 'PF2', 'PF3', 'PF4', 'PF5', 'PF6',
   'PF7', 'PF8', 'PF9', 'PF10', 'PF11', 'PF12',
@@ -94,6 +71,8 @@ export const TerminalComponent = memo(function TerminalComponent({ sessionId }: 
     const container = containerRef.current
     if (!container || !tab?.ws) return
 
+    const ws = tab.ws
+
     const term = new XTerm({
       rows: config.terminal.rows,
       cols: config.terminal.cols,
@@ -107,13 +86,118 @@ export const TerminalComponent = memo(function TerminalComponent({ sessionId }: 
         foreground: '#ffffff',
         cursor: '#00ff00',
       },
-      disableStdin: true,
     })
 
     term.open(container)
     termRef.current = term
+    term.focus()
 
-    const cleanup = tab.ws.onMessage((msg: ServerMessage) => {
+    // Intercept Ctrl+C (copy), Ctrl+V/Cmd+V (paste) before xterm processes them
+    term.attachCustomKeyEventHandler((ev: KeyboardEvent) => {
+      // Allow browser copy
+      if ((ev.ctrlKey || ev.metaKey) && ev.key === 'c') return false
+      // Handle paste via clipboard API
+      if ((ev.ctrlKey || ev.metaKey) && ev.key === 'v') {
+        if (ev.type === 'keydown') {
+          navigator.clipboard.readText().then((text) => {
+            if (text) ws.send({ type: 'data', text })
+          }).catch(() => {})
+        }
+        return false
+      }
+      return true
+    })
+
+    // Handle all keyboard input
+    term.onKey(({ domEvent: ev }) => {
+      // Prevent browser defaults for terminal keys
+      if (ev.key === 'Tab' || ev.key === 'Backspace' || ev.key === 'Enter'
+        || ev.key.startsWith('Arrow') || ev.key.startsWith('F')
+        || ev.key === 'Home' || ev.key === 'End' || ev.key === 'Delete'
+        || ev.key === 'Escape') {
+        ev.preventDefault()
+      }
+
+      // Ctrl shortcuts
+      if (ev.ctrlKey) {
+        if (ev.key === 'c') { ws.send({ type: 'key', key: 'pa1' }); return }
+        if (ev.key === 'r') { ws.send({ type: 'key', key: 'reset' }); return }
+      }
+
+      // F-keys (Shift+F1-F12 → PF13-PF24)
+      const fMatch = ev.key.match(/^F(\d+)$/)
+      if (fMatch) {
+        const n = parseInt(fMatch[1]!, 10)
+        if (n >= 1 && n <= 24) {
+          ws.send({ type: 'key', key: `pf${n}` })
+        }
+        return
+      }
+
+      // Special keys
+      switch (ev.key) {
+        case 'Enter': ws.send({ type: 'key', key: 'enter' }); return
+        case 'Escape': ws.send({ type: 'key', key: 'reset' }); return
+        case 'Tab': ws.send({ type: 'key', key: ev.shiftKey ? 'keyBacktab' : 'keyTab' }); return
+        case 'Backspace': ws.send({ type: 'key', key: 'keyBackspace' }); return
+        case 'Delete': ws.send({ type: 'key', key: 'keyDelete' }); return
+        case 'Home': ws.send({ type: 'key', key: 'keyHome' }); return
+        case 'End': ws.send({ type: 'key', key: 'keyEnd' }); return
+        case 'ArrowUp': ws.send({ type: 'key', key: 'keyCurUp' }); return
+        case 'ArrowDown': ws.send({ type: 'key', key: 'keyCurDown' }); return
+        case 'ArrowLeft': ws.send({ type: 'key', key: 'keyCurLeft' }); return
+        case 'ArrowRight': ws.send({ type: 'key', key: 'keyCurRight' }); return
+      }
+
+      // Regular character typing
+      if (ev.key.length === 1 && !ev.ctrlKey && !ev.metaKey && !ev.altKey) {
+        ws.send({ type: 'data', text: ev.key })
+      }
+    })
+
+    // Mouse click for cursor positioning
+    const handleMouse = (e: MouseEvent) => {
+      const screen = container.querySelector('.xterm-screen')
+      if (!screen) return
+
+      const rect = screen.getBoundingClientRect()
+      const x = e.clientX - rect.left
+      const y = e.clientY - rect.top
+      if (x < 0 || y < 0 || x > rect.width || y > rect.height) return
+
+      const cellWidth = rect.width / config.terminal.cols
+      const cellHeight = rect.height / config.terminal.rows
+      const col = Math.min(Math.floor(x / cellWidth) + 1, config.terminal.cols)
+      const row = Math.min(Math.floor(y / cellHeight) + 1, config.terminal.rows)
+
+      ws.send({ type: 'cursor', row, col })
+      term.focus()
+    }
+
+    // Right-click paste: listen on xterm's internal textarea (capture phase)
+    const handlePaste = (e: Event) => {
+      const clipboardEvent = e as ClipboardEvent
+      const text = clipboardEvent.clipboardData?.getData('text')
+      if (text) {
+        ws.send({ type: 'data', text })
+        e.preventDefault()
+        e.stopPropagation()
+      }
+    }
+
+    // Attach DOM listeners after xterm renders
+    setTimeout(() => {
+      if (term.element) {
+        term.element.addEventListener('mousedown', handleMouse)
+      }
+      const xtermTextarea = container.querySelector('.xterm-helper-textarea')
+      if (xtermTextarea) {
+        xtermTextarea.addEventListener('paste', handlePaste, true)
+      }
+    }, 100)
+
+    // Listen for server messages
+    const messageCleanup = ws.onMessage((msg: ServerMessage) => {
       if (msg.type === 'screen') {
         term.write(msg.ansi)
         updateScreen(sessionId, msg.ansi, msg.meta)
@@ -125,10 +209,17 @@ export const TerminalComponent = memo(function TerminalComponent({ sessionId }: 
     })
 
     // Auto-connect to mainframe
-    tab.ws.send({ type: 'connect' })
+    ws.send({ type: 'connect' })
 
     cleanupRef.current = () => {
-      cleanup()
+      messageCleanup()
+      if (term.element) {
+        term.element.removeEventListener('mousedown', handleMouse)
+      }
+      const xtermTextarea = container.querySelector('.xterm-helper-textarea')
+      if (xtermTextarea) {
+        xtermTextarea.removeEventListener('paste', handlePaste, true)
+      }
       term.dispose()
     }
 
@@ -137,76 +228,6 @@ export const TerminalComponent = memo(function TerminalComponent({ sessionId }: 
       termRef.current = null
     }
   }, [sessionId, tab?.ws, updateScreen, setConnected])
-
-  function pasteFromClipboard() {
-    if (!tab?.ws) return
-    navigator.clipboard.readText().then((text) => {
-      if (text) tab.ws!.send({ type: 'data', text })
-    }).catch(() => {})
-  }
-
-  function handleKeyDown(e: React.KeyboardEvent) {
-    if (!tab?.ws) return
-
-    // Allow Ctrl+V / Cmd+V for paste
-    if ((e.ctrlKey || e.metaKey) && e.key === 'v') {
-      e.preventDefault()
-      pasteFromClipboard()
-      return
-    }
-
-    e.preventDefault()
-    e.stopPropagation()
-
-    if (e.ctrlKey) {
-      if (e.key === 'c') { tab.ws.send({ type: 'key', key: 'pa1' }); return }
-      if (e.key === 'r') { tab.ws.send({ type: 'key', key: 'reset' }); return }
-    }
-
-    if (e.shiftKey && SHIFT_KEY_MAP[e.key]) {
-      tab.ws.send({ type: 'key', key: SHIFT_KEY_MAP[e.key] })
-      return
-    }
-
-    if (KEY_MAP[e.key]) {
-      tab.ws.send({ type: 'key', key: KEY_MAP[e.key] })
-      return
-    }
-
-    if (e.key.length === 1 && !e.ctrlKey && !e.metaKey && !e.altKey) {
-      tab.ws.send({ type: 'data', text: e.key })
-    }
-  }
-
-  function handlePaste(e: React.ClipboardEvent) {
-    e.preventDefault()
-    const text = e.clipboardData.getData('text')
-    if (text && tab?.ws) {
-      tab.ws.send({ type: 'data', text })
-    }
-  }
-
-  function handleBeforeInput(e: React.FormEvent) {
-    // Suppress contentEditable from actually inserting text
-    e.preventDefault()
-  }
-
-  function handleClick(e: React.MouseEvent) {
-    if (!tab?.ws || !termRef.current) return
-    containerRef.current?.focus()
-
-    const term = termRef.current
-    const cellWidth = term.element!.clientWidth / config.terminal.cols
-    const cellHeight = term.element!.clientHeight / config.terminal.rows
-    const rect = term.element!.getBoundingClientRect()
-
-    const col = Math.floor((e.clientX - rect.left) / cellWidth) + 1
-    const row = Math.floor((e.clientY - rect.top) / cellHeight) + 1
-
-    if (row >= 1 && row <= config.terminal.rows && col >= 1 && col <= config.terminal.cols) {
-      tab.ws.send({ type: 'cursor', row, col })
-    }
-  }
 
   const handleReconnect = () => {
     tab?.ws?.send({ type: 'connect' })
@@ -219,7 +240,7 @@ export const TerminalComponent = memo(function TerminalComponent({ sessionId }: 
   const handleKeyClick = (key: string) => {
     tab?.ws?.send({ type: 'key', key })
     setKeyMenuOpen(false)
-    containerRef.current?.focus()
+    termRef.current?.focus()
   }
 
   return (
@@ -359,15 +380,8 @@ export const TerminalComponent = memo(function TerminalComponent({ sessionId }: 
       <div className="relative overscroll-contain">
         <div
           ref={containerRef}
-          tabIndex={0}
-          contentEditable
-          suppressContentEditableWarning
-          onKeyDown={handleKeyDown}
-          onPaste={handlePaste}
-          onBeforeInput={handleBeforeInput}
-          onClick={handleClick}
-          className="p-1 focus:outline-none"
-          style={{ backgroundColor: '#000', caretColor: 'transparent' }}
+          className="p-1"
+          style={{ backgroundColor: '#000' }}
         />
         {!tab?.connected && (
           <div className="absolute inset-0 bg-zinc-950/95 flex items-center justify-center">
