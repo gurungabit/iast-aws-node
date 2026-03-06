@@ -1,0 +1,57 @@
+import type { FastifyRequest, FastifyReply } from 'fastify'
+import { verifyEntraToken } from './entra.js'
+import { config } from '../config.js'
+import { userService } from '../services/user.js'
+
+declare module 'fastify' {
+  interface FastifyRequest {
+    user: {
+      id: string
+      email: string
+      displayName: string
+      entraId: string
+    }
+  }
+}
+
+export async function authHook(request: FastifyRequest, reply: FastifyReply) {
+  // Skip auth for health/docs routes
+  if (
+    request.url === '/health' ||
+    request.url === '/ping' ||
+    request.url === '/metrics' ||
+    request.url.startsWith('/docs')
+  ) {
+    return
+  }
+
+  // Dev mode bypass
+  if (!config.entraTenantId) {
+    request.user = {
+      id: 'dev-user-id',
+      email: 'dev@local',
+      displayName: 'Dev User',
+      entraId: 'dev-oid',
+    }
+    return
+  }
+
+  const authHeader = request.headers.authorization
+  if (!authHeader?.startsWith('Bearer ')) {
+    return reply.status(401).send({ success: false, error: { code: 'UNAUTHORIZED', message: 'Missing token' } })
+  }
+
+  try {
+    const token = authHeader.slice(7)
+    const verified = await verifyEntraToken(token)
+    const user = await userService.findOrCreate(verified)
+    request.user = {
+      id: user.id,
+      email: user.email,
+      displayName: user.displayName,
+      entraId: user.entraId,
+    }
+  } catch {
+    return reply.status(401).send({ success: false, error: { code: 'UNAUTHORIZED', message: 'Invalid token' } })
+  }
+}

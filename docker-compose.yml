@@ -1,0 +1,15 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    ports: ['5432:5432']
+    environment:
+      POSTGRES_DB: iast
+      POSTGRES_USER: iast
+      POSTGRES_PASSWORD: iast_dev
+    volumes: [pgdata:/var/lib/postgresql/data]
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U iast']
+      interval: 5s
+
+volumes:
+  pgdata:
