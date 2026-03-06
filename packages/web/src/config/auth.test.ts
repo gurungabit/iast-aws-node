@@ -26,10 +26,6 @@ describe('auth config', () => {
       expect(msalConfig.auth.postLogoutRedirectUri).toBeDefined()
     })
 
-    it('has navigateToLoginRequestUrl enabled', () => {
-      expect(msalConfig.auth.navigateToLoginRequestUrl).toBe(true)
-    })
-
     it('has cache configuration', () => {
       expect(msalConfig.cache).toBeDefined()
       expect(msalConfig.cache!.cacheLocation).toBe('localStorage')
