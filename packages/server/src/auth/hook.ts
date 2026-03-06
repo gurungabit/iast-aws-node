@@ -31,9 +31,16 @@ export async function authHook(request: FastifyRequest, reply: FastifyReply) {
     return reply.status(401).send({ success: false, error: { code: 'UNAUTHORIZED', message: 'Missing token' } })
   }
 
+  let verified
   try {
     const token = authHeader.slice(7)
-    const verified = await verifyEntraToken(token)
+    verified = await verifyEntraToken(token)
+  } catch (err) {
+    request.log.warn({ err }, 'Token verification failed')
+    return reply.status(401).send({ success: false, error: { code: 'UNAUTHORIZED', message: 'Invalid token' } })
+  }
+
+  try {
     const user = await userService.findOrCreate(verified)
     request.user = {
       id: user.id,
@@ -41,7 +48,8 @@ export async function authHook(request: FastifyRequest, reply: FastifyReply) {
       displayName: user.displayName,
       entraId: user.entraId,
     }
-  } catch {
-    return reply.status(401).send({ success: false, error: { code: 'UNAUTHORIZED', message: 'Invalid token' } })
+  } catch (err) {
+    request.log.error({ err }, 'Failed to find/create user after successful token verification')
+    return reply.status(500).send({ success: false, error: { code: 'INTERNAL_ERROR', message: 'User provisioning failed' } })
   }
 }
