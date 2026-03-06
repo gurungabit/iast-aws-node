@@ -72,6 +72,15 @@ vi.mock('crypto', () => ({
   randomUUID: vi.fn().mockReturnValue('test-uuid'),
 }))
 
+vi.mock('@src/config.js', () => ({
+  config: {
+    smbShare: '',
+    smbDomain: '',
+    smbUsername: '',
+    smbPassword: '',
+  },
+}))
+
 import { Ati } from 'tnz3270-node'
 import { runRoutExtractorAST } from '@src/ast/rout-extractor/index.js'
 import { parse412File } from '@src/ast/rout-extractor/file-412.js'
@@ -174,16 +183,16 @@ describe('runRoutExtractorAST', () => {
     ).rejects.toThrow('Username and password are required')
   })
 
-  it('completes early with no items in 412 mode', async () => {
+  it('throws when SMB not configured and no file uploaded in 412 mode', async () => {
     const params = {
       username: 'user',
       password: 'pass',
       sourceMode: '412',
     }
 
-    await runRoutExtractorAST(mockAti, params, mockReporter, mockCtx)
-
-    expect(mockReporter.reportProgress).toHaveBeenCalledWith(1, 1, 'No items to process')
+    await expect(
+      runRoutExtractorAST(mockAti, params, mockReporter, mockCtx),
+    ).rejects.toThrow('SMB_SHARE not configured')
     expect(mockSession.authenticate).not.toHaveBeenCalled()
   })
 
@@ -372,7 +381,10 @@ describe('runRoutExtractorAST', () => {
   })
 
   describe('412 file mode with SMB download', () => {
-    it('returns empty and reports no items when SMB download fails with stop strategy', async () => {
+    it('throws with error message when SMB download fails with stop strategy', async () => {
+      const { config: mockConfig } = await import('@src/config.js')
+      Object.assign(mockConfig, { smbShare: '//server/share' })
+
       mockReadSmbFile.mockRejectedValueOnce(new Error('SMB unavailable'))
 
       const params = {
@@ -382,15 +394,17 @@ describe('runRoutExtractorAST', () => {
         missing412Strategy: 'stop',
       }
 
-      await runRoutExtractorAST(mockAti, params, mockReporter, mockCtx)
+      await expect(
+        runRoutExtractorAST(mockAti, params, mockReporter, mockCtx),
+      ).rejects.toThrow('Failed to download 412 file')
 
-      expect(mockReporter.reportProgress).toHaveBeenCalledWith(
-        0, 1, '412 file unavailable',
-      )
-      expect(mockReporter.reportProgress).toHaveBeenCalledWith(1, 1, 'No items to process')
+      Object.assign(mockConfig, { smbShare: '' })
     })
 
     it('falls back to ROUT mode when SMB fails and missing412Strategy is use_rout', async () => {
+      const { config: mockConfig } = await import('@src/config.js')
+      Object.assign(mockConfig, { smbShare: '//server/share' })
+
       mockReadSmbFile.mockRejectedValueOnce(new Error('SMB unavailable'))
 
       const params = {
@@ -409,9 +423,14 @@ describe('runRoutExtractorAST', () => {
       expect(mockSession.authenticate).toHaveBeenCalled()
       // Should have processed ROUT items (3 OCCs x 2 sections = 6)
       expect(mockCtx.checkpoint).toHaveBeenCalledTimes(6)
+
+      Object.assign(mockConfig, { smbShare: '' })
     })
 
     it('parses SMB downloaded content successfully', async () => {
+      const { config: mockConfig } = await import('@src/config.js')
+      Object.assign(mockConfig, { smbShare: '//server/share' })
+
       const item = makeRouteItem({ policyNumber: 'SMB001', needsPdqEnrichment: false })
       mockReadSmbFile.mockResolvedValueOnce(Buffer.from('smb file content'))
       vi.mocked(parse412File).mockReturnValueOnce([item])
@@ -434,6 +453,8 @@ describe('runRoutExtractorAST', () => {
           durationMs: 0,
         }),
       )
+
+      Object.assign(mockConfig, { smbShare: '' })
     })
   })
 

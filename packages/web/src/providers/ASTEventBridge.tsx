@@ -23,8 +23,8 @@ export function ASTEventBridge(): React.ReactNode {
             })
             break
           }
-          case 'ast.progress':
-            useASTStore.getState().handleASTProgress(tabId, {
+          case 'ast.progress': {
+            const progressData = {
               current: msg.progress.current,
               total: msg.progress.total,
               message: msg.progress.message,
@@ -32,8 +32,13 @@ export function ASTEventBridge(): React.ReactNode {
                 msg.progress.total > 0
                   ? Math.round((msg.progress.current / msg.progress.total) * 100)
                   : 0,
-            })
+            }
+            useASTStore.getState().handleASTProgress(tabId, progressData)
+            if (msg.progress.message) {
+              useASTStore.getState().addStatusMessage(tabId, msg.progress.message)
+            }
             break
+          }
           case 'ast.item_result_batch':
             useASTStore.getState().handleASTItemResults(tabId, msg.items)
             break

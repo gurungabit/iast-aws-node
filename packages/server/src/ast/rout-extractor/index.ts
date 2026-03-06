@@ -210,14 +210,17 @@ async function prepareFrom412(
       reporter.reportProgress(0, 1, 'Parsing 412 file...')
       allItems = parse412File(fileContent, dateOfRun)
       reporter.reportProgress(0, 1, `Parsed ${allItems.length} records from 412 file`)
-    } catch {
-      reporter.reportProgress(0, 1, '412 file unavailable')
-      // Handle fallback strategy
+    } catch (err) {
+      const smbError = String(err)
+      if (!serverConfig.smbShare) {
+        throw new Error('SMB_SHARE not configured. Upload a 412 file or set SMB_SHARE, SMB_DOMAIN, SMB_USERNAME, SMB_PASSWORD env vars.')
+      }
+      reporter.reportProgress(0, 1, `412 file unavailable: ${smbError}`)
       if (config.missing412Strategy === 'use_rout') {
         reporter.reportProgress(0, 1, 'Falling back to ROUT mode...')
         return prepareFromRout(config, reporter)
       }
-      return []
+      throw new Error(`Failed to download 412 file: ${smbError}`)
     }
   }
 
