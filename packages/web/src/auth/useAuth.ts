@@ -84,7 +84,10 @@ function useMsalAuth(): UseAuthReturn {
 
   const logout = useCallback(async () => {
     try {
-      await instance.logoutRedirect({ account })
+      await instance.logoutRedirect({
+        account,
+        postLogoutRedirectUri: window.location.origin,
+      })
     } catch (error) {
       console.error('Logout failed:', error)
     }
