@@ -73,9 +73,15 @@ export class Session {
 
   // -- Waiting --
 
-  async waitForText(text: string, timeout?: number): Promise<boolean> {
+  /** Case-insensitive screen search (matches Python's default behavior) */
+  private screenHas(text: string, caseSensitive = false): boolean {
+    if (caseSensitive) return this.ati.scrhas(text)
+    return this.getFullScreen().toLowerCase().includes(text.toLowerCase())
+  }
+
+  async waitForText(text: string, timeout?: number, caseSensitive = false): Promise<boolean> {
     const t = timeout ?? this.defaultTimeout
-    const rc = await this.ati.wait(t, () => this.ati.scrhas(text))
+    const rc = await this.ati.wait(t, () => this.screenHas(text, caseSensitive))
     return rc !== 0
   }
 
@@ -85,9 +91,9 @@ export class Session {
     }
   }
 
-  async waitForTextGone(text: string, timeout?: number): Promise<boolean> {
+  async waitForTextGone(text: string, timeout?: number, caseSensitive = false): Promise<boolean> {
     const t = timeout ?? this.defaultTimeout
-    const rc = await this.ati.wait(t, () => !this.ati.scrhas(text))
+    const rc = await this.ati.wait(t, () => !this.screenHas(text, caseSensitive))
     return rc !== 0
   }
 
@@ -98,12 +104,12 @@ export class Session {
   }
 
   /** Wait for any of multiple texts to appear. Returns the matched text or null. */
-  async waitForAnyText(texts: string[], timeout?: number): Promise<string | null> {
+  async waitForAnyText(texts: string[], timeout?: number, caseSensitive = false): Promise<string | null> {
     const t = timeout ?? this.defaultTimeout
     let matched: string | null = null
     await this.ati.wait(t, () => {
       for (const text of texts) {
-        if (this.ati.scrhas(text)) {
+        if (this.screenHas(text, caseSensitive)) {
           matched = text
           return true
         }
@@ -115,12 +121,12 @@ export class Session {
 
   // -- Screen reading --
 
-  hasText(text: string): boolean {
-    return this.ati.scrhas(text)
+  hasText(text: string, caseSensitive = false): boolean {
+    return this.screenHas(text, caseSensitive)
   }
 
-  screenContains(text: string): boolean {
-    return this.ati.scrhas(text)
+  screenContains(text: string, caseSensitive = false): boolean {
+    return this.screenHas(text, caseSensitive)
   }
 
   /** Get text at 1-based row/col position */
