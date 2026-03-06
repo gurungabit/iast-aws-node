@@ -41,10 +41,6 @@ export async function readSmbFile(config: SmbConfig, path: string): Promise<Buff
     domain = domain || parts2[0]
     username = parts2[1]
   }
-  // NTLM uses NetBIOS (short) domain name, not FQDN
-  if (domain.includes('.')) {
-    domain = domain.split('.')[0]
-  }
 
   console.log(`[SMB] host=${host}, share=${shareName}, relative="${relativePath}", user=${username}, domain=${domain}`)
 

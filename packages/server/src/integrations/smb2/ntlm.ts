@@ -32,6 +32,35 @@ export function createType1(): Buffer {
 interface Type2Fields {
   serverChallenge: Buffer
   targetInfo: Buffer
+  /** NetBIOS domain name extracted from AvPairs (MsvAvNbDomainName) */
+  serverDomain: string
+}
+
+// AvPair IDs from MS-NLMP
+const MsvAvNbDomainName = 2
+const MsvAvDnsDomainName = 4
+
+/** Parse AvPairs from Type 2 target info to extract domain names */
+function parseAvPairs(targetInfo: Buffer): { nbDomain: string; dnsDomain: string } {
+  let nbDomain = ''
+  let dnsDomain = ''
+  let offset = 0
+
+  while (offset + 4 <= targetInfo.length) {
+    const avId = targetInfo.readUInt16LE(offset)
+    const avLen = targetInfo.readUInt16LE(offset + 2)
+    if (avId === 0) break // MsvAvEOL
+
+    const value = targetInfo.subarray(offset + 4, offset + 4 + avLen)
+    if (avId === MsvAvNbDomainName) {
+      nbDomain = value.toString('utf16le')
+    } else if (avId === MsvAvDnsDomainName) {
+      dnsDomain = value.toString('utf16le')
+    }
+    offset += 4 + avLen
+  }
+
+  return { nbDomain, dnsDomain }
 }
 
 /** Parse NTLM Type 2 (Challenge) message */
@@ -50,7 +79,11 @@ export function parseType2(buf: Buffer): Type2Fields {
   const targetInfoOffset = buf.readUInt32LE(44)
   const targetInfo = Buffer.from(buf.subarray(targetInfoOffset, targetInfoOffset + targetInfoLen))
 
-  return { serverChallenge, targetInfo }
+  // Extract domain from AvPairs
+  const avPairs = parseAvPairs(targetInfo)
+  const serverDomain = avPairs.nbDomain || avPairs.dnsDomain
+
+  return { serverChallenge, targetInfo, serverDomain }
 }
 
 function ntowfv2(password: string, username: string, domain: string): Buffer {
@@ -99,10 +132,14 @@ export function createType3(
   password: string,
   domain: string,
 ): Buffer {
-  const { serverChallenge, targetInfo } = parseType2(type2)
+  const { serverChallenge, targetInfo, serverDomain } = parseType2(type2)
   const clientChallenge = randomBytes(8)
 
-  const responseKeyNT = ntowfv2(password, username, domain)
+  // Use server-provided domain for NTLMv2 hash (most reliable),
+  // fall back to caller-provided domain
+  const hashDomain = serverDomain || domain
+  console.log(`[NTLM] server domain="${serverDomain}", config domain="${domain}", using="${hashDomain}" for NTLMv2`)
+  const responseKeyNT = ntowfv2(password, username, hashDomain)
   const { ntProofStr, ntChallengeResponse } = computeNtlmV2Response(
     responseKeyNT, serverChallenge, clientChallenge, targetInfo,
   )

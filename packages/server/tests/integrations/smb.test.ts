@@ -140,7 +140,7 @@ describe('readSmbFile', () => {
     expect(mocks.smbReadFile).toHaveBeenCalledWith('relative/path/file.txt')
   })
 
-  it('should split DOMAIN\\username and use short domain for NTLM', async () => {
+  it('should split DOMAIN\\username and pass domain as-is', async () => {
     const config: SmbConfig = {
       share: '\\\\server.example.com\\share',
       domain: 'LONG.EXAMPLE.COM',
@@ -153,7 +153,7 @@ describe('readSmbFile', () => {
     expect(mocks.smbConnect).toHaveBeenCalledWith({
       host: 'server.example.com',
       share: 'share',
-      domain: 'LONG',
+      domain: 'LONG.EXAMPLE.COM',
       username: 'jdoe',
       password: 'pass1',
     })
