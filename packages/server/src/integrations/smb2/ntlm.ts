@@ -189,9 +189,10 @@ export function createType3(
   console.log(`[NTLM] server domain="${serverDomain}", config domain="${domain}", using="${hashDomain}" for NTLMv2`)
   console.log(`[NTLM] serverChallenge=${serverChallenge.toString('hex')}, targetInfo(${targetInfo.length}b)=${targetInfo.subarray(0, 32).toString('hex')}...`)
 
-  // Process targetInfo: add MsvAvFlags=0x02 if MsvAvTimestamp present (for MIC)
-  const { modified: processedTargetInfo, hasTimestamp } = processTargetInfo(targetInfo)
-  console.log(`[NTLM] hasTimestamp=${hasTimestamp}, processedTargetInfo(${processedTargetInfo.length}b)`)
+  // Detect MsvAvTimestamp but don't modify TargetInfo yet (MIC disabled for debugging)
+  const { hasTimestamp } = processTargetInfo(targetInfo)
+  const processedTargetInfo = targetInfo
+  console.log(`[NTLM] hasTimestamp=${hasTimestamp}, targetInfo(${processedTargetInfo.length}b) [MIC off, KEY_EXCH on]`)
 
   const responseKeyNT = ntowfv2(password, username, hashDomain)
   const { ntProofStr, ntChallengeResponse } = computeNtlmV2Response(
@@ -210,15 +211,13 @@ export function createType3(
   const userBuf = Buffer.from(username, 'utf16le')
   const workstationBuf = Buffer.from('', 'utf16le')
 
-  // LM response: 24 zero bytes when MsvAvTimestamp present (MS-NLMP 3.1.5.1.2)
-  const lmResponse = hasTimestamp
-    ? Buffer.alloc(24)
-    : Buffer.concat([
-        createHmac('md5', responseKeyNT)
-          .update(Buffer.concat([serverChallenge, clientChallenge]))
-          .digest(),
-        clientChallenge,
-      ])
+  // LM response (MIC disabled: compute normally)
+  const lmResponse = Buffer.concat([
+    createHmac('md5', responseKeyNT)
+      .update(Buffer.concat([serverChallenge, clientChallenge]))
+      .digest(),
+    clientChallenge,
+  ])
 
   // Layout: fixed header (88 bytes = 64 base + 8 version + 16 MIC) + payloads
   let offset = 88
@@ -282,17 +281,8 @@ export function createType3(
   ntChallengeResponse.copy(buf, ntOffset)
   encryptedSessionKey.copy(buf, skOffset)
 
-  // Compute MIC = HMAC_MD5(ExportedSessionKey, Type1 || Type2 || Type3)
-  // Type3 MIC field must be zeroed during computation (already is since Buffer.alloc)
-  if (hasTimestamp) {
-    const mic = createHmac('md5', exportedSessionKey)
-      .update(Buffer.concat([type1, type2, buf]))
-      .digest()
-    mic.copy(buf, 72)
-    console.log(`[NTLM] MIC computed with ExportedSessionKey: ${mic.toString('hex')}`)
-  }
-
-  console.log(`[NTLM] Type3 size=${buf.length}, flags=0x${FLAGS.toString(16)}, KEY_EXCH=true`)
+  // MIC disabled for debugging — isolate KEY_EXCH behavior
+  console.log(`[NTLM] Type3 size=${buf.length}, flags=0x${FLAGS.toString(16)}, KEY_EXCH=on, MIC=off`)
   return buf
 }
 
