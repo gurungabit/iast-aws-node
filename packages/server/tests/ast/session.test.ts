@@ -105,9 +105,24 @@ describe('Session', () => {
   })
 
   describe('fillFieldAtPosition()', () => {
-    it('sends text with row/col position', async () => {
+    it('moves cursor, clears field, and types value (1-based coords)', async () => {
+      const mockTnz = createMockTnz(' '.repeat(80 * 43))
+      ati.getTnz.mockReturnValue(mockTnz)
+      session = new Session(ati)
+
       await session.fillFieldAtPosition(10, 20, 'value')
-      expect(ati.send).toHaveBeenCalledWith('value', [10, 20])
+
+      // 1-based (10,20) → 0-based address = 9*80 + 19 = 739
+      expect(mockTnz.curadd).toBe(739)
+      expect(mockTnz.keyEraseEof).toHaveBeenCalled()
+      expect(mockTnz.keyData).toHaveBeenCalledWith('value')
+    })
+
+    it('does nothing when tnz is not available', async () => {
+      ati.getTnz.mockReturnValue(null)
+      session = new Session(ati)
+      await session.fillFieldAtPosition(10, 20, 'value')
+      // No error thrown
     })
   })
 
@@ -371,6 +386,14 @@ describe('Session', () => {
   })
 
   describe('logoff()', () => {
+    let mockTnz: ReturnType<typeof createMockTnz>
+
+    beforeEach(() => {
+      mockTnz = createMockTnz(' '.repeat(80 * 43))
+      ati.getTnz.mockReturnValue(mockTnz)
+      session = new Session(ati)
+    })
+
     it('sends pa3 when usePa3 is true', async () => {
       ati.wait.mockResolvedValue(1)
       setScreen(ati, 'Exit Menu')
@@ -384,7 +407,10 @@ describe('Session', () => {
 
       const result = await session.logoff()
       expect(result).toEqual({ success: true, error: '' })
-      expect(ati.send).toHaveBeenCalledWith('1', [36, 5])
+      // fillFieldAtPosition(37, 6, '1') → 0-based address = 36*80 + 5 = 2885
+      expect(mockTnz.curadd).toBe(2885)
+      expect(mockTnz.keyEraseEof).toHaveBeenCalled()
+      expect(mockTnz.keyData).toHaveBeenCalledWith('1')
       expect(ati.send).toHaveBeenCalledWith('[enter]')
     })
 

@@ -37,7 +37,7 @@ const statusConfig: Record<ASTStatus, { label: string; className: string }> = {
 }
 
 export function StatusBadge({ status, className = '' }: StatusBadgeProps): React.ReactNode {
-  const config = statusConfig[status]
+  const config = statusConfig[status] ?? statusConfig.idle
 
   return (
     <span

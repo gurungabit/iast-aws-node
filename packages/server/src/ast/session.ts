@@ -62,9 +62,14 @@ export class Session {
     await this.ati.send(text)
   }
 
-  /** Fill field at 1-based row/col position */
+  /** Fill field at 1-based row/col position (clears field first, matching Python) */
   async fillFieldAtPosition(row: number, col: number, text: string) {
-    await this.ati.send(text, [row, col])
+    const tnz = this.tnz
+    if (!tnz) return
+    const address = (row - 1) * tnz.maxCol + (col - 1)
+    tnz.curadd = address
+    tnz.keyEraseEof()
+    tnz.keyData(text)
   }
 
   /** Get all fields on the screen by scanning the field attribute plane */
@@ -320,12 +325,12 @@ export class Session {
 
     let maxBackoff = 20
     while (maxBackoff > 0) {
-      if (await this.waitForText('Exit Menu', 0.8)) break
+      if (await this.waitForText('Exit Menu', 0.2)) break
       await this.pf(15)
       maxBackoff--
     }
 
-    await this.fillFieldAtPosition(36, 5, '1')
+    await this.fillFieldAtPosition(37, 6, '1')
     await this.enter()
 
     for (const keyword of targetKeywords) {
