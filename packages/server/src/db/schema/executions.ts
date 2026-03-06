@@ -8,7 +8,7 @@ export const executions = pgTable(
     id: text('id').primaryKey(),
     sessionId: text('session_id')
       .notNull()
-      .references(() => sessions.id),
+      .references(() => sessions.id, { onDelete: 'cascade' }),
     userId: uuid('user_id')
       .notNull()
       .references(() => users.id),

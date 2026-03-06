@@ -36,7 +36,7 @@ export const autoLauncherRuns = pgTable(
       .references(() => users.id),
     sessionId: text('session_id')
       .notNull()
-      .references(() => sessions.id),
+      .references(() => sessions.id, { onDelete: 'cascade' }),
     status: text('status').notNull().default('pending'),
     steps: jsonb('steps').notNull().default([]),
     currentStepIndex: text('current_step_index').notNull().default('0'),

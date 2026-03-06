@@ -86,7 +86,8 @@ export async function sessionRoutes(app: FastifyInstance) {
     },
     async (request, reply) => {
       await sessionService.remove(request.params.id, request.user.id)
-      return reply.status(204).send()
+      reply.code(204)
+      return
     },
   )
 }
