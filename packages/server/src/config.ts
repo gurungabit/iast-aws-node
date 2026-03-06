@@ -21,6 +21,9 @@ const envSchema = z.object({
   MAX_WORKERS: z.coerce.number().default(50),
   ENCRYPTION_KEY: z.string().default(''),
 
+  POD_IP: z.string().default('127.0.0.1'),
+  HEADLESS_SERVICE_HOST: z.string().default(''),
+
   AWS_REGION: z.string().optional(),
   EVENTBRIDGE_ROLE_ARN: z.string().optional(),
   SCHEDULE_TARGET_ARN: z.string().optional(),
@@ -41,6 +44,8 @@ export const config = {
   tn3270Secure: parsed.TN3270_SECURE.toLowerCase() === 'true',
   maxWorkers: parsed.MAX_WORKERS,
   encryptionKey: parsed.ENCRYPTION_KEY,
+  podIp: parsed.POD_IP,
+  headlessServiceHost: parsed.HEADLESS_SERVICE_HOST,
   awsRegion: parsed.AWS_REGION,
   eventBridgeRoleArn: parsed.EVENTBRIDGE_ROLE_ARN,
   scheduleTargetArn: parsed.SCHEDULE_TARGET_ARN,

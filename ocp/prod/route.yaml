@@ -1,0 +1,21 @@
+kind: Route
+apiVersion: route.openshift.io/v1
+metadata:
+  name: iast-aws-node-$ROSA_LANE
+  labels:
+    com.statefarm.contact: WG0864
+    com.statefarm.project: "234970"
+    app.kubernetes.io/name: iast-aws-node-$ROSA_LANE
+    app.kubernetes.io/part-of: iast-aws-node
+spec:
+  host: iast-aws-node-$ROSA_LANE-iast-aws.apps.pcrosa01.redk8s.ic1.statefarm
+  to:
+    kind: Service
+    name: iast-aws-node-$ROSA_LANE
+    weight: 100
+  port:
+    targetPort: 3000
+  tls:
+    termination: edge
+    insecureEdgeTerminationPolicy: Redirect
+  wildcardPolicy: None

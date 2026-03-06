@@ -18,6 +18,8 @@ import { autoLauncherRoutes } from './routes/auto-launchers.js'
 import { scheduleRoutes } from './routes/schedules.js'
 import { terminalWsRoutes } from './terminal/ws-handler.js'
 import { terminalManager } from './terminal/manager.js'
+import { terminatePodSessions } from './terminal/registry.js'
+import { config } from './config.js'
 
 export async function buildApp() {
   const app = Fastify({ logger: true }).withTypeProvider<ZodTypeProvider>()
@@ -60,9 +62,14 @@ export async function buildApp() {
   // WebSocket terminal routes
   await app.register(terminalWsRoutes)
 
-  // Wire metrics to TerminalManager
-  app.addHook('onClose', () => {
+  // Cleanup on shutdown: destroy workers and mark sessions as terminated
+  app.addHook('onClose', async () => {
     terminalManager.destroyAll()
+    try {
+      await terminatePodSessions(config.podIp)
+    } catch {
+      // best-effort cleanup
+    }
   })
 
   return app

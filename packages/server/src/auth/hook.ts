@@ -22,7 +22,8 @@ export async function authHook(request: FastifyRequest, reply: FastifyReply) {
     request.url === '/ping' ||
     request.url === '/metrics' ||
     request.url.startsWith('/docs') ||
-    request.url.startsWith('/api/terminal/')
+    request.url.startsWith('/api/terminal/') ||
+    request.url.startsWith('/internal/')
   ) {
     return
   }

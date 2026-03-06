@@ -1,5 +1,6 @@
 export { users } from './users.js'
 export { sessions } from './sessions.js'
+export { sessionAssignments } from './session-assignments.js'
 export { executions } from './executions.js'
 export { policyResults } from './policies.js'
 export { astConfigs } from './ast-configs.js'

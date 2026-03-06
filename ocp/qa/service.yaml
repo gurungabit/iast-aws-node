@@ -1,0 +1,38 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: iast-aws-node-$ROSA_LANE
+  labels:
+    com.statefarm.contact: WG0864
+    com.statefarm.project: '234970'
+    app.kubernetes.io/name: iast-aws-node-$ROSA_LANE
+    app.kubernetes.io/part-of: iast-aws-node
+spec:
+  ports:
+    - name: app
+      port: 3000
+      protocol: TCP
+      targetPort: 3000
+  selector:
+    app.kubernetes.io/name: iast-aws-node-$ROSA_LANE
+    app.kubernetes.io/part-of: iast-aws-node
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: iast-aws-node-headless-$ROSA_LANE
+  labels:
+    com.statefarm.contact: WG0864
+    com.statefarm.project: '234970'
+    app.kubernetes.io/name: iast-aws-node-$ROSA_LANE
+    app.kubernetes.io/part-of: iast-aws-node
+spec:
+  clusterIP: None
+  ports:
+    - name: app
+      port: 3000
+      protocol: TCP
+      targetPort: 3000
+  selector:
+    app.kubernetes.io/name: iast-aws-node-$ROSA_LANE
+    app.kubernetes.io/part-of: iast-aws-node

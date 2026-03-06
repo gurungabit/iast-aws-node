@@ -1,0 +1,83 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: iast-aws-node-$ROSA_LANE
+  labels:
+    app: iast-aws-node
+    cost-center: '1001714'
+    com.statefarm.contact: WG0864
+    com.statefarm.project: '234970'
+    app.kubernetes.io/name: iast-aws-node-$ROSA_LANE
+    app.kubernetes.io/part-of: iast-aws-node
+spec:
+  replicas: 2
+  revisionHistoryLimit: 2
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: iast-aws-node-$ROSA_LANE
+      app.kubernetes.io/part-of: iast-aws-node
+  strategy:
+    rollingUpdate:
+      maxSurge: 25%
+      maxUnavailable: 25%
+  template:
+    metadata:
+      labels:
+        app: iast-aws-node
+        cost-center: '1001714'
+        com.statefarm.contact: WG0864
+        com.statefarm.project: '234970'
+        app.kubernetes.io/name: iast-aws-node-$ROSA_LANE
+        app.kubernetes.io/part-of: iast-aws-node
+    spec:
+      automountServiceAccountToken: true
+      serviceAccountName: iast-aws-node-$ROSA_LANE
+      imagePullSecrets:
+        - name: pull-secret-jfrog
+      containers:
+        - name: iast-aws-node
+          image: packages.ic1.statefarm/rosa-dev-repo/pcrosa01/iast-aws/iast-aws-node:$ROSA_DOCKER_IMAGE_TAG
+          imagePullPolicy: Always
+          env:
+            - name: DT_CUSTOM_PROP
+              value: AWS_SERVICE=iast-aws-node-$ROSA_LANE AWS_COST_CENTER=1001714
+            - name: POD_IP
+              valueFrom:
+                fieldRef:
+                  fieldPath: status.podIP
+            - name: TN3270_HOST
+              value: hometn3270p.opr.statefarm.org
+            - name: TN3270_PORT
+              value: '1023'
+            - name: TN3270_SECURE
+              value: 'true'
+            - name: MAX_WORKERS
+              value: '50'
+            - name: HEADLESS_SERVICE_HOST
+              value: iast-aws-node-headless-$ROSA_LANE
+          envFrom:
+            - secretRef:
+                name: iast-aws-node-$ROSA_LANE
+          resources:
+            requests:
+              memory: '2048Mi'
+              cpu: '500m'
+            limits:
+              memory: '2048Mi'
+          ports:
+            - containerPort: 3000
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 3000
+            initialDelaySeconds: 10
+            timeoutSeconds: 10
+            successThreshold: 1
+            failureThreshold: 5
+          livenessProbe:
+            httpGet:
+              path: /ping
+              port: 3000
+            initialDelaySeconds: 5
+            periodSeconds: 10
+      terminationGracePeriodSeconds: 3600

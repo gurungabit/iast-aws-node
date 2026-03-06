@@ -1,17 +1,156 @@
+// ============================================================================
+// WebSocket Terminal Handler - Session Routing + Cross-Pod Proxy
+//
+// When a browser connects, we look up which pod owns the session in PostgreSQL.
+// If this pod owns it, we attach directly to the local Worker thread.
+// If another pod owns it, we proxy via an internal WebSocket to that pod.
+// If no assignment exists, we assign to the least-loaded pod.
+// ============================================================================
+
 import type { FastifyInstance } from 'fastify'
+import WebSocket from 'ws'
 import { terminalManager } from './manager.js'
 import { verifyWsToken } from '../auth/ws-auth.js'
 import { executionService } from '../services/execution.js'
+import {
+  getSessionAssignment,
+  registerSessionAssignment,
+  terminateSessionAssignment,
+  getLeastLoadedPod,
+  isPodAlive,
+  discoverPods,
+} from './registry.js'
+import { config } from '../config.js'
 import type { WorkerToMainMessage } from './worker-messages.js'
 
+const MY_POD_IP = config.podIp
+
+/**
+ * Attach a browser WebSocket directly to a local Worker thread.
+ * Used when this pod owns the session.
+ */
+function attachLocal(
+  socket: WebSocket,
+  sessionId: string,
+) {
+  const worker = terminalManager.getOrCreateWorker(sessionId)
+  terminalManager.attachWebSocket(sessionId, socket as never)
+
+  // Browser → Worker
+  socket.on('message', (data) => {
+    try {
+      const msg = JSON.parse(String(data))
+      worker.postMessage(msg)
+    } catch {
+      // ignore malformed
+    }
+  })
+
+  // Worker → Browser
+  const onWorkerMessage = (msg: WorkerToMainMessage) => {
+    try {
+      if (msg.type === 'ast.item_result_batch') {
+        executionService
+          .batchInsertPolicies(msg.executionId, msg.items)
+          .catch((err) => console.error('Failed to persist policies:', err))
+      }
+      if (socket.readyState === WebSocket.OPEN) {
+        socket.send(JSON.stringify(msg))
+      }
+    } catch {
+      // ignore
+    }
+  }
+
+  worker.on('message', onWorkerMessage)
+
+  socket.on('close', () => {
+    worker.off('message', onWorkerMessage)
+    terminalManager.detachWebSocket(sessionId)
+  })
+
+  socket.on('error', () => {
+    worker.off('message', onWorkerMessage)
+    terminalManager.detachWebSocket(sessionId)
+  })
+}
+
+/**
+ * Proxy a browser WebSocket to another pod's internal endpoint.
+ * Bridges: Browser WS <-> Internal WS to remote pod.
+ */
+function proxyToRemotePod(
+  browserSocket: WebSocket,
+  podIp: string,
+  sessionId: string,
+  log: FastifyInstance['log'],
+): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const internalUrl = `ws://${podIp}:${config.port}/internal/terminal/${sessionId}`
+    log.info({ sessionId, internalUrl }, 'Proxying to remote pod')
+
+    const remoteWs = new WebSocket(internalUrl)
+
+    remoteWs.on('open', () => {
+      log.info({ sessionId, podIp }, 'Remote pod connected, bridge established')
+
+      // Browser → Remote pod
+      browserSocket.on('message', (data) => {
+        if (remoteWs.readyState === WebSocket.OPEN) {
+          remoteWs.send(data)
+        }
+      })
+
+      // Remote pod → Browser
+      remoteWs.on('message', (data) => {
+        if (browserSocket.readyState === WebSocket.OPEN) {
+          browserSocket.send(data)
+        }
+      })
+
+      // Handle remote disconnect
+      remoteWs.on('close', () => {
+        if (browserSocket.readyState === WebSocket.OPEN) {
+          browserSocket.close(4001, 'Session terminated')
+        }
+      })
+
+      remoteWs.on('error', (err) => {
+        log.error({ sessionId, err: err.message }, 'Remote pod WebSocket error')
+        if (browserSocket.readyState === WebSocket.OPEN) {
+          browserSocket.close(4002, 'Terminal error')
+        }
+      })
+
+      // Handle browser disconnect → close remote
+      browserSocket.on('close', () => {
+        if (remoteWs.readyState === WebSocket.OPEN) {
+          remoteWs.close()
+        }
+      })
+
+      browserSocket.on('error', () => {
+        if (remoteWs.readyState === WebSocket.OPEN) {
+          remoteWs.close()
+        }
+      })
+
+      resolve()
+    })
+
+    remoteWs.on('error', (err) => {
+      reject(err)
+    })
+  })
+}
+
 export async function terminalWsRoutes(app: FastifyInstance) {
+  // ── Public endpoint: browser connects here ──────────────────────────────
   app.get(
     '/api/terminal/:sessionId',
     { websocket: true },
     async (socket, req) => {
       const sessionId = (req.params as { sessionId: string }).sessionId
-
-      // Authenticate via query param token
       const url = new URL(req.url, `http://${req.headers.host}`)
       const token = url.searchParams.get('token') ?? undefined
       const user = await verifyWsToken(token)
@@ -21,48 +160,77 @@ export async function terminalWsRoutes(app: FastifyInstance) {
         return
       }
 
-      const worker = terminalManager.getOrCreateWorker(sessionId)
-      terminalManager.attachWebSocket(sessionId, socket)
+      const userId = user.id
 
-      // Browser → Worker
-      socket.on('message', (data: Buffer | ArrayBuffer | Buffer[]) => {
-        try {
-          const msg = JSON.parse(String(data))
-          worker.postMessage(msg)
-        } catch {
-          // ignore malformed messages
-        }
-      })
+      // Look up existing assignment
+      let assignment = await getSessionAssignment(sessionId)
 
-      // Worker → Browser
-      const onWorkerMessage = (msg: WorkerToMainMessage) => {
-        try {
-          // Persist policy results to DB
-          if (msg.type === 'ast.item_result_batch') {
-            executionService
-              .batchInsertPolicies(msg.executionId, msg.items)
-              .catch((err) => console.error('Failed to persist policies:', err))
-          }
-
-          if (socket.readyState === 1) {
-            socket.send(JSON.stringify(msg))
-          }
-        } catch {
-          // ignore send errors
-        }
+      if (!assignment || assignment.status === 'terminated') {
+        // New session — assign to least-loaded pod
+        const podIp = await getLeastLoadedPod()
+        await registerSessionAssignment(sessionId, podIp, userId)
+        assignment = { podIp, userId, status: 'active' }
+        app.log.info({ sessionId, podIp }, 'New session assigned to pod')
       }
 
-      worker.on('message', onWorkerMessage)
+      const ownerPodIp = assignment.podIp
 
-      socket.on('close', () => {
-        worker.off('message', onWorkerMessage)
-        terminalManager.detachWebSocket(sessionId)
-      })
+      // Fast path: session is on this pod
+      if (ownerPodIp === MY_POD_IP) {
+        attachLocal(socket as unknown as WebSocket, sessionId)
+        return
+      }
 
-      socket.on('error', () => {
-        worker.off('message', onWorkerMessage)
-        terminalManager.detachWebSocket(sessionId)
-      })
+      // Cross-pod: proxy to the owning pod
+      try {
+        await proxyToRemotePod(socket as unknown as WebSocket, ownerPodIp, sessionId, app)
+      } catch {
+        // Connection to remote pod failed — check if pod is alive
+        app.log.warn({ sessionId, ownerPodIp }, 'Remote pod connection failed, checking health')
+
+        const currentPods = await discoverPods()
+        const alive = await isPodAlive(ownerPodIp, currentPods)
+
+        if (!alive) {
+          // Pod is dead — reassign to a new pod
+          app.log.info({ sessionId, deadPodIp: ownerPodIp }, 'Pod dead, reassigning session')
+          await terminateSessionAssignment(sessionId)
+          const newPodIp = await getLeastLoadedPod(currentPods)
+          await registerSessionAssignment(sessionId, newPodIp, userId)
+
+          if (newPodIp === MY_POD_IP) {
+            attachLocal(socket as unknown as WebSocket, sessionId)
+          } else {
+            try {
+              await proxyToRemotePod(socket as unknown as WebSocket, newPodIp, sessionId, app)
+            } catch (retryErr) {
+              app.log.error({ sessionId, err: retryErr }, 'Retry to new pod failed')
+              socket.close(4003, 'Terminal unavailable')
+            }
+          }
+        } else {
+          // Pod alive but transient failure — retry once after delay
+          app.log.info({ sessionId, ownerPodIp }, 'Pod alive, retrying after delay')
+          await new Promise((r) => setTimeout(r, 1000))
+          try {
+            await proxyToRemotePod(socket as unknown as WebSocket, ownerPodIp, sessionId, app)
+          } catch {
+            socket.close(4003, 'Terminal unavailable')
+          }
+        }
+      }
+    },
+  )
+
+  // ── Internal endpoint: pod-to-pod proxy target ──────────────────────────
+  // Only reachable within the cluster (not exposed via OpenShift Route).
+  // Skips JWT auth — internal trust between pods.
+  app.get(
+    '/internal/terminal/:sessionId',
+    { websocket: true },
+    async (socket, _req) => {
+      const sessionId = (_req.params as { sessionId: string }).sessionId
+      attachLocal(socket as unknown as WebSocket, sessionId)
     },
   )
 }

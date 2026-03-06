@@ -18,6 +18,15 @@ const mockExecutionService = vi.hoisted(() => ({
   batchInsertPolicies: vi.fn().mockResolvedValue(undefined),
 }))
 
+const mockRegistry = vi.hoisted(() => ({
+  getSessionAssignment: vi.fn().mockResolvedValue(null),
+  registerSessionAssignment: vi.fn().mockResolvedValue(undefined),
+  terminateSessionAssignment: vi.fn().mockResolvedValue(undefined),
+  getLeastLoadedPod: vi.fn().mockResolvedValue('127.0.0.1'),
+  isPodAlive: vi.fn().mockResolvedValue(true),
+  discoverPods: vi.fn().mockResolvedValue(['127.0.0.1']),
+}))
+
 vi.mock('@src/terminal/manager.js', () => ({
   terminalManager: mockTerminalManager,
 }))
@@ -28,6 +37,15 @@ vi.mock('@src/auth/ws-auth.js', () => ({
 
 vi.mock('@src/services/execution.js', () => ({
   executionService: mockExecutionService,
+}))
+
+vi.mock('@src/terminal/registry.js', () => mockRegistry)
+
+vi.mock('@src/config.js', () => ({
+  config: {
+    podIp: '127.0.0.1',
+    port: 3000,
+  },
 }))
 
 import { terminalWsRoutes } from '@src/terminal/ws-handler.js'
@@ -71,24 +89,34 @@ function createMockReq(sessionId: string, token?: string): MockReq {
 }
 
 describe('terminalWsRoutes', () => {
-  let routeHandler: RouteHandler
+  let publicHandler: RouteHandler
+  let internalHandler: RouteHandler
 
   beforeEach(async () => {
     vi.clearAllMocks()
+    // Default: new session assigned to this pod (127.0.0.1)
+    mockRegistry.getSessionAssignment.mockResolvedValue(null)
+    mockRegistry.getLeastLoadedPod.mockResolvedValue('127.0.0.1')
 
     const app = Fastify()
+    const handlers: RouteHandler[] = []
     vi.spyOn(app, 'get').mockImplementation((...args: unknown[]) => {
-      routeHandler = args[2] as RouteHandler
+      handlers.push(args[2] as RouteHandler)
       return app
     })
+    // @ts-expect-error - mock log
+    app.log = { info: vi.fn(), warn: vi.fn(), error: vi.fn() }
 
     await terminalWsRoutes(app)
     await app.close()
+
+    publicHandler = handlers[0]   // /api/terminal/:sessionId
+    internalHandler = handlers[1] // /internal/terminal/:sessionId
   })
 
-  it('registers a GET route for /api/terminal/:sessionId', async () => {
-    // The route was registered in beforeEach
-    expect(routeHandler).toBeDefined()
+  it('registers both public and internal routes', () => {
+    expect(publicHandler).toBeDefined()
+    expect(internalHandler).toBeDefined()
   })
 
   it('closes socket with 4001 when authentication fails', async () => {
@@ -97,21 +125,37 @@ describe('terminalWsRoutes', () => {
     const socket = createMockSocket()
     const req = createMockReq('sess-1', 'bad-token')
 
-    await routeHandler(socket, req)
+    await publicHandler(socket, req)
 
     expect(socket.close).toHaveBeenCalledWith(4001, 'Unauthorized')
   })
 
-  it('creates or gets worker for the session', async () => {
+  it('assigns new session to least-loaded pod and creates local worker', async () => {
     mockVerifyWsToken.mockResolvedValue({ id: 'user-1', email: 'a@b.com', displayName: 'User', entraId: 'oid' })
 
     const socket = createMockSocket()
     const req = createMockReq('sess-1', 'valid-token')
 
-    await routeHandler(socket, req)
+    await publicHandler(socket, req)
 
+    expect(mockRegistry.getSessionAssignment).toHaveBeenCalledWith('sess-1')
+    expect(mockRegistry.getLeastLoadedPod).toHaveBeenCalled()
+    expect(mockRegistry.registerSessionAssignment).toHaveBeenCalledWith('sess-1', '127.0.0.1', 'user-1')
     expect(mockTerminalManager.getOrCreateWorker).toHaveBeenCalledWith('sess-1')
     expect(mockTerminalManager.attachWebSocket).toHaveBeenCalledWith('sess-1', socket)
+  })
+
+  it('uses existing assignment for local session', async () => {
+    mockVerifyWsToken.mockResolvedValue({ id: 'user-1', email: 'a@b.com', displayName: 'User', entraId: 'oid' })
+    mockRegistry.getSessionAssignment.mockResolvedValue({ podIp: '127.0.0.1', userId: 'user-1', status: 'active' })
+
+    const socket = createMockSocket()
+    const req = createMockReq('sess-1', 'valid-token')
+
+    await publicHandler(socket, req)
+
+    expect(mockRegistry.getLeastLoadedPod).not.toHaveBeenCalled()
+    expect(mockTerminalManager.getOrCreateWorker).toHaveBeenCalledWith('sess-1')
   })
 
   it('forwards browser messages to worker', async () => {
@@ -120,9 +164,8 @@ describe('terminalWsRoutes', () => {
     const socket = createMockSocket()
     const req = createMockReq('sess-1', 'valid-token')
 
-    await routeHandler(socket, req)
+    await publicHandler(socket, req)
 
-    // Simulate incoming message from browser
     const messageHandler = socket._handlers['message']
     const msg = JSON.stringify({ type: 'connect' })
     messageHandler(Buffer.from(msg))
@@ -136,10 +179,9 @@ describe('terminalWsRoutes', () => {
     const socket = createMockSocket()
     const req = createMockReq('sess-1', 'valid-token')
 
-    await routeHandler(socket, req)
+    await publicHandler(socket, req)
 
     const messageHandler = socket._handlers['message']
-    // Should not throw
     messageHandler(Buffer.from('not valid json'))
     expect(mockWorker.postMessage).not.toHaveBeenCalled()
   })
@@ -150,9 +192,8 @@ describe('terminalWsRoutes', () => {
     const socket = createMockSocket()
     const req = createMockReq('sess-1', 'valid-token')
 
-    await routeHandler(socket, req)
+    await publicHandler(socket, req)
 
-    // Extract the worker message handler
     const workerOnCall = mockWorker.on.mock.calls.find(
       (call: [string, ...unknown[]]) => call[0] === 'message',
     )
@@ -168,7 +209,7 @@ describe('terminalWsRoutes', () => {
     const socket = createMockSocket()
     const req = createMockReq('sess-1', 'valid-token')
 
-    await routeHandler(socket, req)
+    await publicHandler(socket, req)
 
     const workerOnCall = mockWorker.on.mock.calls.find(
       (call: [string, ...unknown[]]) => call[0] === 'message',
@@ -188,14 +229,14 @@ describe('terminalWsRoutes', () => {
     )
   })
 
-  it('does not send to socket when readyState is not 1 (OPEN)', async () => {
+  it('does not send to socket when readyState is not OPEN', async () => {
     mockVerifyWsToken.mockResolvedValue({ id: 'user-1', email: 'a@b.com', displayName: 'User', entraId: 'oid' })
 
     const socket = createMockSocket()
     socket.readyState = 3 // CLOSED
     const req = createMockReq('sess-1', 'valid-token')
 
-    await routeHandler(socket, req)
+    await publicHandler(socket, req)
 
     const workerOnCall = mockWorker.on.mock.calls.find(
       (call: [string, ...unknown[]]) => call[0] === 'message',
@@ -212,7 +253,7 @@ describe('terminalWsRoutes', () => {
     const socket = createMockSocket()
     const req = createMockReq('sess-1', 'valid-token')
 
-    await routeHandler(socket, req)
+    await publicHandler(socket, req)
 
     const closeHandler = socket._handlers['close']
     closeHandler()
@@ -227,7 +268,7 @@ describe('terminalWsRoutes', () => {
     const socket = createMockSocket()
     const req = createMockReq('sess-1', 'valid-token')
 
-    await routeHandler(socket, req)
+    await publicHandler(socket, req)
 
     const errorHandler = socket._handlers['error']
     errorHandler()
@@ -242,7 +283,7 @@ describe('terminalWsRoutes', () => {
     const socket = createMockSocket()
     const req = createMockReq('sess-1', 'my-token')
 
-    await routeHandler(socket, req)
+    await publicHandler(socket, req)
 
     expect(mockVerifyWsToken).toHaveBeenCalledWith('my-token')
   })
@@ -253,8 +294,21 @@ describe('terminalWsRoutes', () => {
     const socket = createMockSocket()
     const req = createMockReq('sess-1')
 
-    await routeHandler(socket, req)
+    await publicHandler(socket, req)
 
     expect(mockVerifyWsToken).toHaveBeenCalledWith(undefined)
+  })
+
+  describe('internal route', () => {
+    it('attaches directly to local worker without auth', async () => {
+      const socket = createMockSocket()
+      const req = createMockReq('sess-1')
+
+      await internalHandler(socket, req)
+
+      expect(mockTerminalManager.getOrCreateWorker).toHaveBeenCalledWith('sess-1')
+      expect(mockTerminalManager.attachWebSocket).toHaveBeenCalledWith('sess-1', socket)
+      expect(mockVerifyWsToken).not.toHaveBeenCalled()
+    })
   })
 })
