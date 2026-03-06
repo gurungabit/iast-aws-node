@@ -1,102 +1,118 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen, fireEvent } from '@testing-library/react'
 import { TaskListEditor } from './TaskListEditor'
+import type { AstConfigTask } from '../types'
 
 // Mock crypto.randomUUID
 Object.defineProperty(globalThis, 'crypto', {
   value: { randomUUID: () => 'test-uuid-' + Math.random().toString(36).slice(2, 7) },
 })
 
+// Mock dnd-kit since it requires browser APIs not available in jsdom
+vi.mock('@dnd-kit/core', () => ({
+  DndContext: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
+  KeyboardSensor: vi.fn(),
+  PointerSensor: vi.fn(),
+  closestCenter: vi.fn(),
+  useSensor: vi.fn(),
+  useSensors: vi.fn().mockReturnValue([]),
+}))
+
+vi.mock('@dnd-kit/sortable', () => ({
+  SortableContext: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
+  arrayMove: vi.fn((arr: unknown[], from: number, to: number) => {
+    const result = [...arr]
+    const [item] = result.splice(from, 1)
+    result.splice(to, 0, item)
+    return result
+  }),
+  sortableKeyboardCoordinates: vi.fn(),
+  useSortable: () => ({
+    attributes: {},
+    listeners: {},
+    setNodeRef: vi.fn(),
+    transform: null,
+    transition: null,
+    isDragging: false,
+  }),
+  verticalListSortingStrategy: vi.fn(),
+}))
+
+vi.mock('@dnd-kit/utilities', () => ({
+  CSS: { Transform: { toString: () => '' } },
+}))
+
 describe('TaskListEditor', () => {
   const mockOnChange = vi.fn()
+  const mockRenderTaskInputs = vi.fn(
+    (task: AstConfigTask, _onParamsChange: (params: Record<string, unknown>) => void) => (
+      <div data-testid={`task-inputs-${task.taskId}`}>Task params</div>
+    ),
+  )
+  const mockGetDefaultTaskParams = vi.fn().mockReturnValue({ policyInput: '' })
+
+  const defaultProps = {
+    tasks: [] as AstConfigTask[],
+    onChange: mockOnChange,
+    renderTaskInputs: mockRenderTaskInputs,
+    getDefaultTaskParams: mockGetDefaultTaskParams,
+  }
 
   beforeEach(() => {
     vi.clearAllMocks()
   })
 
-  it('renders label', () => {
-    render(<TaskListEditor tasks={[]} onChange={mockOnChange} label="Policies" />)
-    expect(screen.getByText('Policies')).toBeDefined()
+  it('renders with task count header', () => {
+    render(<TaskListEditor {...defaultProps} />)
+    expect(screen.getByText('Tasks (0)')).toBeDefined()
   })
 
-  it('renders default label "Items"', () => {
-    render(<TaskListEditor tasks={[]} onChange={mockOnChange} />)
-    expect(screen.getByText('Items')).toBeDefined()
+  it('shows empty state when no tasks', () => {
+    render(<TaskListEditor {...defaultProps} />)
+    expect(screen.getByText(/No tasks yet/)).toBeDefined()
   })
 
-  it('renders placeholder on input', () => {
-    render(<TaskListEditor tasks={[]} onChange={mockOnChange} placeholder="Enter policy" />)
-    expect(screen.getByPlaceholderText('Enter policy')).toBeDefined()
+  it('shows Add Task button', () => {
+    render(<TaskListEditor {...defaultProps} />)
+    expect(screen.getByText('Add Task')).toBeDefined()
   })
 
-  it('shows item count', () => {
-    const tasks = [{ id: '1', label: 'ABC', value: 'ABC' }]
-    render(<TaskListEditor tasks={tasks} onChange={mockOnChange} />)
-    expect(screen.getByText('1 items')).toBeDefined()
-  })
-
-  it('adds task when Add button clicked', () => {
-    render(<TaskListEditor tasks={[]} onChange={mockOnChange} />)
-    const input = screen.getByPlaceholderText('Enter value')
-    fireEvent.change(input, { target: { value: 'NEW_ITEM' } })
-    fireEvent.click(screen.getByText('Add'))
+  it('calls onChange with new task when Add Task is clicked', () => {
+    render(<TaskListEditor {...defaultProps} />)
+    fireEvent.click(screen.getByText('Add Task'))
     expect(mockOnChange).toHaveBeenCalledWith(
       expect.arrayContaining([
-        expect.objectContaining({ value: 'NEW_ITEM', label: 'NEW_ITEM' }),
+        expect.objectContaining({
+          order: 0,
+          description: '',
+          params: { policyInput: '' },
+        }),
       ]),
     )
+    expect(mockGetDefaultTaskParams).toHaveBeenCalled()
   })
 
-  it('adds task on Enter key', () => {
-    render(<TaskListEditor tasks={[]} onChange={mockOnChange} />)
-    const input = screen.getByPlaceholderText('Enter value')
-    fireEvent.change(input, { target: { value: 'ENTER_ITEM' } })
-    fireEvent.keyDown(input, { key: 'Enter' })
-    expect(mockOnChange).toHaveBeenCalled()
-  })
-
-  it('splits comma-separated input', () => {
-    render(<TaskListEditor tasks={[]} onChange={mockOnChange} />)
-    const input = screen.getByPlaceholderText('Enter value')
-    fireEvent.change(input, { target: { value: 'A,B,C' } })
-    fireEvent.click(screen.getByText('Add'))
-    expect(mockOnChange).toHaveBeenCalledWith(
-      expect.arrayContaining([
-        expect.objectContaining({ value: 'A' }),
-        expect.objectContaining({ value: 'B' }),
-        expect.objectContaining({ value: 'C' }),
-      ]),
-    )
-  })
-
-  it('does not add empty input', () => {
-    render(<TaskListEditor tasks={[]} onChange={mockOnChange} />)
-    fireEvent.click(screen.getByText('Add'))
-    expect(mockOnChange).not.toHaveBeenCalled()
-  })
-
-  it('removes task when x clicked', () => {
-    const tasks = [
-      { id: '1', label: 'ABC', value: 'ABC' },
-      { id: '2', label: 'DEF', value: 'DEF' },
+  it('renders existing tasks with task numbers', () => {
+    const tasks: AstConfigTask[] = [
+      { taskId: 'task-1', order: 0, description: 'First task', params: { policyInput: 'ABC' } },
+      { taskId: 'task-2', order: 1, description: 'Second task', params: { policyInput: 'DEF' } },
     ]
-    render(<TaskListEditor tasks={tasks} onChange={mockOnChange} />)
-    const removeButtons = screen.getAllByText('×')
-    fireEvent.click(removeButtons[0])
-    expect(mockOnChange).toHaveBeenCalledWith([
-      expect.objectContaining({ id: '2', value: 'DEF' }),
-    ])
+    render(<TaskListEditor {...defaultProps} tasks={tasks} />)
+    expect(screen.getByText('Tasks (2)')).toBeDefined()
+    expect(screen.getByText('First task')).toBeDefined()
+    expect(screen.getByText('Second task')).toBeDefined()
   })
 
-  it('respects disabled prop', () => {
-    render(<TaskListEditor tasks={[]} onChange={mockOnChange} disabled />)
-    const input = screen.getByPlaceholderText('Enter value')
-    expect(input).toBeDisabled()
+  it('shows task count in header', () => {
+    const tasks: AstConfigTask[] = [
+      { taskId: 'task-1', order: 0, description: '', params: {} },
+    ]
+    render(<TaskListEditor {...defaultProps} tasks={tasks} />)
+    expect(screen.getByText('Tasks (1)')).toBeDefined()
   })
 
-  it('renders existing tasks', () => {
-    const tasks = [{ id: '1', label: 'Task1', value: 'Task1' }]
-    render(<TaskListEditor tasks={tasks} onChange={mockOnChange} />)
-    expect(screen.getByText('Task1')).toBeDefined()
+  it('disables Add Task button when disabled', () => {
+    render(<TaskListEditor {...defaultProps} disabled />)
+    expect(screen.getByText('Add Task').closest('button')).toBeDisabled()
   })
 })

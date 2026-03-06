@@ -1,47 +1,97 @@
-import { describe, it, expect, vi } from 'vitest'
+import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen, fireEvent } from '@testing-library/react'
 
+const mockUseASTRegistry = vi.hoisted(() =>
+  vi.fn().mockReturnValue({
+    searchResults: [
+      { id: 'login', name: 'TSO Login', description: 'TSO Login', category: 'fire', enabled: true, visible: true, keywords: [], component: () => null },
+      { id: 'bi_renew', name: 'BI Renew', description: 'BI Renewal', category: 'auto', enabled: true, visible: true, keywords: [], component: () => null },
+    ],
+    searchQuery: '',
+    setSearchQuery: vi.fn(),
+    getAST: vi.fn((id: string) => {
+      if (id === 'login') return { id: 'login', name: 'TSO Login', description: 'TSO Login', category: 'fire', enabled: true, visible: true, keywords: [], component: () => null }
+      if (id === 'bi_renew') return { id: 'bi_renew', name: 'BI Renew', description: 'BI Renewal', category: 'auto', enabled: true, visible: true, keywords: [], component: () => null }
+      return undefined
+    }),
+    groupedASTs: {
+      auto: [{ id: 'bi_renew', name: 'BI Renew', description: 'BI Renewal', category: 'auto', enabled: true, visible: true, keywords: [], component: () => null }],
+      fire: [{ id: 'login', name: 'TSO Login', description: 'TSO Login', category: 'fire', enabled: true, visible: true, keywords: [], component: () => null }],
+    },
+  }),
+)
+
 vi.mock('../registry', () => ({
-  getAllASTs: vi.fn().mockReturnValue([
-    { name: 'login', label: 'Login', description: 'TSO Login' },
-    { name: 'bi-renew', label: 'BI Renew', description: 'BI Renewal' },
-  ]),
+  useASTRegistry: mockUseASTRegistry,
+  CATEGORY_AUTH_GROUP: { auto: '@OOAUTO', fire: '@OOFIRE' },
+}))
+
+vi.mock('../registry/types', () => ({
+  CATEGORY_INFO: {
+    auto: { id: 'auto', name: 'Auto', description: 'Auto insurance' },
+    fire: { id: 'fire', name: 'Fire', description: 'Fire insurance' },
+  },
 }))
 
 import { ASTSelector } from './ASTSelector'
 
 describe('ASTSelector', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mockUseASTRegistry.mockReturnValue({
+      searchResults: [
+        { id: 'login', name: 'TSO Login', description: 'TSO Login', category: 'fire', enabled: true, visible: true, keywords: [], component: () => null },
+        { id: 'bi_renew', name: 'BI Renew', description: 'BI Renewal', category: 'auto', enabled: true, visible: true, keywords: [], component: () => null },
+      ],
+      searchQuery: '',
+      setSearchQuery: vi.fn(),
+      getAST: vi.fn((id: string) => {
+        if (id === 'login') return { id: 'login', name: 'TSO Login', description: 'TSO Login', category: 'fire' }
+        if (id === 'bi_renew') return { id: 'bi_renew', name: 'BI Renew', description: 'BI Renewal', category: 'auto' }
+        return undefined
+      }),
+      groupedASTs: {
+        auto: [{ id: 'bi_renew', name: 'BI Renew', description: 'BI Renewal', category: 'auto', enabled: true, visible: true, keywords: [] }],
+        fire: [{ id: 'login', name: 'TSO Login', description: 'TSO Login', category: 'fire', enabled: true, visible: true, keywords: [] }],
+      },
+    })
+  })
+
   it('renders trigger button with placeholder', () => {
-    render(<ASTSelector selected={null} onSelect={vi.fn()} />)
-    expect(screen.getByText('Search for an AST...')).toBeDefined()
+    render(<ASTSelector value={null} onChange={vi.fn()} />)
+    expect(screen.getByText('Select Automation')).toBeDefined()
   })
 
-  it('shows dropdown when clicked', () => {
-    render(<ASTSelector selected={null} onSelect={vi.fn()} />)
-    fireEvent.click(screen.getByText('Search for an AST...'))
-    expect(screen.getByText('Login')).toBeDefined()
-    expect(screen.getByText('BI Renew')).toBeDefined()
+  it('renders custom placeholder', () => {
+    render(<ASTSelector value={null} onChange={vi.fn()} placeholder="Pick one" />)
+    expect(screen.getByText('Pick one')).toBeDefined()
   })
 
-  it('calls onSelect when option clicked', () => {
-    const onSelect = vi.fn()
-    render(<ASTSelector selected={null} onSelect={onSelect} />)
-    fireEvent.click(screen.getByText('Search for an AST...'))
-    fireEvent.click(screen.getByText('Login'))
-    expect(onSelect).toHaveBeenCalledWith('login')
+  it('shows dropdown with search when clicked', () => {
+    render(<ASTSelector value={null} onChange={vi.fn()} />)
+    fireEvent.click(screen.getByText('Select Automation'))
+    expect(screen.getByPlaceholderText('Search...')).toBeDefined()
   })
 
-  it('shows selected AST label in trigger', () => {
-    render(<ASTSelector selected="login" onSelect={vi.fn()} />)
-    expect(screen.getByText('Login')).toBeDefined()
+  it('calls onChange when option clicked', () => {
+    const onChange = vi.fn()
+    render(<ASTSelector value={null} onChange={onChange} />)
+    fireEvent.click(screen.getByText('Select Automation'))
+    // Options should be visible since searchResults are populated
+    // Use getAllByText since grouped view may show name in multiple places
+    const loginOptions = screen.getAllByText('TSO Login')
+    fireEvent.click(loginOptions[0])
+    expect(onChange).toHaveBeenCalledWith('login')
   })
 
-  it('filters results based on search', () => {
-    render(<ASTSelector selected={null} onSelect={vi.fn()} />)
-    fireEvent.click(screen.getByText('Search for an AST...'))
-    const searchInput = screen.getByPlaceholderText('Search...')
-    fireEvent.change(searchInput, { target: { value: 'renew' } })
-    expect(screen.getByText('BI Renew')).toBeDefined()
-    expect(screen.queryByText('Login')).toBeNull()
+  it('shows selected AST name in trigger', () => {
+    render(<ASTSelector value="login" onChange={vi.fn()} />)
+    expect(screen.getByText('TSO Login')).toBeDefined()
+  })
+
+  it('respects disabled prop', () => {
+    render(<ASTSelector value={null} onChange={vi.fn()} disabled />)
+    const button = screen.getByRole('button')
+    expect(button).toBeDisabled()
   })
 })

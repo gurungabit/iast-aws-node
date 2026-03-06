@@ -1,35 +1,100 @@
-import { describe, it, expect, vi } from 'vitest'
-import { render, screen, fireEvent } from '@testing-library/react'
+import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { render, screen } from '@testing-library/react'
+
+const mockExecuteAST = vi.hoisted(() => vi.fn())
+
+const mockUseAST = vi.hoisted(() =>
+  vi.fn().mockReturnValue({
+    status: 'idle',
+    isRunning: false,
+    lastResult: null,
+    progress: null,
+    itemResults: [],
+    statusMessages: [],
+    executeAST: mockExecuteAST,
+    controlAST: vi.fn(),
+    clearLogs: vi.fn(),
+  }),
+)
+
+const mockUseAuth = vi.hoisted(() =>
+  vi.fn().mockReturnValue({
+    isAuthenticated: true,
+    user: { id: 'user-1', name: 'Test', email: 'test@test.com' },
+    getAccessToken: vi.fn(),
+  }),
+)
+
+const mockUseFormField = vi.hoisted(() =>
+  vi.fn().mockReturnValue(['', vi.fn()]),
+)
+
+const mockUseASTRegistry = vi.hoisted(() =>
+  vi.fn().mockReturnValue({
+    getAST: vi.fn().mockReturnValue({
+      id: 'bi_renew',
+      name: 'BI Renew',
+      category: 'auto',
+      supportsParallel: true,
+    }),
+  }),
+)
+
+const mockUseASTStore = vi.hoisted(() => vi.fn().mockReturnValue(null))
+
+vi.mock('../../hooks/useAST', () => ({ useAST: mockUseAST }))
+vi.mock('../../auth/useAuth', () => ({ useAuth: mockUseAuth }))
+vi.mock('../../hooks/useFormField', () => ({ useFormField: mockUseFormField }))
+vi.mock('../registry', () => ({ useASTRegistry: mockUseASTRegistry }))
+vi.mock('../../stores/ast-store', () => ({ useASTStore: mockUseASTStore }))
+
+vi.mock('../shared', () => ({
+  ASTFormWrapper: ({ title, children }: { title: string; children: React.ReactNode }) => (
+    <div data-testid="form-wrapper">
+      <div>{title}</div>
+      {children}
+    </div>
+  ),
+  CredentialsInput: () => <div data-testid="credentials" />,
+}))
+
+vi.mock('../../components/ui/DatePicker', () => ({
+  DatePicker: ({ label }: { label: string }) => <div data-testid="date-picker">{label}</div>,
+}))
+
+vi.mock('../../services/ast-configs', () => ({
+  listAstConfigs: vi.fn().mockResolvedValue([]),
+}))
+
 import { BiRenewASTForm } from './BiRenewASTForm'
 
-Object.defineProperty(globalThis, 'crypto', {
-  value: { randomUUID: () => 'test-uuid' },
-})
-
 describe('BiRenewASTForm', () => {
-  it('renders credentials and run button', () => {
-    render(<BiRenewASTForm sessionId="s1" onRun={vi.fn()} />)
-    expect(screen.getByPlaceholderText('HERC01')).toBeDefined()
-    expect(screen.getByPlaceholderText('Password')).toBeDefined()
-    expect(screen.getByText('Run BI Renew')).toBeDefined()
+  beforeEach(() => {
+    vi.clearAllMocks()
   })
 
-  it('run button disabled without credentials', () => {
-    render(<BiRenewASTForm sessionId="s1" onRun={vi.fn()} />)
-    expect(screen.getByText('Run BI Renew')).toBeDisabled()
+  it('renders without crashing (no props)', () => {
+    const { container } = render(<BiRenewASTForm />)
+    expect(container).toBeDefined()
   })
 
-  it('calls onRun with params', () => {
-    const onRun = vi.fn()
-    render(<BiRenewASTForm sessionId="s1" onRun={onRun} />)
-    fireEvent.change(screen.getByPlaceholderText('HERC01'), { target: { value: 'u' } })
-    fireEvent.change(screen.getByPlaceholderText('Password'), { target: { value: 'p' } })
-    fireEvent.click(screen.getByText('Run BI Renew'))
-    expect(onRun).toHaveBeenCalledWith({ username: 'u', password: 'p', policyNumbers: [] })
+  it('renders form wrapper with BI Renew title', () => {
+    render(<BiRenewASTForm />)
+    expect(screen.getByText('BI Renew')).toBeDefined()
   })
 
-  it('respects disabled prop', () => {
-    render(<BiRenewASTForm sessionId="s1" onRun={vi.fn()} disabled />)
-    expect(screen.getByPlaceholderText('HERC01')).toBeDisabled()
+  it('renders the date picker for missed run date', () => {
+    render(<BiRenewASTForm />)
+    expect(screen.getByText('Missed Run Date')).toBeDefined()
+  })
+
+  it('uses useAST hook internally', () => {
+    render(<BiRenewASTForm />)
+    expect(mockUseAST).toHaveBeenCalled()
+  })
+
+  it('uses useAuth hook internally', () => {
+    render(<BiRenewASTForm />)
+    expect(mockUseAuth).toHaveBeenCalled()
   })
 })

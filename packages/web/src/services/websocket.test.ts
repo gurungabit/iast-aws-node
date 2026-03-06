@@ -202,7 +202,7 @@ describe('TerminalWebSocket', () => {
     })
 
     it('clears reconnect timer on disconnect', async () => {
-      const clearTimeoutSpy = vi.spyOn(global, 'clearTimeout')
+      const clearTimeoutSpy = vi.spyOn(globalThis, 'clearTimeout')
       const tws = new TerminalWebSocket('session-1')
       await tws.connect()
 

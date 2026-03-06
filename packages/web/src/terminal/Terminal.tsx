@@ -229,17 +229,17 @@ export const TerminalComponent = memo(function TerminalComponent({ sessionId }: 
                 className={`px-3 py-1.5 text-xs flex items-center gap-1 rounded border cursor-pointer transition-colors
                   ${keyMenuOpen
                     ? 'bg-blue-600 text-white border-blue-600'
-                    : 'bg-zinc-800 text-zinc-200 border-zinc-700 hover:bg-zinc-700'
+                    : 'bg-gray-100 dark:bg-zinc-800 text-gray-800 dark:text-zinc-200 border-gray-300 dark:border-zinc-700 hover:bg-gray-200 dark:hover:bg-zinc-700'
                   }`}
               >
                 Keys ▾
               </button>
 
               {keyMenuOpen && (
-                <div className="absolute top-full left-0 mt-1 min-w-[340px] p-3 rounded-md border shadow-lg z-50 bg-zinc-900 border-zinc-700">
+                <div className="absolute top-full left-0 mt-1 min-w-[340px] p-3 rounded-md border shadow-lg z-50 bg-white dark:bg-zinc-900 border-gray-200 dark:border-zinc-700">
                   {/* PF Keys */}
                   <div className="mb-3">
-                    <div className="text-[11px] uppercase mb-1.5 text-zinc-500 font-medium">
+                    <div className="text-[11px] uppercase mb-1.5 text-gray-500 dark:text-zinc-500 font-medium">
                       Function Keys
                     </div>
                     <div className="grid grid-cols-6 gap-1">
@@ -249,9 +249,10 @@ export const TerminalComponent = memo(function TerminalComponent({ sessionId }: 
                           key={label}
                           onClick={() => handleKeyClick(label.toLowerCase())}
                           className="px-1.5 py-1.5 text-[11px] rounded border cursor-pointer transition-colors
-                            bg-zinc-800 text-zinc-200 border-zinc-700
-                            hover:bg-zinc-700 hover:border-zinc-600
-                            active:bg-zinc-600"
+                            bg-gray-100 dark:bg-zinc-800 text-gray-800 dark:text-zinc-200
+                            border-gray-300 dark:border-zinc-700
+                            hover:bg-gray-200 dark:hover:bg-zinc-700 hover:border-gray-400 dark:hover:border-zinc-600
+                            active:bg-gray-300 dark:active:bg-zinc-600"
                         >
                           {label}
                         </button>
@@ -261,7 +262,7 @@ export const TerminalComponent = memo(function TerminalComponent({ sessionId }: 
 
                   {/* PA Keys */}
                   <div className="mb-3">
-                    <div className="text-[11px] uppercase mb-1.5 text-zinc-500 font-medium">
+                    <div className="text-[11px] uppercase mb-1.5 text-gray-500 dark:text-zinc-500 font-medium">
                       Program Attention & Actions
                     </div>
                     <div className="flex flex-wrap gap-1">
@@ -273,7 +274,7 @@ export const TerminalComponent = memo(function TerminalComponent({ sessionId }: 
                           className={`px-2.5 py-1.5 text-[11px] rounded border cursor-pointer transition-colors
                             ${label === 'Enter'
                               ? 'bg-blue-600 text-white border-blue-600 hover:bg-blue-700 active:bg-blue-800'
-                              : 'bg-zinc-800 text-zinc-200 border-zinc-700 hover:bg-zinc-700 hover:border-zinc-600 active:bg-zinc-600'
+                              : 'bg-gray-100 dark:bg-zinc-800 text-gray-800 dark:text-zinc-200 border-gray-300 dark:border-zinc-700 hover:bg-gray-200 dark:hover:bg-zinc-700 hover:border-gray-400 dark:hover:border-zinc-600 active:bg-gray-300 dark:active:bg-zinc-600'
                             }`}
                         >
                           {label}
@@ -283,23 +284,23 @@ export const TerminalComponent = memo(function TerminalComponent({ sessionId }: 
                   </div>
 
                   {/* Keyboard Shortcuts */}
-                  <div className="pt-2 border-t border-zinc-700">
-                    <div className="text-[11px] uppercase mb-1.5 text-zinc-500 font-medium">
+                  <div className="pt-2 border-t border-gray-200 dark:border-zinc-700">
+                    <div className="text-[11px] uppercase mb-1.5 text-gray-500 dark:text-zinc-500 font-medium">
                       Keyboard Shortcuts
                     </div>
                     <div className="grid grid-cols-2 gap-x-4 gap-y-0.5 text-[10px]">
                       {KEYBOARD_SHORTCUTS.map(({ keys, action }) => (
                         <div key={keys} className="flex justify-between">
-                          <span className="text-zinc-400 font-mono">{keys}</span>
-                          <span className="text-zinc-500">{action}</span>
+                          <span className="text-gray-600 dark:text-zinc-400 font-mono">{keys}</span>
+                          <span className="text-gray-500 dark:text-zinc-500">{action}</span>
                         </div>
                       ))}
                     </div>
                   </div>
 
                   {/* Session ID */}
-                  <div className="pt-2 mt-2 border-t border-zinc-700">
-                    <div className="text-[10px] text-zinc-500 font-mono truncate">
+                  <div className="pt-2 mt-2 border-t border-gray-200 dark:border-zinc-700">
+                    <div className="text-[10px] text-gray-400 dark:text-zinc-500 font-mono truncate">
                       Session: {sessionId}
                     </div>
                   </div>
@@ -327,7 +328,8 @@ export const TerminalComponent = memo(function TerminalComponent({ sessionId }: 
               type="button"
               onClick={handleDisconnect}
               className="px-3 py-1.5 text-xs rounded cursor-pointer transition-colors
-                bg-zinc-700 text-zinc-200 hover:bg-zinc-600"
+                bg-gray-200 dark:bg-zinc-700 text-gray-700 dark:text-zinc-200
+                hover:bg-gray-300 dark:hover:bg-zinc-600"
             >
               Disconnect
             </button>

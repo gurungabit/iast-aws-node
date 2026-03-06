@@ -2,71 +2,80 @@ import { describe, it, expect } from 'vitest'
 import { registerAST, getAST, getAllASTs } from './index'
 
 // The registry is module-level state, so registrations persist across tests.
-// We work around this by using unique names per test.
+// We work around this by using unique ids per test.
 
 describe('AST Registry', () => {
-  it('returns undefined for an unknown AST name', () => {
+  it('returns undefined for an unknown AST id', () => {
     expect(getAST('nonexistent-ast')).toBeUndefined()
   })
 
   it('registers an entry and retrieves it with getAST', () => {
     const entry = {
-      name: 'test-ast-1',
-      label: 'Test AST 1',
+      id: 'test-ast-1',
+      name: 'Test AST 1',
       description: 'A test AST',
-      FormComponent: () => null,
+      category: 'fire' as const,
+      component: () => null,
     }
 
     registerAST(entry)
     const result = getAST('test-ast-1')
 
     expect(result).toBeDefined()
-    expect(result!.name).toBe('test-ast-1')
-    expect(result!.label).toBe('Test AST 1')
+    expect(result!.id).toBe('test-ast-1')
+    expect(result!.name).toBe('Test AST 1')
     expect(result!.description).toBe('A test AST')
-    expect(result!.FormComponent).toBe(entry.FormComponent)
+    expect(result!.category).toBe('fire')
+    expect(result!.component).toBe(entry.component)
+    expect(result!.enabled).toBe(true)
+    expect(result!.visible).toBe(true)
   })
 
   it('getAllASTs returns all registered entries', () => {
     registerAST({
-      name: 'test-ast-2',
-      label: 'Test AST 2',
+      id: 'test-ast-2',
+      name: 'Test AST 2',
       description: 'Another test AST',
-      FormComponent: () => null,
+      category: 'auto',
+      component: () => null,
     })
 
     registerAST({
-      name: 'test-ast-3',
-      label: 'Test AST 3',
+      id: 'test-ast-3',
+      name: 'Test AST 3',
       description: 'Yet another test AST',
-      FormComponent: () => null,
+      category: 'fire',
+      component: () => null,
     })
 
     const all = getAllASTs()
-    const names = all.map((a) => a.name)
+    const ids = all.map((a) => a.id)
 
-    expect(names).toContain('test-ast-2')
-    expect(names).toContain('test-ast-3')
+    expect(ids).toContain('test-ast-2')
+    expect(ids).toContain('test-ast-3')
   })
 
-  it('overwrites an entry when registering with the same name', () => {
+  it('overwrites an entry when registering with the same id', () => {
     registerAST({
-      name: 'test-ast-overwrite',
-      label: 'Original',
+      id: 'test-ast-overwrite',
+      name: 'Original',
       description: 'Original description',
-      FormComponent: () => null,
+      category: 'auto',
+      component: () => null,
     })
 
     registerAST({
-      name: 'test-ast-overwrite',
-      label: 'Overwritten',
+      id: 'test-ast-overwrite',
+      name: 'Overwritten',
       description: 'New description',
-      FormComponent: () => null,
+      category: 'fire',
+      component: () => null,
     })
 
     const result = getAST('test-ast-overwrite')
-    expect(result!.label).toBe('Overwritten')
+    expect(result!.name).toBe('Overwritten')
     expect(result!.description).toBe('New description')
+    expect(result!.category).toBe('fire')
   })
 
   it('getAllASTs returns an array', () => {

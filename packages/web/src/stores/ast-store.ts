@@ -1,95 +1,338 @@
 import { create } from 'zustand'
-import type { ASTItemResult } from '../services/websocket'
+import type { ASTStatus, ASTResult, ASTProgress, ASTItemResult } from '../ast/types'
 
-export type ASTStatus = 'idle' | 'running' | 'paused' | 'completed' | 'failed' | 'cancelled'
+// AutoLauncher run types
+export type AutoLauncherRunStatus = 'running' | 'completed' | 'failed'
+export type AutoLauncherStepStatus = 'pending' | 'running' | 'success' | 'failed'
+export type AutoLauncherRunSource = 'autoLauncher' | 'multiTaskConfig'
 
-interface ASTExecution {
-  executionId: string
+export interface AutoLauncherStepState {
   astName: string
-  status: ASTStatus
-  progress: { current: number; total: number; message: string }
-  items: ASTItemResult[]
+  configId: string
+  order: number
+  status: AutoLauncherStepStatus
   error?: string
+  stepLabel?: string
+  taskLabel?: string | null
+  configName?: string
 }
 
-interface ASTState {
-  // Per-session AST execution state
-  executions: Map<string, ASTExecution>
-
-  startExecution: (sessionId: string, executionId: string, astName: string) => void
-  updateStatus: (sessionId: string, status: ASTStatus) => void
-  updateProgress: (sessionId: string, progress: ASTExecution['progress']) => void
-  addItemBatch: (sessionId: string, items: ASTItemResult[]) => void
-  completeExecution: (sessionId: string, status: ASTStatus, error?: string) => void
-  clearExecution: (sessionId: string) => void
-  getExecution: (sessionId: string) => ASTExecution | null
+export interface AutoLauncherRunState {
+  runId: string
+  launcherId: string
+  status: AutoLauncherRunStatus
+  nextStepIndex: number
+  steps: AutoLauncherStepState[]
+  lastError?: string
+  source: AutoLauncherRunSource
+  displayName?: string
 }
 
-export const useASTStore = create<ASTState>((set, get) => ({
-  executions: new Map(),
+// Tab state
+export interface TabASTState {
+  selectedASTId: string | null
+  runningAST: string | null
+  status: ASTStatus
+  lastResult: ASTResult | null
+  progress: ASTProgress | null
+  itemResults: ASTItemResult[]
+  statusMessages: string[]
+  autoLauncherRun: AutoLauncherRunState | null
+  credentials: { username: string; password: string }
+  formOptions: { testMode: boolean; parallel: boolean }
+  customFields: Record<string, unknown>
+}
 
-  startExecution: (sessionId, executionId, astName) => {
-    set((state) => {
-      const executions = new Map(state.executions)
-      executions.set(sessionId, {
-        executionId,
-        astName,
-        status: 'running',
-        progress: { current: 0, total: 0, message: 'Starting...' },
-        items: [],
-      })
-      return { executions }
-    })
-  },
+function createDefaultTabState(): TabASTState {
+  return {
+    selectedASTId: null,
+    runningAST: null,
+    status: 'idle',
+    lastResult: null,
+    progress: null,
+    itemResults: [],
+    statusMessages: [],
+    autoLauncherRun: null,
+    credentials: { username: '', password: '' },
+    formOptions: { testMode: false, parallel: false },
+    customFields: {},
+  }
+}
 
-  updateStatus: (sessionId, status) => {
-    set((state) => {
-      const executions = new Map(state.executions)
-      const exec = executions.get(sessionId)
-      if (exec) executions.set(sessionId, { ...exec, status })
-      return { executions }
-    })
-  },
+interface ASTStore {
+  tabs: Record<string, TabASTState>
+  activeTabId: string | null
 
-  updateProgress: (sessionId, progress) => {
-    set((state) => {
-      const executions = new Map(state.executions)
-      const exec = executions.get(sessionId)
-      if (exec) executions.set(sessionId, { ...exec, progress })
-      return { executions }
-    })
-  },
+  setActiveTabId: (tabId: string | null) => void
+  initTab: (tabId: string) => void
+  removeTab: (tabId: string) => void
+  setSelectedASTId: (tabId: string, astId: string | null) => void
+  setCredentials: (tabId: string, credentials: { username?: string; password?: string }) => void
+  setFormOptions: (tabId: string, options: { testMode?: boolean; parallel?: boolean }) => void
+  setCustomField: (tabId: string, key: string, value: unknown) => void
 
-  addItemBatch: (sessionId, items) => {
+  // Execution
+  executeAST: (tabId: string, astName: string, params?: Record<string, unknown>) => void
+  handleASTStatus: (tabId: string, info: { astName: string; status: ASTStatus; message?: string; error?: string; duration?: number }) => void
+  handleASTProgress: (tabId: string, progress: ASTProgress) => void
+  handleASTItemResults: (tabId: string, items: ASTItemResult[]) => void
+  handleASTComplete: (tabId: string, result: ASTResult) => void
+  addStatusMessage: (tabId: string, message: string) => void
+  clearLogs: (tabId: string) => void
+
+  // AutoLauncher
+  beginAutoLauncherRun: (tabId: string, config: {
+    runId: string
+    launcherId: string
+    steps: Array<{ astName: string; configId: string; order: number; stepLabel?: string; taskLabel?: string | null; configName?: string }>
+    source?: AutoLauncherRunSource
+    displayName?: string
+  }) => void
+  clearAutoLauncherRun: (tabId: string) => void
+}
+
+export const useASTStore = create<ASTStore>((set) => ({
+  tabs: {},
+  activeTabId: null,
+
+  setActiveTabId: (tabId) => set({ activeTabId: tabId }),
+
+  initTab: (tabId) =>
     set((state) => {
-      const executions = new Map(state.executions)
-      const exec = executions.get(sessionId)
-      if (exec) {
-        executions.set(sessionId, {
-          ...exec,
-          items: [...exec.items, ...items],
-        })
+      if (state.tabs[tabId]) return state
+      return { tabs: { ...state.tabs, [tabId]: createDefaultTabState() } }
+    }),
+
+  removeTab: (tabId) =>
+    set((state) => {
+      const { [tabId]: _, ...rest } = state.tabs
+      return { tabs: rest }
+    }),
+
+  setSelectedASTId: (tabId, astId) =>
+    set((state) => {
+      const tab = state.tabs[tabId]
+      if (!tab) return state
+      return { tabs: { ...state.tabs, [tabId]: { ...tab, selectedASTId: astId } } }
+    }),
+
+  setCredentials: (tabId, creds) =>
+    set((state) => {
+      const tab = state.tabs[tabId]
+      if (!tab) return state
+      return {
+        tabs: {
+          ...state.tabs,
+          [tabId]: { ...tab, credentials: { ...tab.credentials, ...creds } },
+        },
       }
-      return { executions }
-    })
-  },
+    }),
 
-  completeExecution: (sessionId, status, error) => {
+  setFormOptions: (tabId, opts) =>
     set((state) => {
-      const executions = new Map(state.executions)
-      const exec = executions.get(sessionId)
-      if (exec) executions.set(sessionId, { ...exec, status, error })
-      return { executions }
-    })
-  },
+      const tab = state.tabs[tabId]
+      if (!tab) return state
+      return {
+        tabs: {
+          ...state.tabs,
+          [tabId]: { ...tab, formOptions: { ...tab.formOptions, ...opts } },
+        },
+      }
+    }),
 
-  clearExecution: (sessionId) => {
+  setCustomField: (tabId, key, value) =>
     set((state) => {
-      const executions = new Map(state.executions)
-      executions.delete(sessionId)
-      return { executions }
+      const tab = state.tabs[tabId]
+      if (!tab) return state
+      return {
+        tabs: {
+          ...state.tabs,
+          [tabId]: { ...tab, customFields: { ...tab.customFields, [key]: value } },
+        },
+      }
+    }),
+
+  executeAST: (tabId, astName, params) => {
+    set((state) => {
+      const tab = state.tabs[tabId]
+      if (!tab) return state
+      return {
+        tabs: {
+          ...state.tabs,
+          [tabId]: {
+            ...tab,
+            runningAST: astName,
+            status: 'running',
+            lastResult: null,
+            progress: null,
+            itemResults: [],
+            statusMessages: [`Starting ${astName}...`],
+          },
+        },
+      }
     })
+
+    // Send via WebSocket if available
+    const sessionStore = (window as unknown as Record<string, unknown>).__sessionStoreRef as
+      | { getState: () => { tabs: Map<string, { ws?: { send: (msg: unknown) => void } }> } }
+      | undefined
+    if (sessionStore) {
+      const tab = sessionStore.getState().tabs.get(tabId)
+      tab?.ws?.send({ type: 'ast.run', astName, params })
+    }
   },
 
-  getExecution: (sessionId) => get().executions.get(sessionId) ?? null,
+  handleASTStatus: (tabId, info) =>
+    set((state) => {
+      const tab = state.tabs[tabId]
+      if (!tab) return state
+
+      const updates: Partial<TabASTState> = { status: info.status }
+      if (info.status === 'running') {
+        updates.runningAST = info.astName
+      }
+      if (info.message) {
+        updates.statusMessages = [...tab.statusMessages, info.message]
+      }
+
+      // Handle AutoLauncher step tracking
+      if (tab.autoLauncherRun) {
+        const run = { ...tab.autoLauncherRun }
+        const steps = [...run.steps]
+        const currentIdx = run.nextStepIndex
+
+        if (info.status === 'running' && currentIdx < steps.length) {
+          steps[currentIdx] = { ...steps[currentIdx], status: 'running' }
+        } else if (info.status === 'completed' && currentIdx < steps.length) {
+          steps[currentIdx] = { ...steps[currentIdx], status: 'success' }
+          run.nextStepIndex = currentIdx + 1
+          if (run.nextStepIndex >= steps.length) {
+            run.status = 'completed'
+          }
+        } else if (info.status === 'failed' && currentIdx < steps.length) {
+          steps[currentIdx] = { ...steps[currentIdx], status: 'failed', error: info.error }
+          run.status = 'failed'
+          run.lastError = info.error
+        }
+
+        run.steps = steps
+        updates.autoLauncherRun = run
+      }
+
+      return {
+        tabs: {
+          ...state.tabs,
+          [tabId]: { ...tab, ...updates },
+        },
+      }
+    }),
+
+  handleASTProgress: (tabId, progress) =>
+    set((state) => {
+      const tab = state.tabs[tabId]
+      if (!tab) return state
+      return { tabs: { ...state.tabs, [tabId]: { ...tab, progress } } }
+    }),
+
+  handleASTItemResults: (tabId, items) =>
+    set((state) => {
+      const tab = state.tabs[tabId]
+      if (!tab) return state
+      return {
+        tabs: {
+          ...state.tabs,
+          [tabId]: { ...tab, itemResults: [...tab.itemResults, ...items] },
+        },
+      }
+    }),
+
+  handleASTComplete: (tabId, result) =>
+    set((state) => {
+      const tab = state.tabs[tabId]
+      if (!tab) return state
+      return {
+        tabs: {
+          ...state.tabs,
+          [tabId]: {
+            ...tab,
+            status: result.status,
+            runningAST: null,
+            lastResult: result,
+            statusMessages: [...tab.statusMessages, result.message || `Completed with status: ${result.status}`],
+          },
+        },
+      }
+    }),
+
+  addStatusMessage: (tabId, message) =>
+    set((state) => {
+      const tab = state.tabs[tabId]
+      if (!tab) return state
+      return {
+        tabs: {
+          ...state.tabs,
+          [tabId]: { ...tab, statusMessages: [...tab.statusMessages, message] },
+        },
+      }
+    }),
+
+  clearLogs: (tabId) =>
+    set((state) => {
+      const tab = state.tabs[tabId]
+      if (!tab) return state
+      return {
+        tabs: {
+          ...state.tabs,
+          [tabId]: {
+            ...tab,
+            statusMessages: [],
+            itemResults: [],
+            progress: null,
+            lastResult: null,
+            status: 'idle',
+          },
+        },
+      }
+    }),
+
+  beginAutoLauncherRun: (tabId, config) =>
+    set((state) => {
+      const tab = state.tabs[tabId]
+      if (!tab) return state
+      const run: AutoLauncherRunState = {
+        runId: config.runId,
+        launcherId: config.launcherId,
+        status: 'running',
+        nextStepIndex: 0,
+        steps: config.steps.map((s) => ({
+          astName: s.astName,
+          configId: s.configId,
+          order: s.order,
+          status: 'pending' as const,
+          stepLabel: s.stepLabel,
+          taskLabel: s.taskLabel,
+          configName: s.configName,
+        })),
+        source: config.source ?? 'autoLauncher',
+        displayName: config.displayName,
+      }
+      return {
+        tabs: {
+          ...state.tabs,
+          [tabId]: { ...tab, autoLauncherRun: run },
+        },
+      }
+    }),
+
+  clearAutoLauncherRun: (tabId) =>
+    set((state) => {
+      const tab = state.tabs[tabId]
+      if (!tab) return state
+      return {
+        tabs: {
+          ...state.tabs,
+          [tabId]: { ...tab, autoLauncherRun: null },
+        },
+      }
+    }),
 }))

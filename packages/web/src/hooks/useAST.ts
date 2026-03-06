@@ -1,36 +1,57 @@
 import { useCallback } from 'react'
-import { useSessionStore } from '../stores/session-store'
 import { useASTStore } from '../stores/ast-store'
+import { useSessionStore } from '../stores/session-store'
 
-export function useAST(sessionId: string | null) {
-  const runAST = useCallback(
-    (astName: string, params: Record<string, unknown>, configId?: string) => {
-      if (!sessionId) return
-      const tab = useSessionStore.getState().tabs.get(sessionId)
-      if (!tab?.ws) return
+export function useAST() {
+  const activeTabId = useASTStore((s) => s.activeTabId)
+  const tabState = useASTStore((s) => (activeTabId ? s.tabs[activeTabId] ?? null : null))
 
-      tab.ws.send({
-        type: 'ast.run',
-        astName,
-        params,
-        configId,
-      })
+  const status = tabState?.status ?? 'idle'
+  const isRunning = status === 'running' || status === 'paused'
+  const lastResult = tabState?.lastResult ?? null
+  const progress = tabState?.progress ?? null
+  const itemResults = tabState?.itemResults ?? []
+  const statusMessages = tabState?.statusMessages ?? []
+
+  const executeAST = useCallback(
+    (astName: string, params?: Record<string, unknown>) => {
+      if (!activeTabId) return
+
+      // Send via WebSocket
+      const tab = useSessionStore.getState().tabs.get(activeTabId)
+      if (tab?.ws) {
+        tab.ws.send({ type: 'ast.run', astName, params })
+      }
+
+      // Update store
+      useASTStore.getState().executeAST(activeTabId, astName, params)
     },
-    [sessionId],
+    [activeTabId],
   )
 
   const controlAST = useCallback(
     (action: 'pause' | 'resume' | 'cancel') => {
-      if (!sessionId) return
-      const tab = useSessionStore.getState().tabs.get(sessionId)
+      if (!activeTabId) return
+      const tab = useSessionStore.getState().tabs.get(activeTabId)
       tab?.ws?.send({ type: 'ast.control', action })
     },
-    [sessionId],
+    [activeTabId],
   )
 
-  const execution = useASTStore(
-    (s) => (sessionId ? s.executions.get(sessionId) ?? null : null),
-  )
+  const clearLogs = useCallback(() => {
+    if (!activeTabId) return
+    useASTStore.getState().clearLogs(activeTabId)
+  }, [activeTabId])
 
-  return { runAST, controlAST, execution }
+  return {
+    status,
+    isRunning,
+    lastResult,
+    progress,
+    itemResults,
+    statusMessages,
+    executeAST,
+    controlAST,
+    clearLogs,
+  }
 }

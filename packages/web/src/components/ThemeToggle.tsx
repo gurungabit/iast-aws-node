@@ -7,7 +7,7 @@ export function ThemeToggle({ theme, onToggle }: ThemeToggleProps): React.ReactN
   return (
     <button
       onClick={onToggle}
-      className="p-2 rounded-lg transition-colors duration-150 cursor-pointer bg-gray-200 dark:bg-zinc-800 hover:bg-gray-300 dark:hover:bg-zinc-700"
+      className="p-2 rounded-lg transition-colors cursor-pointer bg-gray-200 dark:bg-zinc-800 hover:bg-gray-300 dark:hover:bg-zinc-700"
       aria-label={`Switch to ${theme === 'dark' ? 'light' : 'dark'} mode`}
       title={`Switch to ${theme === 'dark' ? 'light' : 'dark'} mode`}
     >

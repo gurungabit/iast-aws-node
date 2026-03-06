@@ -32,7 +32,7 @@ export function UserDropdown({ email, onSignOut }: UserDropdownProps): React.Rea
     <div className="relative" ref={dropdownRef}>
       <button
         onClick={() => setIsOpen(!isOpen)}
-        className="flex items-center gap-2 px-3 py-2 rounded-lg transition-colors duration-150 cursor-pointer bg-gray-100 dark:bg-zinc-800 hover:bg-gray-200 dark:hover:bg-zinc-700"
+        className="flex items-center gap-2 px-3 py-2 rounded-lg transition-colors cursor-pointer bg-gray-100 dark:bg-zinc-800 hover:bg-gray-200 dark:hover:bg-zinc-700"
         aria-label="User menu"
         aria-expanded={isOpen}
         aria-haspopup="true"
@@ -41,7 +41,7 @@ export function UserDropdown({ email, onSignOut }: UserDropdownProps): React.Rea
           <User className="w-4 h-4 text-white" />
         </div>
         <ChevronDown
-          className={`w-4 h-4 text-gray-500 dark:text-zinc-400 transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`}
+          className={`w-4 h-4 text-gray-500 dark:text-zinc-400 transition-transform ${isOpen ? 'rotate-180' : ''}`}
         />
       </button>
 

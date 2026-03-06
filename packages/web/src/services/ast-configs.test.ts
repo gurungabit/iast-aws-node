@@ -15,11 +15,13 @@ vi.mock('./api', () => ({
 }))
 
 import {
-  getASTConfigs,
-  createASTConfig,
-  updateASTConfig,
-  deleteASTConfig,
-  cloneASTConfig,
+  listAstConfigs,
+  getAstConfig,
+  createAstConfig,
+  updateAstConfig,
+  deleteAstConfig,
+  cloneAstConfig,
+  runAstConfig,
 } from './ast-configs'
 
 describe('ast-configs service', () => {
@@ -27,116 +29,93 @@ describe('ast-configs service', () => {
     vi.clearAllMocks()
   })
 
-  describe('getASTConfigs', () => {
-    it('calls apiGet with /ast-configs when no astName provided', async () => {
+  describe('listAstConfigs', () => {
+    it('calls apiGet with astName and default scope', async () => {
       mockApiGet.mockResolvedValue([])
-
-      await getASTConfigs()
-
-      expect(mockApiGet).toHaveBeenCalledWith('/ast-configs')
+      await listAstConfigs('login')
+      expect(mockApiGet).toHaveBeenCalledWith('/ast-configs?astName=login&scope=all')
     })
 
-    it('calls apiGet with query string when astName is provided', async () => {
+    it('calls apiGet with specified scope', async () => {
       mockApiGet.mockResolvedValue([])
-
-      await getASTConfigs('LoginAST')
-
-      expect(mockApiGet).toHaveBeenCalledWith('/ast-configs?astName=LoginAST')
+      await listAstConfigs('login', 'mine')
+      expect(mockApiGet).toHaveBeenCalledWith('/ast-configs?astName=login&scope=mine')
     })
 
-    it('returns the list of AST configs', async () => {
-      const configs = [{ id: '1', astName: 'LoginAST', name: 'Config 1' }]
+    it('returns the list of configs', async () => {
+      const configs = [{ id: '1', astName: 'login' }]
       mockApiGet.mockResolvedValue(configs)
-
-      const result = await getASTConfigs()
-
+      const result = await listAstConfigs('login')
       expect(result).toEqual(configs)
     })
   })
 
-  describe('createASTConfig', () => {
-    it('calls apiPost with /ast-configs and data', async () => {
-      const data = { astName: 'LoginAST', name: 'New Config' }
-      const created = { id: '1', ...data }
-      mockApiPost.mockResolvedValue(created)
-
-      const result = await createASTConfig(data)
-
-      expect(mockApiPost).toHaveBeenCalledWith('/ast-configs', data)
-      expect(result).toEqual(created)
+  describe('getAstConfig', () => {
+    it('calls apiGet with astName and configId', async () => {
+      mockApiGet.mockResolvedValue({ id: '1' })
+      await getAstConfig('login', '1')
+      expect(mockApiGet).toHaveBeenCalledWith('/ast-configs/login/1')
     })
+  })
 
-    it('includes optional fields when provided', async () => {
+  describe('createAstConfig', () => {
+    it('calls apiPost with /ast-configs', async () => {
       const data = {
-        astName: 'LoginAST',
-        name: 'Config',
-        visibility: 'public',
-        params: { timeout: 30 },
-        tasks: [{ type: 'login' }],
+        astName: 'login',
+        category: 'fire',
+        configurationName: 'My Config',
+        oc: '01',
+        parallel: false,
+        testMode: false,
+        visibility: 'private',
+        params: {},
       }
-      mockApiPost.mockResolvedValue({ id: '1', ...data })
-
-      await createASTConfig(data)
-
+      mockApiPost.mockResolvedValue({ configId: '1', ...data })
+      const result = await createAstConfig(data)
       expect(mockApiPost).toHaveBeenCalledWith('/ast-configs', data)
+      expect(result.configId).toBe('1')
     })
   })
 
-  describe('updateASTConfig', () => {
-    it('calls apiPatch with /ast-configs/:id and data', async () => {
-      const data = { name: 'Updated Config' }
-      mockApiPatch.mockResolvedValue({ id: '1', name: 'Updated Config' })
-
-      const result = await updateASTConfig('1', data)
-
-      expect(mockApiPatch).toHaveBeenCalledWith('/ast-configs/1', data)
-      expect(result).toEqual({ id: '1', name: 'Updated Config' })
-    })
-
-    it('passes the correct id in the path', async () => {
-      mockApiPatch.mockResolvedValue({})
-
-      await updateASTConfig('abc-123', { visibility: 'private' })
-
-      expect(mockApiPatch).toHaveBeenCalledWith('/ast-configs/abc-123', { visibility: 'private' })
+  describe('updateAstConfig', () => {
+    it('calls apiPatch with astName and configId', async () => {
+      const data = { configurationName: 'Updated' }
+      mockApiPatch.mockResolvedValue({ id: '1' })
+      await updateAstConfig('login', '1', data)
+      expect(mockApiPatch).toHaveBeenCalledWith('/ast-configs/login/1', data)
     })
   })
 
-  describe('deleteASTConfig', () => {
-    it('calls apiDelete with /ast-configs/:id', async () => {
+  describe('deleteAstConfig', () => {
+    it('calls apiDelete with astName and configId', async () => {
       mockApiDelete.mockResolvedValue(undefined)
-
-      await deleteASTConfig('1')
-
-      expect(mockApiDelete).toHaveBeenCalledWith('/ast-configs/1')
-    })
-
-    it('passes the correct id in the path', async () => {
-      mockApiDelete.mockResolvedValue(undefined)
-
-      await deleteASTConfig('xyz-789')
-
-      expect(mockApiDelete).toHaveBeenCalledWith('/ast-configs/xyz-789')
+      await deleteAstConfig('login', '1')
+      expect(mockApiDelete).toHaveBeenCalledWith('/ast-configs/login/1')
     })
   })
 
-  describe('cloneASTConfig', () => {
-    it('calls apiPost with /ast-configs/:id/clone and name', async () => {
-      const cloned = { id: '2', astName: 'LoginAST', name: 'Cloned Config' }
-      mockApiPost.mockResolvedValue(cloned)
-
-      const result = await cloneASTConfig('1', 'Cloned Config')
-
-      expect(mockApiPost).toHaveBeenCalledWith('/ast-configs/1/clone', { name: 'Cloned Config' })
-      expect(result).toEqual(cloned)
+  describe('cloneAstConfig', () => {
+    it('calls apiPost with clone endpoint', async () => {
+      mockApiPost.mockResolvedValue({ id: '2' })
+      await cloneAstConfig('login', '1', { configurationName: 'Clone' })
+      expect(mockApiPost).toHaveBeenCalledWith('/ast-configs/login/1/clone', {
+        configurationName: 'Clone',
+      })
     })
+  })
 
-    it('passes the correct id in the clone path', async () => {
-      mockApiPost.mockResolvedValue({})
-
-      await cloneASTConfig('abc-123', 'My Clone')
-
-      expect(mockApiPost).toHaveBeenCalledWith('/ast-configs/abc-123/clone', { name: 'My Clone' })
+  describe('runAstConfig', () => {
+    it('calls apiPost with run endpoint', async () => {
+      const data = {
+        username: 'user',
+        password: 'pass',
+        sessionId: 'sess-1',
+        userLocalDate: '2026-01-01',
+      }
+      mockApiPost.mockResolvedValue({ runId: 'run-1', taskCount: 1 })
+      const result = await runAstConfig('login', '1', data)
+      expect(mockApiPost).toHaveBeenCalledWith('/ast-configs/login/1/run', data)
+      expect(result.runId).toBe('run-1')
     })
   })
 })

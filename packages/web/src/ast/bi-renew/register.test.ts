@@ -3,10 +3,12 @@ import { getAST } from '../registry'
 import './register'
 
 describe('bi-renew register', () => {
-  it('registers bi-renew AST', () => {
-    const ast = getAST('bi-renew')
+  it('registers bi_renew AST with correct id and name', () => {
+    const ast = getAST('bi_renew')
     expect(ast).toBeDefined()
-    expect(ast!.name).toBe('bi-renew')
-    expect(ast!.label).toBe('BI Renew')
+    expect(ast!.id).toBe('bi_renew')
+    expect(ast!.name).toBe('BI Renew')
+    expect(ast!.category).toBe('auto')
+    expect(ast!.component).toBeDefined()
   })
 })

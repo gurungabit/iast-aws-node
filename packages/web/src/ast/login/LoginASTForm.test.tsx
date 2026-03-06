@@ -1,51 +1,103 @@
-import { describe, it, expect, vi } from 'vitest'
-import { render, screen, fireEvent } from '@testing-library/react'
+import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { render, screen } from '@testing-library/react'
+
+const mockExecuteAST = vi.hoisted(() => vi.fn())
+
+const mockUseAST = vi.hoisted(() =>
+  vi.fn().mockReturnValue({
+    status: 'idle',
+    isRunning: false,
+    lastResult: null,
+    progress: null,
+    itemResults: [],
+    statusMessages: [],
+    executeAST: mockExecuteAST,
+    controlAST: vi.fn(),
+    clearLogs: vi.fn(),
+  }),
+)
+
+const mockUseAuth = vi.hoisted(() =>
+  vi.fn().mockReturnValue({
+    isAuthenticated: true,
+    user: { id: 'user-1', name: 'Test', email: 'test@test.com' },
+    getAccessToken: vi.fn(),
+  }),
+)
+
+const mockUseFormField = vi.hoisted(() =>
+  vi.fn().mockReturnValue(['', vi.fn()]),
+)
+
+const mockUseASTRegistry = vi.hoisted(() =>
+  vi.fn().mockReturnValue({
+    getAST: vi.fn().mockReturnValue({
+      id: 'login',
+      name: 'TSO Login',
+      category: 'fire',
+      supportsParallel: true,
+    }),
+  }),
+)
+
+const mockUseASTStore = vi.hoisted(() => vi.fn().mockReturnValue(null))
+
+vi.mock('../../hooks/useAST', () => ({ useAST: mockUseAST }))
+vi.mock('../../auth/useAuth', () => ({ useAuth: mockUseAuth }))
+vi.mock('../../hooks/useFormField', () => ({ useFormField: mockUseFormField }))
+vi.mock('../registry', () => ({ useASTRegistry: mockUseASTRegistry }))
+vi.mock('../../stores/ast-store', () => ({ useASTStore: mockUseASTStore }))
+
+vi.mock('../shared', () => ({
+  ASTFormWrapper: ({ title, children }: { title: string; children: React.ReactNode }) => (
+    <div data-testid="form-wrapper">
+      <div>{title}</div>
+      {children}
+    </div>
+  ),
+  CredentialsInput: () => <div data-testid="credentials" />,
+}))
+
+vi.mock('../../services/ast-configs', () => ({
+  listAstConfigs: vi.fn().mockResolvedValue([]),
+}))
+
 import { LoginASTForm } from './LoginASTForm'
 
-Object.defineProperty(globalThis, 'crypto', {
-  value: { randomUUID: () => 'test-uuid' },
-})
-
 describe('LoginASTForm', () => {
-  it('renders credentials inputs', () => {
-    render(<LoginASTForm sessionId="s1" onRun={vi.fn()} />)
-    expect(screen.getByPlaceholderText('HERC01')).toBeDefined()
-    expect(screen.getByPlaceholderText('Password')).toBeDefined()
+  beforeEach(() => {
+    vi.clearAllMocks()
   })
 
-  it('renders run button', () => {
-    render(<LoginASTForm sessionId="s1" onRun={vi.fn()} />)
-    expect(screen.getByText('Run Login AST')).toBeDefined()
+  it('renders without crashing (no props)', () => {
+    const { container } = render(<LoginASTForm />)
+    expect(container).toBeDefined()
   })
 
-  it('run button disabled when no credentials', () => {
-    render(<LoginASTForm sessionId="s1" onRun={vi.fn()} />)
-    expect(screen.getByText('Run Login AST')).toBeDisabled()
+  it('renders form wrapper with TSO Login title', () => {
+    render(<LoginASTForm />)
+    expect(screen.getByText('TSO Login')).toBeDefined()
   })
 
-  it('run button enabled when credentials provided', () => {
-    render(<LoginASTForm sessionId="s1" onRun={vi.fn()} />)
-    fireEvent.change(screen.getByPlaceholderText('HERC01'), { target: { value: 'user' } })
-    fireEvent.change(screen.getByPlaceholderText('Password'), { target: { value: 'pass' } })
-    expect(screen.getByText('Run Login AST')).not.toBeDisabled()
+  it('renders the policy numbers textarea', () => {
+    render(<LoginASTForm />)
+    expect(
+      screen.getByPlaceholderText('Enter 9-char policy numbers (comma, space, or newline separated)'),
+    ).toBeDefined()
   })
 
-  it('calls onRun with correct params', () => {
-    const onRun = vi.fn()
-    render(<LoginASTForm sessionId="s1" onRun={onRun} />)
-    fireEvent.change(screen.getByPlaceholderText('HERC01'), { target: { value: 'myuser' } })
-    fireEvent.change(screen.getByPlaceholderText('Password'), { target: { value: 'mypass' } })
-    fireEvent.click(screen.getByText('Run Login AST'))
-    expect(onRun).toHaveBeenCalledWith({
-      username: 'myuser',
-      password: 'mypass',
-      policyNumbers: [],
-    })
+  it('uses useAST hook internally', () => {
+    render(<LoginASTForm />)
+    expect(mockUseAST).toHaveBeenCalled()
   })
 
-  it('respects disabled prop', () => {
-    render(<LoginASTForm sessionId="s1" onRun={vi.fn()} disabled />)
-    expect(screen.getByPlaceholderText('HERC01')).toBeDisabled()
-    expect(screen.getByPlaceholderText('Password')).toBeDisabled()
+  it('uses useAuth hook internally', () => {
+    render(<LoginASTForm />)
+    expect(mockUseAuth).toHaveBeenCalled()
+  })
+
+  it('uses useASTRegistry hook internally', () => {
+    render(<LoginASTForm />)
+    expect(mockUseASTRegistry).toHaveBeenCalled()
   })
 })

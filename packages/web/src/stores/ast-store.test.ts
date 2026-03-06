@@ -5,201 +5,205 @@ import { act } from '@testing-library/react'
 describe('useASTStore', () => {
   beforeEach(() => {
     act(() => {
-      // Reset store to initial state
-      useASTStore.setState({ executions: new Map() })
+      useASTStore.setState({ tabs: {}, activeTabId: null })
     })
   })
 
-  describe('startExecution', () => {
-    it('creates a new execution entry for a session', () => {
+  describe('initTab', () => {
+    it('creates default tab state', () => {
       act(() => {
-        useASTStore.getState().startExecution('session-1', 'exec-1', 'LoginAST')
+        useASTStore.getState().initTab('tab-1')
       })
-
-      const exec = useASTStore.getState().getExecution('session-1')
-      expect(exec).not.toBeNull()
-      expect(exec!.executionId).toBe('exec-1')
-      expect(exec!.astName).toBe('LoginAST')
-      expect(exec!.status).toBe('running')
-      expect(exec!.progress).toEqual({ current: 0, total: 0, message: 'Starting...' })
-      expect(exec!.items).toEqual([])
+      const tab = useASTStore.getState().tabs['tab-1']
+      expect(tab).toBeDefined()
+      expect(tab.status).toBe('idle')
+      expect(tab.selectedASTId).toBeNull()
+      expect(tab.credentials).toEqual({ username: '', password: '' })
+      expect(tab.customFields).toEqual({})
     })
 
-    it('overwrites an existing execution for the same session', () => {
+    it('does not overwrite existing tab', () => {
       act(() => {
-        useASTStore.getState().startExecution('session-1', 'exec-1', 'LoginAST')
-        useASTStore.getState().startExecution('session-1', 'exec-2', 'BiRenew')
+        useASTStore.getState().initTab('tab-1')
+        useASTStore.getState().setCredentials('tab-1', { username: 'test' })
+        useASTStore.getState().initTab('tab-1')
       })
-
-      const exec = useASTStore.getState().getExecution('session-1')
-      expect(exec!.executionId).toBe('exec-2')
-      expect(exec!.astName).toBe('BiRenew')
-    })
-
-    it('supports multiple sessions simultaneously', () => {
-      act(() => {
-        useASTStore.getState().startExecution('session-1', 'exec-1', 'LoginAST')
-        useASTStore.getState().startExecution('session-2', 'exec-2', 'BiRenew')
-      })
-
-      expect(useASTStore.getState().getExecution('session-1')!.astName).toBe('LoginAST')
-      expect(useASTStore.getState().getExecution('session-2')!.astName).toBe('BiRenew')
+      expect(useASTStore.getState().tabs['tab-1'].credentials.username).toBe('test')
     })
   })
 
-  describe('updateStatus', () => {
-    it('updates the status of an existing execution', () => {
+  describe('removeTab', () => {
+    it('removes a tab', () => {
       act(() => {
-        useASTStore.getState().startExecution('session-1', 'exec-1', 'LoginAST')
-        useASTStore.getState().updateStatus('session-1', 'paused')
+        useASTStore.getState().initTab('tab-1')
+        useASTStore.getState().removeTab('tab-1')
       })
-
-      expect(useASTStore.getState().getExecution('session-1')!.status).toBe('paused')
-    })
-
-    it('does nothing for a nonexistent session', () => {
-      act(() => {
-        useASTStore.getState().updateStatus('nonexistent', 'failed')
-      })
-
-      expect(useASTStore.getState().getExecution('nonexistent')).toBeNull()
+      expect(useASTStore.getState().tabs['tab-1']).toBeUndefined()
     })
   })
 
-  describe('updateProgress', () => {
-    it('updates progress for an existing execution', () => {
+  describe('setSelectedASTId', () => {
+    it('sets the selected AST for a tab', () => {
       act(() => {
-        useASTStore.getState().startExecution('session-1', 'exec-1', 'LoginAST')
-        useASTStore.getState().updateProgress('session-1', { current: 5, total: 10, message: 'Processing...' })
+        useASTStore.getState().initTab('tab-1')
+        useASTStore.getState().setSelectedASTId('tab-1', 'login')
       })
-
-      const exec = useASTStore.getState().getExecution('session-1')
-      expect(exec!.progress).toEqual({ current: 5, total: 10, message: 'Processing...' })
-    })
-
-    it('does nothing for a nonexistent session', () => {
-      act(() => {
-        useASTStore.getState().updateProgress('nonexistent', { current: 1, total: 1, message: 'test' })
-      })
-
-      expect(useASTStore.getState().getExecution('nonexistent')).toBeNull()
+      expect(useASTStore.getState().tabs['tab-1'].selectedASTId).toBe('login')
     })
   })
 
-  describe('addItemBatch', () => {
-    it('appends items to an existing execution', () => {
-      const item1 = { id: 'i1', policyNumber: 'P1', status: 'success' as const, durationMs: 100 }
-      const item2 = { id: 'i2', policyNumber: 'P2', status: 'failure' as const, durationMs: 200, error: 'fail' }
-
+  describe('setCredentials', () => {
+    it('updates credentials', () => {
       act(() => {
-        useASTStore.getState().startExecution('session-1', 'exec-1', 'LoginAST')
-        useASTStore.getState().addItemBatch('session-1', [item1])
-        useASTStore.getState().addItemBatch('session-1', [item2])
+        useASTStore.getState().initTab('tab-1')
+        useASTStore.getState().setCredentials('tab-1', { username: 'user', password: 'pass' })
       })
-
-      const exec = useASTStore.getState().getExecution('session-1')
-      expect(exec!.items).toHaveLength(2)
-      expect(exec!.items[0]).toEqual(item1)
-      expect(exec!.items[1]).toEqual(item2)
+      expect(useASTStore.getState().tabs['tab-1'].credentials).toEqual({
+        username: 'user',
+        password: 'pass',
+      })
     })
 
-    it('adds multiple items in one batch', () => {
-      const items = [
-        { id: 'i1', policyNumber: 'P1', status: 'success' as const, durationMs: 100 },
-        { id: 'i2', policyNumber: 'P2', status: 'success' as const, durationMs: 150 },
-        { id: 'i3', policyNumber: 'P3', status: 'failure' as const, durationMs: 200, error: 'err' },
-      ]
-
+    it('merges partial credentials', () => {
       act(() => {
-        useASTStore.getState().startExecution('session-1', 'exec-1', 'LoginAST')
-        useASTStore.getState().addItemBatch('session-1', items)
+        useASTStore.getState().initTab('tab-1')
+        useASTStore.getState().setCredentials('tab-1', { username: 'user' })
       })
+      expect(useASTStore.getState().tabs['tab-1'].credentials).toEqual({
+        username: 'user',
+        password: '',
+      })
+    })
+  })
 
-      expect(useASTStore.getState().getExecution('session-1')!.items).toHaveLength(3)
+  describe('setCustomField', () => {
+    it('stores a custom field', () => {
+      act(() => {
+        useASTStore.getState().initTab('tab-1')
+        useASTStore.getState().setCustomField('tab-1', 'myField', 42)
+      })
+      expect(useASTStore.getState().tabs['tab-1'].customFields['myField']).toBe(42)
+    })
+  })
+
+  describe('executeAST', () => {
+    it('sets running state', () => {
+      act(() => {
+        useASTStore.getState().initTab('tab-1')
+        useASTStore.getState().executeAST('tab-1', 'login')
+      })
+      const tab = useASTStore.getState().tabs['tab-1']
+      expect(tab.status).toBe('running')
+      expect(tab.runningAST).toBe('login')
+      expect(tab.itemResults).toEqual([])
+    })
+  })
+
+  describe('handleASTStatus', () => {
+    it('updates status', () => {
+      act(() => {
+        useASTStore.getState().initTab('tab-1')
+        useASTStore.getState().handleASTStatus('tab-1', { astName: 'login', status: 'running' })
+      })
+      expect(useASTStore.getState().tabs['tab-1'].status).toBe('running')
     })
 
-    it('does nothing for a nonexistent session', () => {
+    it('does nothing for nonexistent tab', () => {
       act(() => {
-        useASTStore.getState().addItemBatch('nonexistent', [
-          { id: 'i1', policyNumber: 'P1', status: 'success' as const, durationMs: 100 },
+        useASTStore.getState().handleASTStatus('nonexistent', {
+          astName: 'login',
+          status: 'running',
+        })
+      })
+      expect(useASTStore.getState().tabs['nonexistent']).toBeUndefined()
+    })
+  })
+
+  describe('handleASTProgress', () => {
+    it('updates progress', () => {
+      act(() => {
+        useASTStore.getState().initTab('tab-1')
+        useASTStore.getState().handleASTProgress('tab-1', {
+          current: 5,
+          total: 10,
+          message: 'Processing...',
+          percentage: 50,
+        })
+      })
+      expect(useASTStore.getState().tabs['tab-1'].progress).toEqual({
+        current: 5,
+        total: 10,
+        message: 'Processing...',
+        percentage: 50,
+      })
+    })
+  })
+
+  describe('handleASTItemResults', () => {
+    it('appends item results', () => {
+      act(() => {
+        useASTStore.getState().initTab('tab-1')
+        useASTStore.getState().handleASTItemResults('tab-1', [
+          { id: 'i1', policyNumber: 'P1', status: 'success', durationMs: 100 },
+        ])
+        useASTStore.getState().handleASTItemResults('tab-1', [
+          { id: 'i2', policyNumber: 'P2', status: 'failure', durationMs: 200, error: 'fail' },
         ])
       })
-
-      expect(useASTStore.getState().getExecution('nonexistent')).toBeNull()
+      expect(useASTStore.getState().tabs['tab-1'].itemResults).toHaveLength(2)
     })
   })
 
-  describe('completeExecution', () => {
-    it('sets status to completed', () => {
+  describe('handleASTComplete', () => {
+    it('sets completed status', () => {
       act(() => {
-        useASTStore.getState().startExecution('session-1', 'exec-1', 'LoginAST')
-        useASTStore.getState().completeExecution('session-1', 'completed')
+        useASTStore.getState().initTab('tab-1')
+        useASTStore.getState().executeAST('tab-1', 'login')
+        useASTStore.getState().handleASTComplete('tab-1', { status: 'completed' })
       })
-
-      expect(useASTStore.getState().getExecution('session-1')!.status).toBe('completed')
-      expect(useASTStore.getState().getExecution('session-1')!.error).toBeUndefined()
+      const tab = useASTStore.getState().tabs['tab-1']
+      expect(tab.status).toBe('completed')
+      expect(tab.runningAST).toBeNull()
     })
 
-    it('sets status to failed with error message', () => {
+    it('sets failed status with error', () => {
       act(() => {
-        useASTStore.getState().startExecution('session-1', 'exec-1', 'LoginAST')
-        useASTStore.getState().completeExecution('session-1', 'failed', 'Connection timeout')
+        useASTStore.getState().initTab('tab-1')
+        useASTStore.getState().executeAST('tab-1', 'login')
+        useASTStore.getState().handleASTComplete('tab-1', {
+          status: 'failed',
+          message: 'Timeout',
+        })
       })
-
-      const exec = useASTStore.getState().getExecution('session-1')
-      expect(exec!.status).toBe('failed')
-      expect(exec!.error).toBe('Connection timeout')
-    })
-
-    it('does nothing for a nonexistent session', () => {
-      act(() => {
-        useASTStore.getState().completeExecution('nonexistent', 'completed')
-      })
-
-      expect(useASTStore.getState().getExecution('nonexistent')).toBeNull()
+      const tab = useASTStore.getState().tabs['tab-1']
+      expect(tab.status).toBe('failed')
     })
   })
 
-  describe('clearExecution', () => {
-    it('removes execution for a session', () => {
+  describe('clearLogs', () => {
+    it('resets execution state', () => {
       act(() => {
-        useASTStore.getState().startExecution('session-1', 'exec-1', 'LoginAST')
-        useASTStore.getState().clearExecution('session-1')
+        useASTStore.getState().initTab('tab-1')
+        useASTStore.getState().executeAST('tab-1', 'login')
+        useASTStore.getState().addStatusMessage('tab-1', 'test message')
+        useASTStore.getState().clearLogs('tab-1')
       })
-
-      expect(useASTStore.getState().getExecution('session-1')).toBeNull()
-    })
-
-    it('does not affect other sessions', () => {
-      act(() => {
-        useASTStore.getState().startExecution('session-1', 'exec-1', 'LoginAST')
-        useASTStore.getState().startExecution('session-2', 'exec-2', 'BiRenew')
-        useASTStore.getState().clearExecution('session-1')
-      })
-
-      expect(useASTStore.getState().getExecution('session-1')).toBeNull()
-      expect(useASTStore.getState().getExecution('session-2')).not.toBeNull()
+      const tab = useASTStore.getState().tabs['tab-1']
+      expect(tab.status).toBe('idle')
+      expect(tab.statusMessages).toEqual([])
+      expect(tab.itemResults).toEqual([])
     })
   })
 
-  describe('getExecution', () => {
-    it('returns null for nonexistent session', () => {
-      expect(useASTStore.getState().getExecution('nope')).toBeNull()
-    })
-
-    it('returns the execution object for existing session', () => {
+  describe('multiple tabs', () => {
+    it('supports independent tab state', () => {
       act(() => {
-        useASTStore.getState().startExecution('session-1', 'exec-1', 'LoginAST')
+        useASTStore.getState().initTab('tab-1')
+        useASTStore.getState().initTab('tab-2')
+        useASTStore.getState().executeAST('tab-1', 'login')
       })
-
-      const exec = useASTStore.getState().getExecution('session-1')
-      expect(exec).toEqual({
-        executionId: 'exec-1',
-        astName: 'LoginAST',
-        status: 'running',
-        progress: { current: 0, total: 0, message: 'Starting...' },
-        items: [],
-      })
+      expect(useASTStore.getState().tabs['tab-1'].status).toBe('running')
+      expect(useASTStore.getState().tabs['tab-2'].status).toBe('idle')
     })
   })
 })

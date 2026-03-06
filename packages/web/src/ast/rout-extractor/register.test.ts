@@ -3,10 +3,12 @@ import { getAST } from '../registry'
 import './register'
 
 describe('rout-extractor register', () => {
-  it('registers rout-extractor AST', () => {
-    const ast = getAST('rout-extractor')
+  it('registers rout_extractor AST with correct id and name', () => {
+    const ast = getAST('rout_extractor')
     expect(ast).toBeDefined()
-    expect(ast!.name).toBe('rout-extractor')
-    expect(ast!.label).toBe('Route Extractor')
+    expect(ast!.id).toBe('rout_extractor')
+    expect(ast!.name).toBe('RoutExtractor')
+    expect(ast!.category).toBe('fire')
+    expect(ast!.component).toBeDefined()
   })
 })

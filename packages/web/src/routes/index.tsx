@@ -1,6 +1,7 @@
 import { createFileRoute } from '@tanstack/react-router'
 import { useEffect, useRef, useState } from 'react'
 import { useSessionStore } from '../stores/session-store'
+import { useASTStore } from '../stores/ast-store'
 import { TerminalComponent } from '../terminal/Terminal'
 import { ASTPanel } from '../ast/components/ASTPanel'
 import { getSessions, createSession } from '../services/sessions'
@@ -20,6 +21,7 @@ function TerminalPage() {
   const initRef = useRef(false)
 
   const { addTab, removeTab, setWs, setActiveTab, renameTab } = useSessionStore()
+  const { initTab: initASTTab, removeTab: removeASTTab, setActiveTabId: setASTActiveTab } = useASTStore()
 
   // Auto-load existing sessions or create one on mount
   useEffect(() => {
@@ -39,6 +41,7 @@ function TerminalPage() {
 
         for (const s of sessions) {
           addTab(s.id, s.name || `Session ${s.id.slice(0, 6)}`)
+          initASTTab(s.id)
           try {
             const ws = new TerminalWebSocket(s.id)
             await ws.connect()
@@ -50,6 +53,7 @@ function TerminalPage() {
 
         const activeId = sessions.find((s) => s.id === stored)?.id ?? sessions[0].id
         setActiveTab(activeId)
+        setASTActiveTab(activeId)
         localStorage.setItem('iast-active-session', activeId)
       } catch (err) {
         console.error('Failed to initialize sessions:', err)
@@ -59,7 +63,7 @@ function TerminalPage() {
     }
 
     init()
-  }, [addTab, setWs, setActiveTab])
+  }, [addTab, setWs, setActiveTab, initASTTab, setASTActiveTab])
 
   const handleAddTab = async () => {
     if (isCreating) return
@@ -67,10 +71,12 @@ function TerminalPage() {
     try {
       const session = await createSession(`Session ${tabs.size + 1}`)
       addTab(session.id, session.name || `Session ${tabs.size + 1}`)
+      initASTTab(session.id)
       const ws = new TerminalWebSocket(session.id)
       await ws.connect()
       setWs(session.id, ws)
       setActiveTab(session.id)
+      setASTActiveTab(session.id)
       localStorage.setItem('iast-active-session', session.id)
     } catch (err) {
       console.error('Failed to create session:', err)
@@ -81,16 +87,19 @@ function TerminalPage() {
 
   const handleCloseTab = (tabId: string) => {
     removeTab(tabId)
+    removeASTTab(tabId)
     const remaining = Array.from(tabs.keys()).filter((id) => id !== tabId)
     if (remaining.length > 0) {
       const nextId = remaining[0]
       setActiveTab(nextId)
+      setASTActiveTab(nextId)
       localStorage.setItem('iast-active-session', nextId)
     }
   }
 
   const handleSwitchTab = (tabId: string) => {
     setActiveTab(tabId)
+    setASTActiveTab(tabId)
     localStorage.setItem('iast-active-session', tabId)
   }
 
@@ -211,7 +220,7 @@ function TerminalPage() {
 
             {/* AST Panel - flex-1 fills remaining space */}
             <div className="flex-1 min-w-0 overflow-auto overscroll-contain">
-              <ASTPanel sessionId={activeTabId} />
+              <ASTPanel />
             </div>
           </div>
         ) : null}

@@ -3,10 +3,10 @@ import { render, screen, fireEvent } from '@testing-library/react'
 import { DateTimePicker } from './DateTimePicker'
 
 describe('DateTimePicker', () => {
-  let mockOnChange: ReturnType<typeof vi.fn>
+  const mockOnChange = vi.fn<(isoString: string, timezone: string) => void>()
 
   beforeEach(() => {
-    mockOnChange = vi.fn()
+    mockOnChange.mockClear()
   })
 
   it('renders date, time, and timezone labels', () => {

@@ -15,7 +15,7 @@ export function Navbar(): React.ReactNode {
         <nav className="flex items-center gap-1">
           <Link
             to="/"
-            className="px-3 py-1.5 text-sm rounded-md transition-colors duration-150 cursor-pointer
+            className="px-3 py-1.5 text-sm rounded-md transition-colors
               [&.active]:bg-blue-100 [&.active]:text-blue-700
               dark:[&.active]:bg-blue-900/30 dark:[&.active]:text-blue-400
               hover:bg-gray-100 dark:hover:bg-zinc-800"
@@ -24,7 +24,7 @@ export function Navbar(): React.ReactNode {
           </Link>
           <Link
             to="/history"
-            className="px-3 py-1.5 text-sm rounded-md transition-colors duration-150 cursor-pointer
+            className="px-3 py-1.5 text-sm rounded-md transition-colors
               [&.active]:bg-blue-100 [&.active]:text-blue-700
               dark:[&.active]:bg-blue-900/30 dark:[&.active]:text-blue-400
               hover:bg-gray-100 dark:hover:bg-zinc-800"
@@ -33,7 +33,7 @@ export function Navbar(): React.ReactNode {
           </Link>
           <Link
             to="/schedules"
-            className="px-3 py-1.5 text-sm rounded-md transition-colors duration-150 cursor-pointer
+            className="px-3 py-1.5 text-sm rounded-md transition-colors
               [&.active]:bg-blue-100 [&.active]:text-blue-700
               dark:[&.active]:bg-blue-900/30 dark:[&.active]:text-blue-400
               hover:bg-gray-100 dark:hover:bg-zinc-800"
@@ -42,7 +42,7 @@ export function Navbar(): React.ReactNode {
           </Link>
           <Link
             to="/auto-launcher-runs"
-            className="px-3 py-1.5 text-sm rounded-md transition-colors duration-150 cursor-pointer
+            className="px-3 py-1.5 text-sm rounded-md transition-colors
               [&.active]:bg-blue-100 [&.active]:text-blue-700
               dark:[&.active]:bg-blue-900/30 dark:[&.active]:text-blue-400
               hover:bg-gray-100 dark:hover:bg-zinc-800"

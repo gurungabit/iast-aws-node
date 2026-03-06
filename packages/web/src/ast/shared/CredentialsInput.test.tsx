@@ -4,9 +4,9 @@ import { CredentialsInput } from './CredentialsInput'
 
 describe('CredentialsInput', () => {
   const defaultProps = {
-    userId: '',
+    username: '',
     password: '',
-    onUserIdChange: vi.fn(),
+    onUsernameChange: vi.fn(),
     onPasswordChange: vi.fn(),
   }
 
@@ -17,24 +17,24 @@ describe('CredentialsInput', () => {
     expect(screen.getByLabelText('Password')).toBeInTheDocument()
   })
 
-  it('displays current userId and password values', () => {
+  it('displays current username and password values', () => {
     render(
-      <CredentialsInput {...defaultProps} userId="HERC01" password="secret123" />,
+      <CredentialsInput {...defaultProps} username="HERC01" password="secret123" />,
     )
 
     expect(screen.getByLabelText('User ID')).toHaveValue('HERC01')
     expect(screen.getByLabelText('Password')).toHaveValue('secret123')
   })
 
-  it('calls onUserIdChange when typing in User ID input', () => {
-    const onUserIdChange = vi.fn()
-    render(<CredentialsInput {...defaultProps} onUserIdChange={onUserIdChange} />)
+  it('calls onUsernameChange when typing in User ID input', () => {
+    const onUsernameChange = vi.fn()
+    render(<CredentialsInput {...defaultProps} onUsernameChange={onUsernameChange} />)
 
     fireEvent.change(screen.getByLabelText('User ID'), {
       target: { value: 'NEWUSER' },
     })
 
-    expect(onUserIdChange).toHaveBeenCalledWith('NEWUSER')
+    expect(onUsernameChange).toHaveBeenCalledWith('NEWUSER')
   })
 
   it('calls onPasswordChange when typing in Password input', () => {

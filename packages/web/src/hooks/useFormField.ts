@@ -1,32 +1,46 @@
-import { useState, useCallback, type ChangeEvent } from 'react'
+import { useCallback, type ChangeEvent } from 'react'
+import { useASTStore } from '../stores/ast-store'
 
-export function useFormField(initialValue = '') {
-  const [value, setValue] = useState(initialValue)
+/**
+ * Persist a form field value per-tab in the AST store's customFields.
+ * Returns [value, setValue] similar to useState.
+ */
+export function useFormField<T>(key: string, defaultValue: T): [T, (value: T) => void] {
+  const activeTabId = useASTStore((s) => s.activeTabId)
+  const storedValue = useASTStore((s) => {
+    if (!activeTabId) return undefined
+    return s.tabs[activeTabId]?.customFields[key]
+  })
+  const setCustomField = useASTStore((s) => s.setCustomField)
 
-  const onChange = useCallback((e: ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
-    setValue(e.target.value)
-  }, [])
+  const value = storedValue !== undefined ? (storedValue as T) : defaultValue
 
-  const reset = useCallback(() => setValue(initialValue), [initialValue])
-
-  return { value, setValue, onChange, reset }
-}
-
-export function useFormFields<T extends Record<string, string>>(initial: T) {
-  const [values, setValues] = useState(initial)
-
-  const setField = useCallback((key: keyof T, value: string) => {
-    setValues((prev) => ({ ...prev, [key]: value }))
-  }, [])
-
-  const onChange = useCallback(
-    (key: keyof T) => (e: ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
-      setField(key, e.target.value)
+  const setValue = useCallback(
+    (newValue: T) => {
+      if (activeTabId) {
+        setCustomField(activeTabId, key, newValue)
+      }
     },
-    [setField],
+    [activeTabId, key, setCustomField],
   )
 
-  const reset = useCallback(() => setValues(initial), [initial])
+  return [value, setValue]
+}
 
-  return { values, setField, onChange, reset }
+/**
+ * Simple form field hook (non-persisted) for basic inputs.
+ */
+export function useSimpleFormField(initialValue = '') {
+  const [value, setValue] = useFormField<string>('_simple_' + initialValue, initialValue)
+
+  const onChange = useCallback(
+    (e: ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
+      setValue(e.target.value)
+    },
+    [setValue],
+  )
+
+  const reset = useCallback(() => setValue(initialValue), [initialValue, setValue])
+
+  return { value, setValue, onChange, reset }
 }

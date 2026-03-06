@@ -3,43 +3,45 @@ import { useSessionStore } from '../stores/session-store'
 import { useASTStore } from '../stores/ast-store'
 import type { ServerMessage } from '../services/websocket'
 
-export function ASTEventBridge() {
+export function ASTEventBridge(): React.ReactNode {
   const tabs = useSessionStore((s) => s.tabs)
-  const {
-    startExecution,
-    updateStatus,
-    updateProgress,
-    addItemBatch,
-    completeExecution,
-  } = useASTStore()
 
   useEffect(() => {
     const cleanups: (() => void)[] = []
 
-    for (const [sessionId, tab] of tabs) {
+    for (const [tabId, tab] of tabs) {
       if (!tab.ws) continue
 
       const cleanup = tab.ws.onMessage((msg: ServerMessage) => {
         switch (msg.type) {
-          case 'ast.status':
-            if (msg.status === 'running' && msg.executionId) {
-              startExecution(sessionId, msg.executionId, msg.astName)
-            } else {
-              updateStatus(sessionId, msg.status as 'running' | 'paused')
-            }
+          case 'ast.status': {
+            const mappedStatus = msg.status === 'pending' ? 'running' : msg.status
+            useASTStore.getState().addStatusMessage(tabId, `[${msg.astName}] ${mappedStatus}`)
+            useASTStore.getState().handleASTStatus(tabId, {
+              astName: msg.astName,
+              status: mappedStatus as 'running' | 'paused' | 'completed' | 'failed' | 'cancelled',
+            })
             break
+          }
           case 'ast.progress':
-            updateProgress(sessionId, msg.progress)
+            useASTStore.getState().handleASTProgress(tabId, {
+              current: msg.progress.current,
+              total: msg.progress.total,
+              message: msg.progress.message,
+              percentage:
+                msg.progress.total > 0
+                  ? Math.round((msg.progress.current / msg.progress.total) * 100)
+                  : 0,
+            })
             break
           case 'ast.item_result_batch':
-            addItemBatch(sessionId, msg.items)
+            useASTStore.getState().handleASTItemResults(tabId, msg.items)
             break
           case 'ast.complete':
-            completeExecution(
-              sessionId,
-              msg.status as 'completed' | 'failed' | 'cancelled',
-              msg.error,
-            )
+            useASTStore.getState().handleASTComplete(tabId, {
+              status: msg.status as 'completed' | 'failed' | 'cancelled',
+              message: msg.error,
+            })
             break
         }
       })
@@ -48,7 +50,7 @@ export function ASTEventBridge() {
     }
 
     return () => cleanups.forEach((fn) => fn())
-  }, [tabs, startExecution, updateStatus, updateProgress, addItemBatch, completeExecution])
+  }, [tabs])
 
   return null
 }
