@@ -139,4 +139,42 @@ describe('readSmbFile', () => {
 
     expect(mocks.smbReadFile).toHaveBeenCalledWith('relative/path/file.txt')
   })
+
+  it('should split DOMAIN\\username and use short domain for NTLM', async () => {
+    const config: SmbConfig = {
+      share: '\\\\server.example.com\\share',
+      domain: 'LONG.EXAMPLE.COM',
+      username: 'CORP\\jdoe',
+      password: 'pass1',
+    }
+
+    await readSmbFile(config, 'file.txt')
+
+    expect(mocks.smbConnect).toHaveBeenCalledWith({
+      host: 'server.example.com',
+      share: 'share',
+      domain: 'LONG',
+      username: 'jdoe',
+      password: 'pass1',
+    })
+  })
+
+  it('should use domain from username prefix when config domain is empty', async () => {
+    const config: SmbConfig = {
+      share: '//server/share',
+      domain: '',
+      username: 'MYDOMAIN\\user1',
+      password: 'pass1',
+    }
+
+    await readSmbFile(config, 'file.txt')
+
+    expect(mocks.smbConnect).toHaveBeenCalledWith({
+      host: 'server',
+      share: 'share',
+      domain: 'MYDOMAIN',
+      username: 'user1',
+      password: 'pass1',
+    })
+  })
 })

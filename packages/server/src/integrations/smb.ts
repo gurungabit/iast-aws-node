@@ -33,15 +33,28 @@ export async function readSmbFile(config: SmbConfig, path: string): Promise<Buff
     ? normalizedPath.slice(sharePrefix.length)
     : normalizedPath.replace(/^\/+/, '')
 
-  console.log(`[SMB] share=${host}/${shareName}, path="${path}" → relative="${relativePath}", isDfs will be detected`)
+  // Handle DOMAIN\username format — split into separate domain and username
+  let username = config.username
+  let domain = config.domain || ''
+  if (username.includes('\\')) {
+    const parts2 = username.split('\\')
+    domain = domain || parts2[0]
+    username = parts2[1]
+  }
+  // NTLM uses NetBIOS (short) domain name, not FQDN
+  if (domain.includes('.')) {
+    domain = domain.split('.')[0]
+  }
+
+  console.log(`[SMB] host=${host}, share=${shareName}, relative="${relativePath}", user=${username}, domain=${domain}`)
 
   const client = new SMB2Client()
   try {
     await client.connect({
       host,
       share: shareName,
-      domain: config.domain || undefined,
-      username: config.username,
+      domain: domain || undefined,
+      username,
       password: config.password,
     })
     return await client.readFile(relativePath)
