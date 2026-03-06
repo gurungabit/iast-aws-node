@@ -20,9 +20,7 @@ function RootLayout() {
         <div className="flex flex-col h-screen overflow-hidden bg-gray-100 dark:bg-zinc-950 text-gray-900 dark:text-zinc-100">
           <ASTEventBridge />
           <Navbar />
-          <main className="flex-1 overflow-hidden">
-            <Outlet />
-          </main>
+          <Outlet />
         </div>
       </ASTProvider>
     </AuthGuard>

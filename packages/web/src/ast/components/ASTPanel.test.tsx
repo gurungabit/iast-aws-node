@@ -61,10 +61,10 @@ describe('ASTPanel', () => {
     expect(container).toBeDefined()
   })
 
-  it('shows "Select an AST" when no AST selected and getAST returns undefined', () => {
+  it('shows Select Automation label when AST mode is active', () => {
     mockGetAST.mockReturnValue(undefined)
     render(<ASTPanel sessionId="s1" />)
-    expect(screen.getByText('Select an AST to configure')).toBeDefined()
+    expect(screen.getByText('Select Automation')).toBeDefined()
   })
 
   it('renders AST form when AST is selected', () => {

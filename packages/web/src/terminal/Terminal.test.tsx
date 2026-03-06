@@ -51,6 +51,7 @@ vi.mock('../stores/session-store', () => ({
           }],
         ]),
         updateScreen: mockUpdateScreen,
+        setConnected: vi.fn(),
       })
     }
     return null
@@ -76,7 +77,7 @@ describe('TerminalComponent', () => {
 
   it('shows cursor position', () => {
     render(<TerminalComponent sessionId="s1" />)
-    expect(screen.getByText('1:1')).toBeDefined()
+    expect(screen.getByText(/Cursor: \(1,1\)/)).toBeDefined()
   })
 
   it('sends enter key on Enter keydown', () => {

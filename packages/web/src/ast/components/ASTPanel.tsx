@@ -18,6 +18,7 @@ interface ASTPanelProps {
 }
 
 export function ASTPanel({ sessionId }: ASTPanelProps) {
+  const [panelMode, setPanelMode] = useState<'ast' | 'autolauncher'>('ast')
   const [selectedAST, setSelectedAST] = useState<string | null>('login')
   const { runAST, controlAST, execution } = useAST(sessionId)
 
@@ -25,26 +26,61 @@ export function ASTPanel({ sessionId }: ASTPanelProps) {
   const isRunning = execution?.status === 'running' || execution?.status === 'paused'
 
   return (
-    <div className="flex h-full flex-col">
-      {/* AST selector */}
-      <div className="border-b border-gray-800 p-2">
-        <ASTSelector selected={selectedAST} onSelect={setSelectedAST} />
+    <div className="space-y-4">
+      {/* Mode toggle */}
+      <div className="flex items-center gap-2">
+        <button
+          type="button"
+          onClick={() => setPanelMode('ast')}
+          className={`px-3 py-1.5 text-sm rounded-md transition-colors cursor-pointer select-none ${
+            panelMode === 'ast'
+              ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400'
+              : 'text-gray-600 dark:text-zinc-400 hover:bg-gray-100 dark:hover:bg-zinc-800'
+          }`}
+        >
+          AST
+        </button>
+        <button
+          type="button"
+          onClick={() => setPanelMode('autolauncher')}
+          className={`px-3 py-1.5 text-sm rounded-md transition-colors cursor-pointer select-none ${
+            panelMode === 'autolauncher'
+              ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400'
+              : 'text-gray-600 dark:text-zinc-400 hover:bg-gray-100 dark:hover:bg-zinc-800'
+          }`}
+        >
+          AutoLauncher
+        </button>
       </div>
 
-      {/* AST form or execution view */}
-      <div className="flex-1 overflow-y-auto p-3">
-        {isRunning || (execution && execution.status !== 'idle') ? (
-          <ExecutionView sessionId={sessionId} execution={execution!} onControl={controlAST} />
-        ) : ast ? (
-          <ast.FormComponent
-            sessionId={sessionId}
-            onRun={(params) => runAST(ast.name, params)}
-            disabled={isRunning}
-          />
-        ) : (
-          <p className="text-sm text-gray-500">Select an AST to configure</p>
-        )}
-      </div>
+      {panelMode === 'autolauncher' && (
+        <div className="text-sm text-gray-500 dark:text-zinc-400">
+          AutoLauncher panel coming soon.
+        </div>
+      )}
+
+      {panelMode === 'ast' && (
+        <>
+          {/* AST selector */}
+          <div>
+            <label className="block text-left text-xs font-medium text-gray-700 dark:text-zinc-300 mb-1.5">
+              Select Automation
+            </label>
+            <ASTSelector selected={selectedAST} onSelect={setSelectedAST} />
+          </div>
+
+          {/* AST form or execution view */}
+          {isRunning || (execution && execution.status !== 'idle') ? (
+            <ExecutionView sessionId={sessionId} execution={execution!} onControl={controlAST} />
+          ) : ast ? (
+            <ast.FormComponent
+              sessionId={sessionId}
+              onRun={(params) => runAST(ast.name, params)}
+              disabled={isRunning}
+            />
+          ) : null}
+        </>
+      )}
     </div>
   )
 }
@@ -72,22 +108,22 @@ function ExecutionView({ sessionId, execution, onControl }: ExecutionViewProps) 
     : 0
 
   return (
-    <div className="flex h-full flex-col gap-2">
+    <div className="flex flex-col gap-2">
       {/* Progress */}
       <div>
         <div className="flex items-center justify-between text-xs">
-          <span className="text-gray-400">{execution.progress.message}</span>
+          <span className="text-gray-500 dark:text-gray-400">{execution.progress.message}</span>
           <span className={cn(
             'font-medium',
-            execution.status === 'completed' ? 'text-green-400' :
-            execution.status === 'failed' ? 'text-red-400' :
-            execution.status === 'cancelled' ? 'text-yellow-400' :
-            'text-blue-400'
+            execution.status === 'completed' ? 'text-green-600 dark:text-green-400' :
+            execution.status === 'failed' ? 'text-red-600 dark:text-red-400' :
+            execution.status === 'cancelled' ? 'text-yellow-600 dark:text-yellow-400' :
+            'text-blue-600 dark:text-blue-400'
           )}>
             {execution.status} {progressPct > 0 && `(${progressPct}%)`}
           </span>
         </div>
-        <div className="mt-1 h-1.5 w-full overflow-hidden rounded-full bg-gray-800">
+        <div className="mt-1 h-1.5 w-full overflow-hidden rounded-full bg-gray-200 dark:bg-gray-800">
           <div
             className={cn(
               'h-full rounded-full transition-all duration-300',
@@ -125,11 +161,13 @@ function ExecutionView({ sessionId, execution, onControl }: ExecutionViewProps) 
 
       {/* Error */}
       {execution.error && (
-        <div className="rounded bg-red-900/30 p-2 text-xs text-red-300">{execution.error}</div>
+        <div className="rounded bg-red-50 dark:bg-red-900/30 p-2 text-xs text-red-600 dark:text-red-300">
+          {execution.error}
+        </div>
       )}
 
       {/* Results - virtual scrolling */}
-      <div className="text-[10px] text-gray-500">
+      <div className="text-[10px] text-gray-500 dark:text-zinc-500">
         {execution.items.length} results
       </div>
       <div ref={parentRef} className="flex-1 overflow-y-auto" style={{ maxHeight: '400px' }}>
@@ -147,18 +185,18 @@ function ExecutionView({ sessionId, execution, onControl }: ExecutionViewProps) 
                   height: `${virtualRow.size}px`,
                   transform: `translateY(${virtualRow.start}px)`,
                 }}
-                className="flex items-center justify-between border-b border-gray-800/50 px-1 text-xs"
+                className="flex items-center justify-between border-b border-gray-100 dark:border-gray-800/50 px-1 text-xs"
               >
-                <span className="font-mono text-gray-300">{item.policyNumber}</span>
+                <span className="font-mono text-gray-900 dark:text-gray-300">{item.policyNumber}</span>
                 <div className="flex items-center gap-2">
-                  <span className="text-gray-500">{formatDuration(item.durationMs)}</span>
+                  <span className="text-gray-400 dark:text-gray-500">{formatDuration(item.durationMs)}</span>
                   <span
                     className={cn(
                       'rounded px-1.5 py-0.5 text-[10px] font-medium',
-                      item.status === 'success' && 'bg-green-900/30 text-green-400',
-                      item.status === 'failure' && 'bg-red-900/30 text-red-400',
-                      item.status === 'error' && 'bg-orange-900/30 text-orange-400',
-                      item.status === 'skipped' && 'bg-gray-800 text-gray-400',
+                      item.status === 'success' && 'bg-green-50 dark:bg-green-900/30 text-green-600 dark:text-green-400',
+                      item.status === 'failure' && 'bg-red-50 dark:bg-red-900/30 text-red-600 dark:text-red-400',
+                      item.status === 'error' && 'bg-orange-50 dark:bg-orange-900/30 text-orange-600 dark:text-orange-400',
+                      item.status === 'skipped' && 'bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400',
                     )}
                   >
                     {item.status}
