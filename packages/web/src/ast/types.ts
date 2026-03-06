@@ -70,8 +70,9 @@ export interface BaseASTPayload {
 
 export function extractAlias(email: string): string {
   if (!email) return ''
-  const atIndex = email.indexOf('@')
-  return atIndex > 0 ? email.substring(0, atIndex) : email
+  const localPart = email.split('@')[0]
+  const segments = localPart.split('.')
+  return segments[segments.length - 1]
 }
 
 export function getLocalDateString(): string {
