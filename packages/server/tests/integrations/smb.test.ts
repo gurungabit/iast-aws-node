@@ -114,4 +114,29 @@ describe('readSmbFile', () => {
       expect.objectContaining({ host: 'server', share: 'share' }),
     )
   })
+
+  it('should strip UNC prefix from path when it matches the share', async () => {
+    await readSmbFile(testConfig, '\\\\server\\share\\CORP\\00\\file.txt')
+
+    expect(mocks.smbReadFile).toHaveBeenCalledWith('CORP/00/file.txt')
+  })
+
+  it('should strip UNC prefix case-insensitively', async () => {
+    const config: SmbConfig = {
+      share: '\\\\Opr.statefarm.org\\dfs',
+      domain: 'CORP',
+      username: 'user1',
+      password: 'pass1',
+    }
+
+    await readSmbFile(config, '\\\\Opr.statefarm.org\\dfs\\CORP\\00\\WORKGROUP\\FTP\\file.txt')
+
+    expect(mocks.smbReadFile).toHaveBeenCalledWith('CORP/00/WORKGROUP/FTP/file.txt')
+  })
+
+  it('should use path as-is when it does not match share prefix', async () => {
+    await readSmbFile(testConfig, 'relative/path/file.txt')
+
+    expect(mocks.smbReadFile).toHaveBeenCalledWith('relative/path/file.txt')
+  })
 })

@@ -26,6 +26,13 @@ export async function readSmbFile(config: SmbConfig, path: string): Promise<Buff
   const host = parts[0]
   const shareName = parts[1]
 
+  // Strip the \\server\share prefix from the path if present (UNC → share-relative)
+  const normalizedPath = path.replace(/\\/g, '/')
+  const sharePrefix = `//${host}/${shareName}/`
+  const relativePath = normalizedPath.toLowerCase().startsWith(sharePrefix.toLowerCase())
+    ? normalizedPath.slice(sharePrefix.length)
+    : normalizedPath.replace(/^\/+/, '')
+
   const client = new SMB2Client()
   try {
     await client.connect({
@@ -35,7 +42,7 @@ export async function readSmbFile(config: SmbConfig, path: string): Promise<Buff
       username: config.username,
       password: config.password,
     })
-    return await client.readFile(path)
+    return await client.readFile(relativePath)
   } catch (err) {
     throw new Error(`Failed to read SMB file ${path}: ${err}`)
   } finally {
