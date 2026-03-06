@@ -3,7 +3,7 @@ import dotenv from 'dotenv'
 import { resolve, dirname } from 'path'
 import { fileURLToPath } from 'url'
 
-dotenv.config({ path: resolve(dirname(fileURLToPath(import.meta.url)), '../../../.env') })
+dotenv.config({ path: resolve(dirname(fileURLToPath(import.meta.url)), '../.env') })
 
 const envSchema = z.object({
   DATABASE_URL: z.string().default('postgres://iast:iast_dev@localhost:5432/iast'),
