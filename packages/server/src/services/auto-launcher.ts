@@ -1,6 +1,21 @@
 import { eq, and, or } from 'drizzle-orm'
 import { db } from '../db/index.js'
 import { autoLaunchers, autoLauncherRuns } from '../db/schema/index.js'
+import type { Worker } from 'worker_threads'
+
+interface AutoLauncherStep {
+  astName: string
+  configName?: string
+  params: Record<string, unknown>
+}
+
+interface RunStep extends AutoLauncherStep {
+  status: 'pending' | 'running' | 'completed' | 'failed' | 'cancelled'
+  executionId?: string
+  error?: string
+  startedAt?: string
+  completedAt?: string
+}
 
 export const autoLauncherService = {
   async create(data: {
@@ -89,4 +104,103 @@ export const autoLauncherService = {
       .limit(limit)
       .offset(offset)
   },
+
+  /**
+   * Execute an AutoLauncher run: iterate steps sequentially,
+   * sending each AST to the worker thread and waiting for completion.
+   */
+  async executeRun(
+    runId: string,
+    worker: Worker,
+    steps: AutoLauncherStep[],
+    _sessionId: string,
+  ): Promise<void> {
+    const runSteps: RunStep[] = steps.map((s) => ({
+      ...s,
+      status: 'pending' as const,
+    }))
+
+    await this.updateRun(runId, { status: 'running', steps: runSteps })
+
+    for (let i = 0; i < runSteps.length; i++) {
+      const step = runSteps[i]
+      const executionId = `${runId}-step-${i}`
+
+      step.status = 'running'
+      step.executionId = executionId
+      step.startedAt = new Date().toISOString()
+
+      await this.updateRun(runId, {
+        currentStepIndex: String(i),
+        steps: runSteps,
+      })
+
+      try {
+        // Send AST run command to worker
+        worker.postMessage({
+          type: 'ast.run',
+          astName: step.astName,
+          params: step.params,
+          executionId,
+        })
+
+        // Wait for AST completion
+        await waitForAstComplete(worker, executionId)
+
+        step.status = 'completed'
+        step.completedAt = new Date().toISOString()
+      } catch (err) {
+        step.status = 'failed'
+        step.error = String(err)
+        step.completedAt = new Date().toISOString()
+
+        // Mark remaining steps as cancelled
+        for (let j = i + 1; j < runSteps.length; j++) {
+          runSteps[j].status = 'cancelled'
+        }
+
+        await this.updateRun(runId, {
+          status: 'failed',
+          steps: runSteps,
+          completedAt: new Date(),
+        })
+        return
+      }
+
+      await this.updateRun(runId, { steps: runSteps })
+    }
+
+    await this.updateRun(runId, {
+      status: 'completed',
+      steps: runSteps,
+      completedAt: new Date(),
+    })
+  },
+}
+
+/** Wait for ast.complete message from a worker for a specific executionId */
+function waitForAstComplete(worker: Worker, executionId: string): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const timeout = setTimeout(() => {
+      worker.off('message', handler)
+      reject(new Error(`AST execution ${executionId} timed out after 30 minutes`))
+    }, 30 * 60 * 1000)
+
+    function handler(msg: { type: string; executionId?: string; status?: string; error?: string }) {
+      if (msg.type === 'ast.complete' && msg.executionId === executionId) {
+        clearTimeout(timeout)
+        worker.off('message', handler)
+
+        if (msg.status === 'failed') {
+          reject(new Error(msg.error ?? 'AST execution failed'))
+        } else if (msg.status === 'cancelled') {
+          reject(new Error('AST execution cancelled'))
+        } else {
+          resolve()
+        }
+      }
+    }
+
+    worker.on('message', handler)
+  })
 }

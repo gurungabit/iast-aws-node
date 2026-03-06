@@ -1,11 +1,24 @@
-// AWS Secrets Manager for retrieving secrets
-// TODO: Implement when needed
+import {
+  SecretsManagerClient,
+  GetSecretValueCommand,
+  PutSecretValueCommand,
+} from '@aws-sdk/client-secrets-manager'
 
-export async function getSecret(_secretId: string): Promise<string> {
-  // TODO: Use @aws-sdk/client-secrets-manager
-  throw new Error('Secrets Manager integration not yet implemented')
+const client = new SecretsManagerClient({})
+
+export async function getSecret(secretId: string): Promise<string> {
+  const command = new GetSecretValueCommand({ SecretId: secretId })
+  const response = await client.send(command)
+  if (!response.SecretString) {
+    throw new Error(`Secret ${secretId} has no string value`)
+  }
+  return response.SecretString
 }
 
-export async function putSecret(_secretId: string, _value: string): Promise<void> {
-  throw new Error('Secrets Manager integration not yet implemented')
+export async function putSecret(secretId: string, value: string): Promise<void> {
+  const command = new PutSecretValueCommand({
+    SecretId: secretId,
+    SecretString: value,
+  })
+  await client.send(command)
 }

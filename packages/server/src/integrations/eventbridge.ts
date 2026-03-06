@@ -1,5 +1,11 @@
-// AWS EventBridge Scheduler for scheduled AST runs
-// TODO: Implement when schedule routes are fully wired
+import {
+  SchedulerClient,
+  CreateScheduleCommand,
+  DeleteScheduleCommand,
+  type FlexibleTimeWindowMode,
+} from '@aws-sdk/client-scheduler'
+
+const client = new SchedulerClient({})
 
 export interface ScheduleConfig {
   scheduleName: string
@@ -9,11 +15,28 @@ export interface ScheduleConfig {
   input: string
 }
 
-export async function createSchedule(_config: ScheduleConfig): Promise<string> {
-  // TODO: Use @aws-sdk/client-scheduler
-  throw new Error('EventBridge integration not yet implemented')
+export async function createSchedule(config: ScheduleConfig): Promise<string> {
+  const command = new CreateScheduleCommand({
+    Name: config.scheduleName,
+    ScheduleExpression: config.scheduleExpression,
+    Target: {
+      Arn: config.targetArn,
+      RoleArn: config.roleArn,
+      Input: config.input,
+    },
+    FlexibleTimeWindow: {
+      Mode: 'OFF' as FlexibleTimeWindowMode,
+    },
+    ActionAfterCompletion: 'DELETE',
+  })
+
+  const response = await client.send(command)
+  return response.ScheduleArn ?? config.scheduleName
 }
 
-export async function deleteSchedule(_scheduleName: string): Promise<void> {
-  throw new Error('EventBridge integration not yet implemented')
+export async function deleteSchedule(scheduleName: string): Promise<void> {
+  const command = new DeleteScheduleCommand({
+    Name: scheduleName,
+  })
+  await client.send(command)
 }
