@@ -58,6 +58,12 @@ function attachLocal(
           .batchInsertPolicies(msg.executionId, msg.items)
           .catch((err) => console.error('Failed to persist policies:', err))
       }
+      if (msg.type === 'error') {
+        console.error(`[worker:${sessionId}] ${msg.message}`)
+      }
+      if (msg.type === 'ast.complete' && msg.status === 'failed') {
+        console.error(`[worker:${sessionId}] AST failed: ${msg.error}`)
+      }
       if (socket.readyState === WebSocket.OPEN) {
         socket.send(JSON.stringify(msg))
       }
