@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo } from 'react'
+import { useCallback, useMemo } from 'react'
 import { useMsal, useIsAuthenticated } from '@azure/msal-react'
 import { InteractionStatus, InteractionRequiredAuthError } from '@azure/msal-browser'
 import { loginRequest } from '../config/auth'
@@ -29,18 +29,20 @@ const devAuth: UseAuthReturn = {
 }
 
 export function useAuth(): UseAuthReturn {
+  const msalAuth = useMsalAuth()
+
   // Dev mode bypass
   if (!import.meta.env.VITE_MSAL_CLIENT_ID) {
     return devAuth
   }
 
-  return useMsalAuth()
+  return msalAuth
 }
 
 function useMsalAuth(): UseAuthReturn {
   const { instance, accounts, inProgress } = useMsal()
   const isAuthenticated = useIsAuthenticated()
-  const [isLoading, setIsLoading] = useState(true)
+  const isLoading = inProgress !== InteractionStatus.None
 
   const account = accounts[0]
 
@@ -92,12 +94,6 @@ function useMsalAuth(): UseAuthReturn {
       console.error('Logout failed:', error)
     }
   }, [instance, account])
-
-  useEffect(() => {
-    if (inProgress === InteractionStatus.None) {
-      setIsLoading(false)
-    }
-  }, [inProgress])
 
   return { isAuthenticated, isLoading, user, getAccessToken, login, logout }
 }

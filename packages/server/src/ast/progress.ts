@@ -1,5 +1,5 @@
-import type { MessagePort } from 'worker_threads'
 import type { ASTItemResult, WorkerToMainMessage } from '../terminal/worker-messages.js'
+import type { MessagePort } from 'worker_threads'
 
 const BATCH_SIZE = 50
 const FLUSH_INTERVAL_MS = 200

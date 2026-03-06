@@ -48,7 +48,7 @@ export function TaskListEditor({
 
   return (
     <div>
-      <label className="mb-1 block text-xs font-medium text-gray-400">{label}</label>
+      <label className="mb-1 block text-xs font-medium text-gray-500 dark:text-zinc-400">{label}</label>
       <div className="flex gap-2">
         <Input
           value={newValue}

@@ -31,28 +31,28 @@ export function SessionSelector() {
   }
 
   return (
-    <div className="flex items-center gap-0.5 border-b border-gray-800 bg-gray-950 px-2">
+    <div className="flex items-center gap-1 border-b border-gray-200 dark:border-zinc-800 bg-gray-50 dark:bg-zinc-900 px-2 min-h-10">
       {Array.from(tabs.values()).map((tab) => (
         <button
           key={tab.sessionId}
           onClick={() => setActiveTab(tab.sessionId)}
           className={cn(
-            'group flex items-center gap-1.5 rounded-t px-3 py-1.5 text-xs transition-colors',
+            'group flex items-center gap-2 rounded-t px-3 py-2 text-sm transition-colors cursor-pointer',
             activeTabId === tab.sessionId
-              ? 'bg-gray-900 text-white'
-              : 'text-gray-400 hover:bg-gray-900 hover:text-gray-200',
+              ? 'bg-white dark:bg-zinc-800 text-gray-900 dark:text-zinc-100'
+              : 'text-gray-500 dark:text-zinc-400 hover:bg-gray-100 dark:hover:bg-zinc-800 hover:text-gray-700 dark:hover:text-zinc-200',
           )}
         >
           <span
             className={cn(
-              'h-1.5 w-1.5 rounded-full',
-              tab.connected ? 'bg-green-400' : 'bg-gray-600',
+              'h-2 w-2 rounded-full',
+              tab.connected ? 'bg-green-500' : 'bg-gray-400 dark:bg-zinc-600',
             )}
           />
           <span>{tab.name || tab.sessionId.slice(0, 8)}</span>
           <span
             onClick={(e) => handleClose(e, tab.sessionId)}
-            className="ml-1 opacity-0 group-hover:opacity-100 hover:text-red-400"
+            className="ml-1 opacity-0 group-hover:opacity-100 hover:text-red-500 cursor-pointer"
           >
             &times;
           </span>
@@ -61,7 +61,8 @@ export function SessionSelector() {
       <button
         onClick={handleNewTab}
         disabled={creating}
-        className="ml-1 rounded px-2 py-1 text-xs text-gray-500 hover:bg-gray-800 hover:text-gray-300 disabled:opacity-50"
+        className="ml-1 flex items-center justify-center rounded h-7 w-7 text-sm font-medium text-gray-500 dark:text-zinc-400 hover:bg-gray-200 dark:hover:bg-zinc-800 hover:text-gray-900 dark:hover:text-white disabled:opacity-50 cursor-pointer disabled:cursor-not-allowed"
+        title="New session"
       >
         +
       </button>

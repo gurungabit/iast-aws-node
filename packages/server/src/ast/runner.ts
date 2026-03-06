@@ -1,5 +1,5 @@
-import type { MessagePort } from 'worker_threads'
 import type { Ati } from 'tnz3270-node'
+import type { MessagePort } from 'worker_threads'
 import { ProgressReporter } from './progress.js'
 import { executeAST } from './executor.js'
 import type { ASTName } from '../types.js'

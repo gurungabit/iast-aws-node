@@ -31,15 +31,15 @@ function TerminalPage() {
           </div>
 
           {/* AST panel sidebar */}
-          <div className="w-80 border-l border-gray-800 bg-gray-950">
+          <div className="w-80 border-l border-gray-200 dark:border-zinc-800 bg-gray-50 dark:bg-zinc-900">
             <ASTPanel sessionId={activeTabId} />
           </div>
         </div>
       ) : (
         <div className="flex flex-1 items-center justify-center">
           <div className="text-center">
-            <p className="text-gray-400">No session open</p>
-            <p className="mt-1 text-sm text-gray-600">Click + to create a new session</p>
+            <p className="text-gray-500 dark:text-zinc-400">No session open</p>
+            <p className="mt-1 text-sm text-gray-400 dark:text-zinc-600">Click + to create a new session</p>
           </div>
         </div>
       )}
@@ -57,7 +57,7 @@ function ConnectBar({ sessionId }: { sessionId: string }) {
   }
 
   return (
-    <div className="flex items-center gap-2 border-b border-gray-800 bg-gray-900 px-3 py-2">
+    <div className="flex items-center gap-2 border-b border-gray-200 dark:border-zinc-800 bg-gray-50 dark:bg-zinc-900 px-3 py-2">
       <Input
         value={host}
         onChange={(e) => setHost(e.target.value)}

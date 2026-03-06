@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { DatePicker } from './DatePicker'
 
 interface DateTimePickerProps {
   value: string | null
@@ -61,37 +62,34 @@ export function DateTimePicker({
     }
   }, [dateStr, timeStr, timezone, onChange])
 
-  const minDateStr = formatDateForInput(minDate)
+  const minDaysBack = Math.ceil((Date.now() - minDate.getTime()) / (1000 * 60 * 60 * 24))
 
   return (
     <div className={`flex flex-col gap-3 ${className}`}>
       <div className="grid grid-cols-2 gap-3">
-        <div className="flex flex-col gap-1">
-          <label className="text-xs font-medium text-zinc-500 dark:text-zinc-400">Date</label>
-          <input
-            type="date"
-            value={dateStr}
-            min={minDateStr}
-            onChange={(e) => setDateStr(e.target.value)}
-            className="px-3 py-2 rounded-lg border border-zinc-300 dark:border-zinc-600 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer"
-          />
-        </div>
-        <div className="flex flex-col gap-1">
-          <label className="text-xs font-medium text-zinc-500 dark:text-zinc-400">Time</label>
+        <DatePicker
+          label="Date"
+          value={dateStr}
+          onChange={setDateStr}
+          maxDaysBack={minDaysBack}
+          allowFuture
+        />
+        <div className="flex flex-col gap-1.5">
+          <label className="text-sm font-medium text-gray-700 dark:text-zinc-300">Time</label>
           <input
             type="time"
             value={timeStr}
             onChange={(e) => setTimeStr(e.target.value)}
-            className="px-3 py-2 rounded-lg border border-zinc-300 dark:border-zinc-600 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer"
+            className="px-3 py-2 text-sm rounded-lg border border-gray-300 dark:border-zinc-600 bg-white dark:bg-zinc-800 text-gray-900 dark:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 cursor-pointer"
           />
         </div>
       </div>
-      <div className="flex flex-col gap-1">
-        <label className="text-xs font-medium text-zinc-500 dark:text-zinc-400">Timezone</label>
+      <div className="flex flex-col gap-1.5">
+        <label className="text-sm font-medium text-gray-700 dark:text-zinc-300">Timezone</label>
         <select
           value={timezone}
           onChange={(e) => setTimezone(e.target.value)}
-          className="px-3 py-2 rounded-lg border border-zinc-300 dark:border-zinc-600 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer"
+          className="px-3 py-2 text-sm rounded-lg border border-gray-300 dark:border-zinc-600 bg-white dark:bg-zinc-800 text-gray-900 dark:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 cursor-pointer"
         >
           {TIMEZONES.map((tz) => (
             <option key={tz.value} value={tz.value}>

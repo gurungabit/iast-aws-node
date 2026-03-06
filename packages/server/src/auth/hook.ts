@@ -3,14 +3,16 @@ import { verifyEntraToken } from './entra.js'
 import { config } from '../config.js'
 import { userService } from '../services/user.js'
 
+export interface AuthUser {
+  id: string
+  email: string
+  displayName: string
+  entraId: string
+}
+
 declare module 'fastify' {
   interface FastifyRequest {
-    user: {
-      id: string
-      email: string
-      displayName: string
-      entraId: string
-    }
+    user: AuthUser
   }
 }
 
