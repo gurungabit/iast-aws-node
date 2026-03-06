@@ -13,11 +13,13 @@ const workerFile = join(__dirname, isTsx ? 'worker-entry.mjs' : 'worker.js')
 interface WorkerEntry {
   worker: Worker
   ws: WebSocket | null
+  idleTimer: ReturnType<typeof setTimeout> | null
 }
 
 class TerminalManager {
   private workers = new Map<string, WorkerEntry>()
   private maxWorkers = config.maxWorkers
+  private idleTimeoutMs = config.workerIdleTimeoutMs
 
   createWorker(sessionId: string): Worker {
     if (this.workers.size >= this.maxWorkers) {
@@ -49,7 +51,8 @@ class TerminalManager {
       this.workers.delete(sessionId)
     })
 
-    this.workers.set(sessionId, { worker, ws: null })
+    this.workers.set(sessionId, { worker, ws: null, idleTimer: null })
+    this.startIdleTimer(sessionId)
     return worker
   }
 
@@ -62,6 +65,7 @@ class TerminalManager {
   attachWebSocket(sessionId: string, ws: WebSocket): void {
     const entry = this.workers.get(sessionId)
     if (!entry) return
+    this.clearIdleTimer(sessionId)
     entry.ws = ws
   }
 
@@ -69,6 +73,7 @@ class TerminalManager {
     const entry = this.workers.get(sessionId)
     if (!entry) return
     entry.ws = null
+    this.startIdleTimer(sessionId)
   }
 
   getWorker(sessionId: string): Worker | undefined {
@@ -79,9 +84,32 @@ class TerminalManager {
     return this.workers.get(sessionId)?.ws
   }
 
+  private startIdleTimer(sessionId: string): void {
+    this.clearIdleTimer(sessionId)
+    const entry = this.workers.get(sessionId)
+    if (!entry) return
+
+    entry.idleTimer = setTimeout(() => {
+      const current = this.workers.get(sessionId)
+      if (current && !current.ws) {
+        console.log(`Worker ${sessionId} idle for ${this.idleTimeoutMs / 1000}s, destroying`)
+        this.destroySession(sessionId)
+      }
+    }, this.idleTimeoutMs)
+  }
+
+  private clearIdleTimer(sessionId: string): void {
+    const entry = this.workers.get(sessionId)
+    if (!entry?.idleTimer) return
+    clearTimeout(entry.idleTimer)
+    entry.idleTimer = null
+  }
+
   destroySession(sessionId: string): void {
     const entry = this.workers.get(sessionId)
     if (!entry) return
+
+    this.clearIdleTimer(sessionId)
 
     try {
       entry.worker.postMessage({ type: 'disconnect' } satisfies MainToWorkerMessage)

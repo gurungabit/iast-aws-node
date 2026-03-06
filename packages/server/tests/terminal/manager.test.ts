@@ -27,6 +27,7 @@ vi.mock('worker_threads', () => ({
 vi.mock('@src/config.js', () => ({
   config: {
     maxWorkers: 3,
+    workerIdleTimeoutMs: 30 * 60 * 1000,
     tn3270Host: 'localhost',
     tn3270Port: 3270,
     tn3270Secure: false,
@@ -57,6 +58,7 @@ describe('TerminalManager', () => {
     vi.doMock('@src/config.js', () => ({
       config: {
         maxWorkers: 3,
+        workerIdleTimeoutMs: 30 * 60 * 1000,
         tn3270Host: 'localhost',
         tn3270Port: 3270,
         tn3270Secure: false,
@@ -331,6 +333,76 @@ describe('TerminalManager', () => {
 
       // destroySession should have been called, removing the session
       expect(terminalManager.getActiveCount()).toBe(0)
+    })
+  })
+
+  describe('idle timeout', () => {
+    it('destroys worker after idle timeout when no WS attached', () => {
+      vi.useFakeTimers()
+      terminalManager.createWorker('ses_001')
+      expect(terminalManager.getActiveCount()).toBe(1)
+
+      // Worker starts with no WS → idle timer starts on creation
+      vi.advanceTimersByTime(30 * 60 * 1000)
+
+      expect(terminalManager.getActiveCount()).toBe(0)
+      expect(terminalManager.getWorker('ses_001')).toBeUndefined()
+      vi.useRealTimers()
+    })
+
+    it('does not destroy worker while WS is attached', () => {
+      vi.useFakeTimers()
+      terminalManager.createWorker('ses_001')
+      const mockWs: MockWebSocket = { send: vi.fn() }
+
+      terminalManager.attachWebSocket('ses_001', mockWs)
+
+      vi.advanceTimersByTime(30 * 60 * 1000)
+
+      expect(terminalManager.getActiveCount()).toBe(1)
+      vi.useRealTimers()
+    })
+
+    it('starts idle timer when WS is detached', () => {
+      vi.useFakeTimers()
+      terminalManager.createWorker('ses_001')
+      const mockWs: MockWebSocket = { send: vi.fn() }
+
+      terminalManager.attachWebSocket('ses_001', mockWs)
+      terminalManager.detachWebSocket('ses_001')
+
+      // Not destroyed yet
+      vi.advanceTimersByTime(30 * 60 * 1000 - 1)
+      expect(terminalManager.getActiveCount()).toBe(1)
+
+      // Now destroyed
+      vi.advanceTimersByTime(1)
+      expect(terminalManager.getActiveCount()).toBe(0)
+      vi.useRealTimers()
+    })
+
+    it('resets idle timer when WS reattaches before timeout', () => {
+      vi.useFakeTimers()
+      terminalManager.createWorker('ses_001')
+      const mockWs: MockWebSocket = { send: vi.fn() }
+
+      // Attach, detach, wait 20 min, reattach
+      terminalManager.attachWebSocket('ses_001', mockWs)
+      terminalManager.detachWebSocket('ses_001')
+      vi.advanceTimersByTime(20 * 60 * 1000)
+      expect(terminalManager.getActiveCount()).toBe(1)
+
+      terminalManager.attachWebSocket('ses_001', mockWs)
+      terminalManager.detachWebSocket('ses_001')
+
+      // 20 more minutes — old timer would have fired, but was reset
+      vi.advanceTimersByTime(20 * 60 * 1000)
+      expect(terminalManager.getActiveCount()).toBe(1)
+
+      // Full 30 min from last detach
+      vi.advanceTimersByTime(10 * 60 * 1000)
+      expect(terminalManager.getActiveCount()).toBe(0)
+      vi.useRealTimers()
     })
   })
 })

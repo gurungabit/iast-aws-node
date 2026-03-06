@@ -19,6 +19,7 @@ const envSchema = z.object({
   TN3270_SECURE: z.string().default('true'),
 
   MAX_WORKERS: z.coerce.number().default(50),
+  WORKER_IDLE_TIMEOUT_MS: z.coerce.number().default(30 * 60 * 1000),
   ENCRYPTION_KEY: z.string().default(''),
 
   POD_IP: z.string().default('127.0.0.1'),
@@ -43,6 +44,7 @@ export const config = {
   tn3270Port: parsed.TN3270_PORT,
   tn3270Secure: parsed.TN3270_SECURE.toLowerCase() === 'true',
   maxWorkers: parsed.MAX_WORKERS,
+  workerIdleTimeoutMs: parsed.WORKER_IDLE_TIMEOUT_MS,
   encryptionKey: parsed.ENCRYPTION_KEY,
   podIp: parsed.POD_IP,
   headlessServiceHost: parsed.HEADLESS_SERVICE_HOST,

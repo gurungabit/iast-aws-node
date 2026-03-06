@@ -108,5 +108,6 @@ describe('config', () => {
     expect(keys).toContain('maxWorkers')
     expect(keys).toContain('encryptionKey')
     expect(keys).toContain('secretsPrefix')
+    expect(keys).toContain('workerIdleTimeoutMs')
   })
 })
