@@ -8,7 +8,7 @@ import { config } from '../config.js'
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = dirname(__filename)
 const isTsx = __filename.endsWith('.ts')
-const workerFile = join(__dirname, isTsx ? 'worker.ts' : 'worker.js')
+const workerFile = join(__dirname, isTsx ? 'worker-entry.mjs' : 'worker.js')
 
 interface WorkerEntry {
   worker: Worker
@@ -35,8 +35,6 @@ class TerminalManager {
         tn3270Port: config.tn3270Port,
         tn3270Secure: config.tn3270Secure,
       },
-      // In dev (tsx), inherit parent's execArgv so worker gets the same tsx loader hooks
-      ...(isTsx && { execArgv: process.execArgv }),
     })
 
     worker.on('error', (err) => {
