@@ -1,6 +1,5 @@
 /**
  * ROUT Screen Abstraction - Host screen navigation for ROUT system.
- * Ported from Python rout_screens.py.
  *
  * Provides named screen detection, section finding, queue listing,
  * and detail extraction for ROUT mode host screen-scraping.

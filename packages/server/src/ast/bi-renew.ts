@@ -7,7 +7,7 @@ import { Session } from './session.js'
 /**
  * BI Renew AST - Automated Billing Invoice Renewal Processing
  *
- * Ported from Python bi_renew.py. Processes BI_RENEW pending records by:
+ * Processes BI_RENEW pending records by:
  * 1. Fetching pending records from DB2 (NZ490 table)
  * 2. Retrieving and filtering RW1AA271 office reports from network storage
  * 3. Enriching records with PND queue data and exclusion lists

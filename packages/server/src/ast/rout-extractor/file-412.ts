@@ -1,6 +1,5 @@
 /**
  * 412 File Parser - Fixed-width file parsing and transformation.
- * Ported from Python file_412.py.
  *
  * The 412 file is a 1523-character fixed-width text file generated daily.
  * Each line contains one routing item with fields at defined column positions.

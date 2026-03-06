@@ -1,6 +1,5 @@
 /**
  * Filtering logic for RoutExtractor items.
- * Ported from Python filters.py.
  *
  * Three filter dimensions:
  * 1. Status: Active (A), Pended (P), or all

@@ -1,6 +1,5 @@
 /**
  * Static lookup tables for policy type resolution.
- * Ported from Python policy_types.py.
  *
  * Two mapping structures:
  * 1. FORM_LINE_TYPES: (SystemPolicyType, SystemFormLine) -> policy type description
