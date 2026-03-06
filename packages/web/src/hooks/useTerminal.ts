@@ -1,4 +1,4 @@
-import { useEffect, useRef, useCallback } from 'react'
+import { useRef, useCallback } from 'react'
 import { Terminal } from '@xterm/xterm'
 import { config } from '../config'
 import { useSessionStore } from '../stores/session-store'

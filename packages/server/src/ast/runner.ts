@@ -10,21 +10,23 @@ let cancelled = false
 
 export async function runAST(
   ati: Ati,
-  astName: ASTName,
+  astName: string,
   params: Record<string, unknown>,
   executionId: string,
   port: MessagePort,
 ) {
+  // Normalize: frontend sends underscores (rout_extractor), server uses hyphens (rout-extractor)
+  const normalizedName = astName.replace(/_/g, '-') as ASTName
   paused = false
   cancelled = false
 
   const reporter = new ProgressReporter(executionId, port)
   currentReporter = reporter
 
-  reporter.reportStatus('running', astName)
+  reporter.reportStatus('running', normalizedName)
 
   try {
-    await executeAST(ati, astName, params, reporter, {
+    await executeAST(ati, normalizedName, params, reporter, {
       checkpoint: async () => {
         if (cancelled) throw new Error('AST_CANCELLED')
         while (paused) {

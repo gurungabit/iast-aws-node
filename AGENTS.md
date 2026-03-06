@@ -93,10 +93,12 @@ Never submit code that breaks tests, introduces lint errors, or drops coverage b
 
 ## Code Style
 
+- **Clean, concise, modular code** - avoid duplications across the codebase
 - **Keep it simple** - don't over-engineer, don't add features not asked for
 - **No unnecessary abstractions** - three similar lines > premature helper function
 - **No dead code** - delete unused code completely, no `// removed` comments
 - **No backwards-compat hacks** - no renamed `_unused` vars, no re-exports of removed types
+- **DRY principle** - extract shared logic only when the same code exists in 3+ places
 - **Minimal comments** - only where logic isn't self-evident
 - **Don't add docstrings/types/comments** to code you didn't change
 - Prefer editing existing files over creating new ones

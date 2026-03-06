@@ -25,6 +25,11 @@ const envSchema = z.object({
   POD_IP: z.string().default('127.0.0.1'),
   HEADLESS_SERVICE_HOST: z.string().default(''),
 
+  SMB_SHARE: z.string().default(''),
+  SMB_DOMAIN: z.string().default(''),
+  SMB_USERNAME: z.string().default(''),
+  SMB_PASSWORD: z.string().default(''),
+
   AWS_REGION: z.string().optional(),
   EVENTBRIDGE_ROLE_ARN: z.string().optional(),
   SCHEDULE_TARGET_ARN: z.string().optional(),
@@ -48,6 +53,10 @@ export const config = {
   encryptionKey: parsed.ENCRYPTION_KEY,
   podIp: parsed.POD_IP,
   headlessServiceHost: parsed.HEADLESS_SERVICE_HOST,
+  smbShare: parsed.SMB_SHARE,
+  smbDomain: parsed.SMB_DOMAIN,
+  smbUsername: parsed.SMB_USERNAME,
+  smbPassword: parsed.SMB_PASSWORD,
   awsRegion: parsed.AWS_REGION,
   eventBridgeRoleArn: parsed.EVENTBRIDGE_ROLE_ARN,
   scheduleTargetArn: parsed.SCHEDULE_TARGET_ARN,

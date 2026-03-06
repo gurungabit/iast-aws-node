@@ -20,6 +20,7 @@ import { parse412File, resolve412Path } from './file-412.js'
 import { applyAllFilters } from './filters.js'
 import { getPolicyTypeFromPdq } from './policy-types.js'
 import { RoutScreen } from './rout-screen.js'
+import { config as serverConfig } from '../../config.js'
 
 // Auth config for Fire system
 const AUTH_CONFIG = {
@@ -198,10 +199,10 @@ async function prepareFrom412(
     try {
       const { readSmbFile } = await import('../../integrations/smb.js')
       const smbConfig = {
-        share: `\\\\Opr.statefarm.org`,
-        domain: 'statefarm',
-        username: '',
-        password: '',
+        share: serverConfig.smbShare,
+        domain: serverConfig.smbDomain,
+        username: serverConfig.smbUsername,
+        password: serverConfig.smbPassword,
       }
       const data = await readSmbFile(smbConfig, filePath)
       const fileContent = data.toString('latin1')

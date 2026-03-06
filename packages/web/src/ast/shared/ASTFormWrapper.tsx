@@ -79,7 +79,7 @@ export function ASTFormWrapper({
 
   const [scheduleMode, setScheduleMode] = useFormField<boolean>('schedule.enabled', false)
   const [scheduledTime, setScheduledTime] = useFormField<string>('schedule.time', '')
-  const [timezone, setTimezone] = useFormField<string>('schedule.timezone', 'America/Chicago')
+  const [_timezone, setTimezone] = useFormField<string>('schedule.timezone', 'America/Chicago')
   const [notifyEmail, setNotifyEmail] = useFormField<string>('schedule.email', '')
 
   const [selectedConfigId, setSelectedConfigId] = useFormField<string>(`astConfig.${astName}.selectedId`, '')
