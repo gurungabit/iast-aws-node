@@ -22,7 +22,9 @@
     "test:coverage": "vitest run -c packages/server/vitest.config.ts --coverage && vitest run -c packages/web/vitest.config.ts --coverage",
     "test:server": "vitest run -c packages/server/vitest.config.ts",
     "test:web": "vitest run -c packages/web/vitest.config.ts",
-    "test:e2e": "playwright test"
+    "test:e2e": "playwright test",
+    "db:push": "npm -w packages/server run db:push",
+    "db:reset": "npm run docker:reset && sleep 2 && npm run db:push"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.3",
