@@ -76,19 +76,24 @@ export const TerminalComponent = memo(function TerminalComponent({ sessionId }: 
   const setConnected = useSessionStore((s) => s.setConnected)
 
   const [keyMenuOpen, setKeyMenuOpen] = useState(false)
+  const [contextMenu, setContextMenu] = useState<{ x: number; y: number } | null>(null)
+  const contextMenuRef = useRef<HTMLDivElement>(null)
 
-  // Close menu on outside click
+  // Close menus on outside click
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
       if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
         setKeyMenuOpen(false)
       }
+      if (contextMenuRef.current && !contextMenuRef.current.contains(e.target as Node)) {
+        setContextMenu(null)
+      }
     }
-    if (keyMenuOpen) {
+    if (keyMenuOpen || contextMenu) {
       document.addEventListener('mousedown', handleClickOutside)
     }
     return () => document.removeEventListener('mousedown', handleClickOutside)
-  }, [keyMenuOpen])
+  }, [keyMenuOpen, contextMenu])
 
   useEffect(() => {
     const container = containerRef.current
@@ -138,8 +143,22 @@ export const TerminalComponent = memo(function TerminalComponent({ sessionId }: 
     }
   }, [sessionId, tab?.ws, updateScreen, setConnected])
 
+  function pasteFromClipboard() {
+    if (!tab?.ws) return
+    navigator.clipboard.readText().then((text) => {
+      if (text) tab.ws!.send({ type: 'data', text })
+    }).catch(() => {})
+  }
+
   function handleKeyDown(e: React.KeyboardEvent) {
     if (!tab?.ws) return
+
+    // Allow Ctrl+V / Cmd+V for paste
+    if ((e.ctrlKey || e.metaKey) && e.key === 'v') {
+      e.preventDefault()
+      pasteFromClipboard()
+      return
+    }
 
     e.preventDefault()
     e.stopPropagation()
@@ -164,8 +183,28 @@ export const TerminalComponent = memo(function TerminalComponent({ sessionId }: 
     }
   }
 
+  function handlePaste(e: React.ClipboardEvent) {
+    e.preventDefault()
+    const text = e.clipboardData.getData('text')
+    if (text && tab?.ws) {
+      tab.ws.send({ type: 'data', text })
+    }
+  }
+
+  function handleContextMenu(e: React.MouseEvent) {
+    e.preventDefault()
+    setContextMenu({ x: e.clientX, y: e.clientY })
+  }
+
+  function handleContextMenuPaste() {
+    setContextMenu(null)
+    pasteFromClipboard()
+    containerRef.current?.focus()
+  }
+
   function handleClick(e: React.MouseEvent) {
     if (!tab?.ws || !termRef.current) return
+    setContextMenu(null)
     containerRef.current?.focus()
 
     const term = termRef.current
@@ -334,10 +373,27 @@ export const TerminalComponent = memo(function TerminalComponent({ sessionId }: 
           ref={containerRef}
           tabIndex={0}
           onKeyDown={handleKeyDown}
+          onPaste={handlePaste}
+          onContextMenu={handleContextMenu}
           onClick={handleClick}
           className="p-1 focus:outline-none"
           style={{ backgroundColor: '#000' }}
         />
+        {contextMenu && (
+          <div
+            ref={contextMenuRef}
+            className="fixed z-50 min-w-[120px] py-1 rounded-md border shadow-lg bg-white dark:bg-zinc-800 border-gray-200 dark:border-zinc-700"
+            style={{ left: contextMenu.x, top: contextMenu.y }}
+          >
+            <button
+              type="button"
+              className="w-full px-3 py-1.5 text-left text-sm cursor-pointer hover:bg-gray-100 dark:hover:bg-zinc-700 text-gray-800 dark:text-zinc-200"
+              onClick={handleContextMenuPaste}
+            >
+              Paste
+            </button>
+          </div>
+        )}
         {!tab?.connected && (
           <div className="absolute inset-0 bg-zinc-950/95 flex items-center justify-center">
             <div className="text-center px-6">
