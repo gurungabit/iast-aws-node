@@ -28,10 +28,14 @@ const MY_POD_IP = config.podIp
 /**
  * Attach a browser WebSocket directly to a local Worker thread.
  * Used when this pod owns the session.
+ *
+ * @param pendingMessages - Messages buffered during async setup (auth, routing)
+ *   that arrived before this handler was registered.
  */
 function attachLocal(
   socket: WebSocket,
   sessionId: string,
+  pendingMessages?: unknown[],
 ) {
   const worker = terminalManager.getOrCreateWorker(sessionId)
   terminalManager.attachWebSocket(sessionId, socket as never)
@@ -73,6 +77,13 @@ function attachLocal(
     worker.off('message', onWorkerMessage)
     terminalManager.detachWebSocket(sessionId)
   })
+
+  // Replay any messages that arrived during async setup
+  if (pendingMessages?.length) {
+    for (const msg of pendingMessages) {
+      worker.postMessage(msg)
+    }
+  }
 }
 
 /**
@@ -151,11 +162,28 @@ export async function terminalWsRoutes(app: FastifyInstance) {
     { websocket: true },
     async (socket, req) => {
       const sessionId = (req.params as { sessionId: string }).sessionId
+      const wsSocket = socket as unknown as WebSocket
+
+      // Buffer messages that arrive during async auth/routing setup.
+      // The browser may send { type: 'connect' } before we've registered
+      // the real message handler — without buffering, that message is lost
+      // and the terminal stays stuck on "Connecting...".
+      const pendingMessages: unknown[] = []
+      const bufferHandler = (data: unknown) => {
+        try {
+          pendingMessages.push(JSON.parse(String(data)))
+        } catch {
+          // ignore malformed
+        }
+      }
+      wsSocket.on('message', bufferHandler)
+
       const url = new URL(req.url, `http://${req.headers.host}`)
       const token = url.searchParams.get('token') ?? undefined
       const user = await verifyWsToken(token)
 
       if (!user) {
+        wsSocket.off('message', bufferHandler)
         socket.close(4001, 'Unauthorized')
         return
       }
@@ -175,15 +203,24 @@ export async function terminalWsRoutes(app: FastifyInstance) {
 
       const ownerPodIp = assignment.podIp
 
+      // Remove buffer handler before attaching the real one
+      wsSocket.off('message', bufferHandler)
+
       // Fast path: session is on this pod
       if (ownerPodIp === MY_POD_IP) {
-        attachLocal(socket as unknown as WebSocket, sessionId)
+        attachLocal(wsSocket, sessionId, pendingMessages)
         return
       }
 
       // Cross-pod: proxy to the owning pod
       try {
-        await proxyToRemotePod(socket as unknown as WebSocket, ownerPodIp, sessionId, app)
+        await proxyToRemotePod(wsSocket, ownerPodIp, sessionId, app)
+        // Replay buffered messages to remote pod
+        for (const msg of pendingMessages) {
+          if (wsSocket.readyState === WebSocket.OPEN) {
+            wsSocket.send(JSON.stringify(msg))
+          }
+        }
       } catch {
         // Connection to remote pod failed — check if pod is alive
         app.log.warn({ sessionId, ownerPodIp }, 'Remote pod connection failed, checking health')
@@ -199,10 +236,15 @@ export async function terminalWsRoutes(app: FastifyInstance) {
           await registerSessionAssignment(sessionId, newPodIp, userId)
 
           if (newPodIp === MY_POD_IP) {
-            attachLocal(socket as unknown as WebSocket, sessionId)
+            attachLocal(wsSocket, sessionId, pendingMessages)
           } else {
             try {
-              await proxyToRemotePod(socket as unknown as WebSocket, newPodIp, sessionId, app)
+              await proxyToRemotePod(wsSocket, newPodIp, sessionId, app)
+              for (const msg of pendingMessages) {
+                if (wsSocket.readyState === WebSocket.OPEN) {
+                  wsSocket.send(JSON.stringify(msg))
+                }
+              }
             } catch (retryErr) {
               app.log.error({ sessionId, err: retryErr }, 'Retry to new pod failed')
               socket.close(4003, 'Terminal unavailable')
@@ -213,7 +255,12 @@ export async function terminalWsRoutes(app: FastifyInstance) {
           app.log.info({ sessionId, ownerPodIp }, 'Pod alive, retrying after delay')
           await new Promise((r) => setTimeout(r, 1000))
           try {
-            await proxyToRemotePod(socket as unknown as WebSocket, ownerPodIp, sessionId, app)
+            await proxyToRemotePod(wsSocket, ownerPodIp, sessionId, app)
+            for (const msg of pendingMessages) {
+              if (wsSocket.readyState === WebSocket.OPEN) {
+                wsSocket.send(JSON.stringify(msg))
+              }
+            }
           } catch {
             socket.close(4003, 'Terminal unavailable')
           }

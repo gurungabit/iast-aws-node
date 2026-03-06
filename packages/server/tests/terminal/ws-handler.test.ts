@@ -55,6 +55,8 @@ interface MockSocket {
   send: ReturnType<typeof vi.fn>
   readyState: number
   on: ReturnType<typeof vi.fn>
+  off: ReturnType<typeof vi.fn>
+  _handlerMap: Map<string, Array<(...args: unknown[]) => void>>
   _handlers: Record<string, (...args: unknown[]) => void>
 }
 
@@ -67,16 +69,33 @@ interface MockReq {
 type RouteHandler = (socket: MockSocket, req: MockReq) => Promise<void>
 
 function createMockSocket(): MockSocket {
-  const handlers: Record<string, (...args: unknown[]) => void> = {}
-  return {
+  const handlerMap = new Map<string, Array<(...args: unknown[]) => void>>()
+  const socket: MockSocket = {
     close: vi.fn(),
     send: vi.fn(),
     readyState: 1,
     on: vi.fn().mockImplementation((event: string, handler: (...args: unknown[]) => void) => {
-      handlers[event] = handler
+      if (!handlerMap.has(event)) handlerMap.set(event, [])
+      handlerMap.get(event)!.push(handler)
     }),
-    _handlers: handlers,
+    off: vi.fn().mockImplementation((event: string, handler: (...args: unknown[]) => void) => {
+      const list = handlerMap.get(event)
+      if (list) {
+        const idx = list.indexOf(handler)
+        if (idx !== -1) list.splice(idx, 1)
+      }
+    }),
+    _handlerMap: handlerMap,
+    // Convenience: returns the last registered handler for an event
+    get _handlers() {
+      const result: Record<string, (...args: unknown[]) => void> = {}
+      for (const [event, list] of handlerMap) {
+        if (list.length > 0) result[event] = list[list.length - 1]
+      }
+      return result
+    },
   }
+  return socket
 }
 
 function createMockReq(sessionId: string, token?: string): MockReq {
@@ -297,6 +316,40 @@ describe('terminalWsRoutes', () => {
     await publicHandler(socket, req)
 
     expect(mockVerifyWsToken).toHaveBeenCalledWith(undefined)
+  })
+
+  it('replays messages buffered during async setup', async () => {
+    // Simulate: browser sends { type: 'connect' } while server is still doing auth/routing
+    mockVerifyWsToken.mockImplementation(async () => {
+      // While verifyWsToken is running, simulate the browser sending a message.
+      // The buffer handler was registered synchronously before this await,
+      // so it should capture the message.
+      const bufferHandlers = socket._handlerMap.get('message')
+      if (bufferHandlers?.[0]) {
+        bufferHandlers[0](Buffer.from(JSON.stringify({ type: 'connect' })))
+      }
+      return { id: 'user-1', email: 'a@b.com', displayName: 'User', entraId: 'oid' }
+    })
+
+    const socket = createMockSocket()
+    const req = createMockReq('sess-1', 'valid-token')
+
+    await publicHandler(socket, req)
+
+    // The buffered 'connect' message should have been replayed to the worker
+    expect(mockWorker.postMessage).toHaveBeenCalledWith({ type: 'connect' })
+  })
+
+  it('removes buffer handler on auth failure', async () => {
+    mockVerifyWsToken.mockResolvedValue(null)
+
+    const socket = createMockSocket()
+    const req = createMockReq('sess-1', 'bad-token')
+
+    await publicHandler(socket, req)
+
+    expect(socket.off).toHaveBeenCalledWith('message', expect.any(Function))
+    expect(socket.close).toHaveBeenCalledWith(4001, 'Unauthorized')
   })
 
   describe('internal route', () => {
