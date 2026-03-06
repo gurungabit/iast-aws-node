@@ -1,5 +1,5 @@
-import { register } from 'node:module'
+import { register } from 'tsx/esm/api'
 
-register('tsx/esm', import.meta.url)
+register()
 
 await import('./worker.ts')
