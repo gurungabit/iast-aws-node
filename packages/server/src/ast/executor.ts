@@ -1,9 +1,9 @@
 import type { Ati } from 'tnz3270-node'
 import type { ProgressReporter } from './progress.js'
 import type { ASTName } from '../types.js'
-import { runLoginAST } from './login.js'
-import { runBiRenewAST } from './bi-renew.js'
-import { runRoutExtractorAST } from './rout-extractor.js'
+import { runLoginAST } from './login/index.js'
+import { runBiRenewAST } from './bi-renew/index.js'
+import { runRoutExtractorAST } from './rout-extractor/index.js'
 
 export interface ASTContext {
   checkpoint: () => Promise<void>

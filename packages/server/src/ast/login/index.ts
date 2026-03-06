@@ -1,8 +1,8 @@
 import type { Ati } from 'tnz3270-node'
-import type { ProgressReporter } from './progress.js'
-import type { ASTContext } from './executor.js'
+import type { ProgressReporter } from '../progress.js'
+import type { ASTContext } from '../executor.js'
 import { randomUUID } from 'crypto'
-import { Session } from './session.js'
+import { Session } from '../session.js'
 
 function validatePolicyNumber(policyNumber: string): boolean {
   return Boolean(policyNumber && policyNumber.length === 9 && /^[a-zA-Z0-9]+$/.test(policyNumber))

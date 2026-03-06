@@ -44,7 +44,7 @@ vi.mock('@src/integrations/db2.js', () => ({
   queryDb2: vi.fn().mockRejectedValue(new Error('not available')),
 }))
 
-import { runBiRenewAST } from '@src/ast/bi-renew.js'
+import { runBiRenewAST } from '@src/ast/bi-renew/index.js'
 
 // -- Helpers --
 

@@ -1,8 +1,8 @@
 import type { Ati } from 'tnz3270-node'
-import type { ProgressReporter } from './progress.js'
-import type { ASTContext } from './executor.js'
+import type { ProgressReporter } from '../progress.js'
+import type { ASTContext } from '../executor.js'
 import { randomUUID } from 'crypto'
-import { Session } from './session.js'
+import { Session } from '../session.js'
 
 /**
  * BI Renew AST - Automated Billing Invoice Renewal Processing
@@ -193,7 +193,7 @@ export async function runBiRenewAST(
 
   try {
     // Import dynamically to keep the integration isolated
-    const { readSmbFile } = await import('../integrations/smb.js')
+    const { readSmbFile } = await import('../../integrations/smb.js')
     const smbConfig = {
       share: `\\\\Opr.statefarm.org\\dfs\\CORP\\${officeCode}`,
       domain: 'statefarm',
@@ -240,7 +240,7 @@ export async function runBiRenewAST(
   let dbRecords: DbRecord[] = []
 
   try {
-    const { queryDb2 } = await import('../integrations/db2.js')
+    const { queryDb2 } = await import('../../integrations/db2.js')
     const db2Config = {
       hostname: process.env.DB2_HOSTNAME ?? 'localhost',
       port: Number(process.env.DB2_PORT ?? 50000),

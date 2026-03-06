@@ -34,7 +34,7 @@ vi.mock('crypto', () => ({
   randomUUID: vi.fn().mockReturnValue('test-uuid'),
 }))
 
-import { runLoginAST } from '@src/ast/login.js'
+import { runLoginAST } from '@src/ast/login/index.js'
 
 describe('runLoginAST', () => {
   let mockAti: Ati

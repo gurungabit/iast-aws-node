@@ -6,15 +6,15 @@ const { mockRunLoginAST, mockRunBiRenewAST, mockRunRoutExtractorAST } = vi.hoist
   mockRunRoutExtractorAST: vi.fn(),
 }))
 
-vi.mock('@src/ast/login.js', () => ({
+vi.mock('@src/ast/login/index.js', () => ({
   runLoginAST: mockRunLoginAST,
 }))
 
-vi.mock('@src/ast/bi-renew.js', () => ({
+vi.mock('@src/ast/bi-renew/index.js', () => ({
   runBiRenewAST: mockRunBiRenewAST,
 }))
 
-vi.mock('@src/ast/rout-extractor.js', () => ({
+vi.mock('@src/ast/rout-extractor/index.js', () => ({
   runRoutExtractorAST: mockRunRoutExtractorAST,
 }))
 
