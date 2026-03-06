@@ -1,39 +1,91 @@
-import { type ReactNode, useEffect, useRef } from 'react'
+import { useEffect, type ReactNode } from 'react'
+import { X } from 'lucide-react'
+import { Button } from './Button'
 
-interface ModalProps {
-  open: boolean
+export interface ModalProps {
+  isOpen: boolean
   onClose: () => void
-  title: string
+  title?: ReactNode
   children: ReactNode
+  footer?: ReactNode
+  size?: 'sm' | 'md' | 'lg' | 'xl' | 'full'
+  closeOnBackdropClick?: boolean
+  closeOnEscape?: boolean
 }
 
-export function Modal({ open, onClose, title, children }: ModalProps) {
-  const dialogRef = useRef<HTMLDialogElement>(null)
+const sizeStyles = {
+  sm: 'max-w-md',
+  md: 'max-w-lg',
+  lg: 'max-w-2xl',
+  xl: 'max-w-4xl',
+  full: 'max-w-5xl xl:max-w-6xl 2xl:max-w-7xl',
+}
 
+export function Modal({
+  isOpen,
+  onClose,
+  title,
+  children,
+  footer,
+  size = 'md',
+  closeOnBackdropClick = true,
+  closeOnEscape = true,
+}: ModalProps) {
   useEffect(() => {
-    const dialog = dialogRef.current
-    if (!dialog) return
+    if (!closeOnEscape) return
 
-    if (open && !dialog.open) {
-      dialog.showModal()
-    } else if (!open && dialog.open) {
-      dialog.close()
+    const handleEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') onClose()
     }
-  }, [open])
+
+    if (isOpen) {
+      document.addEventListener('keydown', handleEscape)
+      document.body.style.overflow = 'hidden'
+    }
+
+    return () => {
+      document.removeEventListener('keydown', handleEscape)
+      document.body.style.overflow = 'unset'
+    }
+  }, [isOpen, onClose, closeOnEscape])
+
+  if (!isOpen) return null
 
   return (
-    <dialog
-      ref={dialogRef}
-      onClose={onClose}
-      className="max-w-lg w-full rounded-lg border border-gray-700 bg-gray-900 p-0 text-white backdrop:bg-black/60"
-    >
-      <div className="flex items-center justify-between border-b border-gray-700 px-4 py-3">
-        <h2 className="text-sm font-semibold">{title}</h2>
-        <button onClick={onClose} className="text-gray-400 hover:text-white">
-          &times;
-        </button>
+    <div className="fixed inset-0 z-50 flex items-center justify-center">
+      {/* Backdrop */}
+      <div
+        className="absolute inset-0 bg-black/50 backdrop-blur-sm"
+        onClick={closeOnBackdropClick ? onClose : undefined}
+      />
+
+      {/* Modal */}
+      <div
+        className={`
+          relative bg-white dark:bg-zinc-900 rounded-lg shadow-xl
+          border border-gray-200 dark:border-zinc-700
+          w-full mx-4 ${sizeStyles[size]}
+          max-h-[90vh] overflow-hidden
+        `}
+      >
+        {/* Header */}
+        <div className="flex items-center justify-between p-6 border-b border-gray-200 dark:border-zinc-700">
+          <div className="text-lg font-semibold text-gray-900 dark:text-zinc-100">{title}</div>
+          <Button variant="ghost" size="sm" onClick={onClose} className="p-1 h-auto w-auto" aria-label="Close modal">
+            <X className="h-5 w-5" />
+          </Button>
+        </div>
+
+        {/* Content */}
+        <div className="p-6 overflow-y-auto max-h-[calc(90vh-8rem)]">{children}</div>
+
+        {/* Footer */}
+        {footer && (
+          <div className="flex items-center justify-end gap-3 p-6 border-t border-gray-200 dark:border-zinc-700">
+            {footer}
+          </div>
+        )}
       </div>
-      <div className="p-4">{children}</div>
-    </dialog>
+    </div>
   )
 }

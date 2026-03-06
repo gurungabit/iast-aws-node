@@ -1,9 +1,9 @@
-import { useEffect, type ReactNode } from 'react'
+import { useEffect } from 'react'
 import { useSessionStore } from '../stores/session-store'
 import { useASTStore } from '../stores/ast-store'
 import type { ServerMessage } from '../services/websocket'
 
-export function ASTEventBridge({ children }: { children: ReactNode }) {
+export function ASTEventBridge() {
   const tabs = useSessionStore((s) => s.tabs)
   const {
     startExecution,
@@ -50,5 +50,5 @@ export function ASTEventBridge({ children }: { children: ReactNode }) {
     return () => cleanups.forEach((fn) => fn())
   }, [tabs, startExecution, updateStatus, updateProgress, addItemBatch, completeExecution])
 
-  return <>{children}</>
+  return null
 }

@@ -1,41 +1,43 @@
-import { type ReactNode } from 'react'
-import { MsalAuthenticationTemplate, UnauthenticatedTemplate } from '@azure/msal-react'
-import { InteractionType } from '@azure/msal-browser'
-import { loginRequest } from '../config/auth'
+import { type ReactNode, useEffect } from 'react'
+import { useAuth } from './useAuth'
+import { useTheme } from '../hooks/useTheme'
+import { ThemeToggle } from '../components/ThemeToggle'
 
 interface AuthGuardProps {
   children: ReactNode
 }
 
-function LoginFallback() {
-  return (
-    <div className="flex min-h-screen items-center justify-center bg-gray-950">
-      <div className="text-center">
-        <h1 className="text-2xl font-bold text-white">IAST</h1>
-        <p className="mt-2 text-gray-400">Authenticating...</p>
-      </div>
-    </div>
-  )
-}
+export function AuthGuard({ children }: AuthGuardProps): ReactNode {
+  const { isAuthenticated, isLoading, login } = useAuth()
+  const { theme, toggleTheme } = useTheme()
 
-export function AuthGuard({ children }: AuthGuardProps) {
-  // Dev mode: skip auth if MSAL not configured
+  // Dev mode bypass
   if (!import.meta.env.VITE_MSAL_CLIENT_ID) {
     return <>{children}</>
   }
 
-  return (
-    <>
-      <MsalAuthenticationTemplate
-        interactionType={InteractionType.Popup}
-        authenticationRequest={loginRequest}
-        loadingComponent={LoginFallback}
-      >
-        {children}
-      </MsalAuthenticationTemplate>
-      <UnauthenticatedTemplate>
-        <LoginFallback />
-      </UnauthenticatedTemplate>
-    </>
-  )
+  // Auto-redirect to MSAL login when not authenticated
+  useEffect(() => {
+    if (!isLoading && !isAuthenticated) {
+      void login()
+    }
+  }, [isLoading, isAuthenticated, login])
+
+  if (isLoading || !isAuthenticated) {
+    return (
+      <div className="flex items-center justify-center min-h-screen bg-white dark:bg-zinc-950">
+        <div className="absolute top-4 right-4">
+          <ThemeToggle theme={theme} onToggle={toggleTheme} />
+        </div>
+        <div className="text-center">
+          <div className="w-10 h-10 border-3 border-gray-300 dark:border-zinc-700 border-t-blue-500 rounded-full animate-spin mx-auto mb-4" />
+          <p className="text-gray-500 dark:text-zinc-500">
+            {isLoading ? 'Loading...' : 'Redirecting to sign in...'}
+          </p>
+        </div>
+      </div>
+    )
+  }
+
+  return <>{children}</>
 }

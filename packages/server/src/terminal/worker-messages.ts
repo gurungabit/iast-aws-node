@@ -12,7 +12,7 @@ export interface ScreenMeta {
 
 // Main thread → Worker thread messages
 export type MainToWorkerMessage =
-  | { type: 'connect'; host: string; port: number; options?: Record<string, unknown> }
+  | { type: 'connect' }
   | { type: 'disconnect' }
   | { type: 'key'; key: string }
   | { type: 'data'; text: string }

@@ -27,7 +27,12 @@ class TerminalManager {
     }
 
     const worker = new Worker(join(__dirname, 'worker.js'), {
-      workerData: { sessionId },
+      workerData: {
+        sessionId,
+        tn3270Host: config.tn3270Host,
+        tn3270Port: config.tn3270Port,
+        tn3270Secure: config.tn3270Secure,
+      },
     })
 
     worker.on('error', (err) => {

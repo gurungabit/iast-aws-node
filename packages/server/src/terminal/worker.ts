@@ -1,4 +1,4 @@
-import { parentPort } from 'worker_threads'
+import { parentPort, workerData } from 'worker_threads'
 import { Tnz, Ati } from 'tnz3270-node'
 import { renderAnsiScreen } from './renderer.js'
 import type { MainToWorkerMessage, WorkerToMainMessage, ScreenMeta } from './worker-messages.js'
@@ -6,6 +6,12 @@ import type { MainToWorkerMessage, WorkerToMainMessage, ScreenMeta } from './wor
 if (!parentPort) throw new Error('worker.ts must be run as a Worker thread')
 
 const port = parentPort
+const { tn3270Host, tn3270Port, tn3270Secure } = workerData as {
+  sessionId: string
+  tn3270Host: string
+  tn3270Port: number
+  tn3270Secure: boolean
+}
 
 let tnz: Tnz | null = null
 let ati: Ati | null = null
@@ -100,10 +106,9 @@ port.on('message', async (msg: MainToWorkerMessage) => {
           send({ type: 'disconnected' })
         })
 
-        const options = msg.options ?? {}
-        await tnz.connect(msg.host, msg.port || 3270, {
-          secure: options.secure as boolean | undefined,
-          verifyCert: options.verifyCert as boolean | undefined,
+        await tnz.connect(tn3270Host, tn3270Port, {
+          secure: tn3270Secure,
+          verifyCert: false,
         })
 
         send({ type: 'connected' })

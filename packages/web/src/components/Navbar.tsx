@@ -1,38 +1,61 @@
-import { Link, useRouterState } from '@tanstack/react-router'
-import { cn } from '../utils'
+import { Link } from '@tanstack/react-router'
+import { useAuth } from '../auth/useAuth'
+import { useTheme } from '../hooks/useTheme'
+import { ThemeToggle } from './ThemeToggle'
 import { UserDropdown } from './UserDropdown'
 
-const navItems = [
-  { to: '/', label: 'Terminal' },
-  { to: '/history', label: 'History' },
-  { to: '/auto-launcher-runs', label: 'Auto Launcher' },
-  { to: '/schedules', label: 'Schedules' },
-] as const
-
-export function Navbar() {
-  const routerState = useRouterState()
-  const currentPath = routerState.location.pathname
+export function Navbar(): React.ReactNode {
+  const { user, logout } = useAuth()
+  const { theme, toggleTheme } = useTheme()
 
   return (
-    <nav className="flex h-10 items-center justify-between border-b border-gray-800 bg-gray-950 px-4">
-      <div className="flex items-center gap-1">
-        <span className="mr-4 text-sm font-bold text-white">IAST</span>
-        {navItems.map((item) => (
+    <header className="flex items-center justify-between px-4 py-2 bg-gray-50 dark:bg-zinc-900 border-b border-gray-200 dark:border-zinc-800">
+      <div className="flex items-center gap-6">
+        <span className="text-lg font-semibold text-gray-900 dark:text-zinc-100">TN3270 Terminal</span>
+        <nav className="flex items-center gap-1">
           <Link
-            key={item.to}
-            to={item.to}
-            className={cn(
-              'rounded px-3 py-1 text-xs font-medium transition-colors',
-              currentPath === item.to
-                ? 'bg-gray-800 text-white'
-                : 'text-gray-400 hover:bg-gray-800 hover:text-gray-200',
-            )}
+            to="/"
+            className="px-3 py-1.5 text-sm rounded-md transition-colors duration-150
+              [&.active]:bg-blue-100 [&.active]:text-blue-700
+              dark:[&.active]:bg-blue-900/30 dark:[&.active]:text-blue-400
+              hover:bg-gray-100 dark:hover:bg-zinc-800"
           >
-            {item.label}
+            Terminal
           </Link>
-        ))}
+          <Link
+            to="/history"
+            className="px-3 py-1.5 text-sm rounded-md transition-colors duration-150
+              [&.active]:bg-blue-100 [&.active]:text-blue-700
+              dark:[&.active]:bg-blue-900/30 dark:[&.active]:text-blue-400
+              hover:bg-gray-100 dark:hover:bg-zinc-800"
+          >
+            History
+          </Link>
+          <Link
+            to="/schedules"
+            className="px-3 py-1.5 text-sm rounded-md transition-colors duration-150
+              [&.active]:bg-blue-100 [&.active]:text-blue-700
+              dark:[&.active]:bg-blue-900/30 dark:[&.active]:text-blue-400
+              hover:bg-gray-100 dark:hover:bg-zinc-800"
+          >
+            Schedules
+          </Link>
+          <Link
+            to="/auto-launcher-runs"
+            className="px-3 py-1.5 text-sm rounded-md transition-colors duration-150
+              [&.active]:bg-blue-100 [&.active]:text-blue-700
+              dark:[&.active]:bg-blue-900/30 dark:[&.active]:text-blue-400
+              hover:bg-gray-100 dark:hover:bg-zinc-800"
+          >
+            AutoLauncher Runs
+          </Link>
+        </nav>
       </div>
-      <UserDropdown />
-    </nav>
+
+      <div className="flex items-center gap-3">
+        <ThemeToggle theme={theme} onToggle={toggleTheme} />
+        <UserDropdown email={user?.email || ''} onSignOut={() => void logout()} />
+      </div>
+    </header>
   )
 }
