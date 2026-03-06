@@ -1,4 +1,15 @@
-import type { Ati } from 'tnz3270-node'
+import type { Ati, Tnz } from 'tnz3270-node'
+
+// Field attribute bit flags (3270 architecture)
+const FA_PROTECTED = 0x20
+
+interface ScreenField {
+  address: number // buffer address of field data start (after FA byte)
+  row: number // 0-indexed row
+  col: number // 0-indexed col
+  length: number
+  protected: boolean
+}
 
 /**
  * High-level Session wrapper over tnz3270-node Ati.
@@ -11,6 +22,11 @@ export class Session {
 
   constructor(ati: Ati) {
     this.ati = ati
+  }
+
+  /** Get the underlying Tnz instance */
+  private get tnz(): Tnz | undefined {
+    return this.ati.getTnz()
   }
 
   // -- Key actions --
@@ -51,23 +67,105 @@ export class Session {
     await this.ati.send(text, [row, col])
   }
 
-  /** Search screen for a label and fill the adjacent input field */
+  /** Get all fields on the screen by scanning the field attribute plane */
+  private getFields(): ScreenField[] {
+    const tnz = this.tnz
+    if (!tnz) return []
+
+    const fields: ScreenField[] = []
+    const bufSize = tnz.bufferSize
+    const maxCol = tnz.maxCol
+
+    // Collect all field attribute positions
+    const faPositions: [number, number][] = []
+    for (const [addr, fattr] of tnz.fields()) {
+      faPositions.push([addr, fattr])
+    }
+
+    if (faPositions.length === 0) return fields
+
+    for (let i = 0; i < faPositions.length; i++) {
+      const [faAddr, fattr] = faPositions[i]
+      const fieldStart = (faAddr + 1) % bufSize
+      const fieldEnd = faPositions[(i + 1) % faPositions.length][0]
+
+      const length = fieldEnd > fieldStart
+        ? fieldEnd - fieldStart
+        : bufSize - fieldStart + fieldEnd
+
+      fields.push({
+        address: fieldStart,
+        row: Math.floor(fieldStart / maxCol),
+        col: fieldStart % maxCol,
+        length,
+        protected: (fattr & FA_PROTECTED) !== 0,
+      })
+    }
+
+    return fields
+  }
+
+  /** Get all unprotected (input) fields */
+  private getUnprotectedFields(): ScreenField[] {
+    return this.getFields().filter((f) => !f.protected)
+  }
+
+  /**
+   * Search screen for a label and fill the closest unprotected input field.
+   * Uses field-attribute-aware positioning (matching Python Host.fill_field_by_label).
+   */
   async fillFieldByLabel(label: string, value: string, caseInsensitive = true): Promise<boolean> {
-    const screenText = this.getFullScreen()
-    const searchLabel = caseInsensitive ? label.toLowerCase() : label
-    const searchScreen = caseInsensitive ? screenText.toLowerCase() : screenText
+    const tnz = this.tnz
+    if (!tnz) return false
 
-    const idx = searchScreen.indexOf(searchLabel)
-    if (idx === -1) return false
+    const inputFields = this.getUnprotectedFields()
+    if (inputFields.length === 0) return false
 
-    // Calculate the row/col position of the label
-    const cols = this.cols
-    const labelRow = Math.floor(idx / cols) + 1
-    const labelEndCol = (idx % cols) + label.length + 1
+    const maxCol = tnz.maxCol
+    const screenText = tnz.scrstr(0, 0, false)
+    if (!screenText) return false
 
-    // Try to position cursor after the label and type
-    // The field is typically right after the label on the same row
-    await this.fillFieldAtPosition(labelRow, labelEndCol + 1, value)
+    const searchLabel = caseInsensitive ? label.toUpperCase() : label
+    const searchScreen = caseInsensitive ? screenText.toUpperCase() : screenText
+
+    const labelPos = searchScreen.indexOf(searchLabel)
+    if (labelPos === -1) return false
+
+    const labelRow = Math.floor(labelPos / maxCol)
+    const labelEndCol = (labelPos % maxCol) + searchLabel.length
+
+    // Find closest unprotected field after the label (matching Python logic)
+    let bestField: ScreenField | null = null
+    let minDistance = Infinity
+
+    for (const field of inputFields) {
+      if (field.row < labelRow) continue
+
+      const rowDiff = field.row - labelRow
+
+      if (rowDiff === 0) {
+        if (field.col >= labelEndCol) {
+          const distance = field.col - labelEndCol
+          if (distance < minDistance) {
+            minDistance = distance
+            bestField = field
+          }
+        }
+      } else {
+        const distance = rowDiff * 1000 + Math.abs(field.col - (labelPos % maxCol))
+        if (distance < minDistance) {
+          minDistance = distance
+          bestField = field
+        }
+      }
+    }
+
+    if (!bestField) return false
+
+    // Move cursor to field address, clear field, type value
+    tnz.curadd = bestField.address
+    tnz.keyEraseEof()
+    tnz.keyData(value)
     return true
   }
 

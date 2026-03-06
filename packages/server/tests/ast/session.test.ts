@@ -7,7 +7,23 @@ vi.mock('tnz3270-node', () => ({
 import { Ati } from 'tnz3270-node'
 import { Session } from '@src/ast/session.js'
 
-function createMockAti() {
+function createMockTnz(screenText: string, fieldAttrs: [number, number][] = []) {
+  return {
+    bufferSize: 80 * 43,
+    maxCol: 80,
+    curadd: 0,
+    scrstr: vi.fn().mockReturnValue(screenText),
+    keyEraseEof: vi.fn(),
+    keyData: vi.fn(),
+    fields: vi.fn(function* () {
+      for (const [addr, fattr] of fieldAttrs) {
+        yield [addr, fattr] as [number, number]
+      }
+    }),
+  }
+}
+
+function createMockAti(mockTnz?: ReturnType<typeof createMockTnz>) {
   return Object.assign(new Ati(), {
     send: vi.fn().mockResolvedValue(undefined),
     wait: vi.fn().mockResolvedValue(1),
@@ -16,6 +32,7 @@ function createMockAti() {
     maxRow: 43,
     maxCol: 80,
     keyLock: false,
+    getTnz: vi.fn().mockReturnValue(mockTnz ?? null),
   })
 }
 
@@ -95,17 +112,65 @@ describe('Session', () => {
   })
 
   describe('fillFieldByLabel()', () => {
-    it('returns true and fills field when label is found', async () => {
-      setScreen(ati, 'Userid' + ' '.repeat(74))
+    it('returns true and fills field when label is found with unprotected field', async () => {
+      // Screen: "Userid" at col 0, then field attribute at col 9 (protected=false), field data starts at col 10
+      // FA byte at address 9 (0x00 = unprotected), field data at address 10
+      const screenText = 'Userid    ' + ' '.repeat(80 * 43 - 10)
+      const mockTnz = createMockTnz(screenText, [
+        [9, 0x00],   // unprotected field at address 9 (data starts at 10, col 10)
+        [79, 0x20],  // protected field wrapping around
+      ])
+      ati.getTnz.mockReturnValue(mockTnz)
+
       const result = await session.fillFieldByLabel('Userid', 'testuser')
       expect(result).toBe(true)
-      expect(ati.send).toHaveBeenCalledWith('testuser', [1, 8])
+      expect(mockTnz.curadd).toBe(10)
+      expect(mockTnz.keyEraseEof).toHaveBeenCalled()
+      expect(mockTnz.keyData).toHaveBeenCalledWith('testuser')
     })
 
     it('returns false when label is not found', async () => {
+      const screenText = ' '.repeat(80 * 43)
+      const mockTnz = createMockTnz(screenText, [[9, 0x00], [79, 0x20]])
+      ati.getTnz.mockReturnValue(mockTnz)
+
       const result = await session.fillFieldByLabel('Nonexistent', 'value')
       expect(result).toBe(false)
-      expect(ati.send).not.toHaveBeenCalled()
+      expect(mockTnz.keyData).not.toHaveBeenCalled()
+    })
+
+    it('returns false when no tnz instance', async () => {
+      ati.getTnz.mockReturnValue(undefined)
+      const result = await session.fillFieldByLabel('Userid', 'value')
+      expect(result).toBe(false)
+    })
+
+    it('returns false when no unprotected fields exist', async () => {
+      const screenText = 'Userid    ' + ' '.repeat(80 * 43 - 10)
+      const mockTnz = createMockTnz(screenText, [
+        [9, 0x20],   // protected
+        [79, 0x20],  // protected
+      ])
+      ati.getTnz.mockReturnValue(mockTnz)
+
+      const result = await session.fillFieldByLabel('Userid', 'value')
+      expect(result).toBe(false)
+    })
+
+    it('picks the closest unprotected field after the label', async () => {
+      // "Userid" at col 0, unprotected field at col 20, another at col 50
+      const screenText = 'Userid' + ' '.repeat(80 * 43 - 6)
+      const mockTnz = createMockTnz(screenText, [
+        [19, 0x00],  // unprotected: data starts at 20 (col 20) - closer to label
+        [49, 0x00],  // unprotected: data starts at 50 (col 50)
+        [79, 0x20],  // protected end marker
+      ])
+      ati.getTnz.mockReturnValue(mockTnz)
+
+      const result = await session.fillFieldByLabel('Userid', 'user1')
+      expect(result).toBe(true)
+      expect(mockTnz.curadd).toBe(20) // picked the closer field
+      expect(mockTnz.keyData).toHaveBeenCalledWith('user1')
     })
   })
 
@@ -255,7 +320,20 @@ describe('Session', () => {
     })
 
     it('fills credentials and succeeds after enter', async () => {
-      setScreen(ati, 'Userid    ' + ' '.repeat(70) + 'Password  ' + ' '.repeat(70))
+      // Row 0: "Userid    " (10 chars) + 70 spaces = 80 chars
+      // Row 1: "Password  " (10 chars) + 70 spaces = 80 chars
+      const screenContent = 'Userid    ' + ' '.repeat(70) + 'Password  ' + ' '.repeat(70)
+      const fullScreen = screenContent + ' '.repeat(80 * 43 - screenContent.length)
+      setScreen(ati, screenContent)
+
+      // Field attributes: unprotected fields after "Userid" and "Password" labels
+      const mockTnz = createMockTnz(fullScreen, [
+        [9, 0x00],   // unprotected field after Userid (data at col 10, row 0)
+        [79, 0x20],  // protected separator
+        [89, 0x00],  // unprotected field after Password (data at col 10, row 1)
+        [159, 0x20], // protected separator
+      ])
+      ati.getTnz.mockReturnValue(mockTnz)
       ati.wait.mockResolvedValue(1)
 
       const result = await session.authenticate({
@@ -264,10 +342,22 @@ describe('Session', () => {
         expectedKeywords: ['Fire System Selection'],
       })
       expect(result.success).toBe(true)
+      expect(mockTnz.keyData).toHaveBeenCalledWith('user1')
+      expect(mockTnz.keyData).toHaveBeenCalledWith('pass1')
     })
 
     it('returns failure when expected keywords not found after login', async () => {
-      setScreen(ati, 'Userid    ' + ' '.repeat(70) + 'Password  ' + ' '.repeat(70))
+      const screenContent = 'Userid    ' + ' '.repeat(70) + 'Password  ' + ' '.repeat(70)
+      const fullScreen = screenContent + ' '.repeat(80 * 43 - screenContent.length)
+      setScreen(ati, screenContent)
+
+      const mockTnz = createMockTnz(fullScreen, [
+        [9, 0x00],
+        [79, 0x20],
+        [89, 0x00],
+        [159, 0x20],
+      ])
+      ati.getTnz.mockReturnValue(mockTnz)
       ati.wait.mockResolvedValue(0) // timeout
 
       const result = await session.authenticate({
