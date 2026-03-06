@@ -48,6 +48,16 @@ export function ASTEventBridge(): React.ReactNode {
               message: msg.error,
             })
             break
+          case 'error': {
+            const store = useASTStore.getState()
+            store.addStatusMessage(tabId, `Error: ${msg.message}`)
+            // If AST is running, transition to failed
+            const tab = store.tabs[tabId]
+            if (tab?.status === 'running') {
+              store.handleASTComplete(tabId, { status: 'failed', message: msg.message })
+            }
+            break
+          }
         }
       })
 

@@ -177,6 +177,9 @@ port.on('message', async (msg: MainToWorkerMessage) => {
           astRunner = await import('../ast/runner.js')
         }
         astRunner.runAST(ati, msg.astName, msg.params, msg.executionId, port)
+          .catch((err) => {
+            send({ type: 'error', message: `AST crashed: ${err}` })
+          })
         break
       }
 
