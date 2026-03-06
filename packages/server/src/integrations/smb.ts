@@ -33,6 +33,8 @@ export async function readSmbFile(config: SmbConfig, path: string): Promise<Buff
     ? normalizedPath.slice(sharePrefix.length)
     : normalizedPath.replace(/^\/+/, '')
 
+  console.log(`[SMB] share=${host}/${shareName}, path="${path}" → relative="${relativePath}", isDfs will be detected`)
+
   const client = new SMB2Client()
   try {
     await client.connect({

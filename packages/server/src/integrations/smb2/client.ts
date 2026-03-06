@@ -27,6 +27,18 @@ const STATUS_MORE_PROCESSING_REQUIRED = 0xc0000016
 const STATUS_END_OF_FILE = 0xc0000011
 const STATUS_NO_MORE_FILES = 0x80000006
 
+// Common NT status code names for error messages
+const STATUS_NAMES: Record<number, string> = {
+  0xc000000d: 'STATUS_INVALID_PARAMETER',
+  0xc0000022: 'STATUS_ACCESS_DENIED',
+  0xc000006d: 'STATUS_LOGON_FAILURE',
+  0xc0000034: 'STATUS_OBJECT_NAME_NOT_FOUND',
+  0xc000003a: 'STATUS_OBJECT_PATH_NOT_FOUND',
+  0xc00000ba: 'STATUS_FILE_IS_A_DIRECTORY',
+  0xc0000257: 'STATUS_PATH_NOT_COVERED',
+  0xc000005e: 'STATUS_NO_LOGON_SERVERS',
+}
+
 // Access/share/disposition constants for CREATE
 const FILE_READ_DATA = 0x00000001
 const FILE_READ_ATTRIBUTES = 0x00000080
@@ -66,6 +78,7 @@ export class SMB2Client {
   }>()
   private recvBuffer = Buffer.alloc(0)
   private connected = false
+  private isDfs = false
 
   async connect(opts: SMB2Options): Promise<void> {
     const port = opts.port ?? 445
@@ -267,10 +280,13 @@ export class SMB2Client {
     return header
   }
 
-  private checkStatus(response: Buffer, allowedStatuses: number[] = [STATUS_SUCCESS]): number {
+  private checkStatus(response: Buffer, allowedStatuses: number[] = [STATUS_SUCCESS], context?: string): number {
     const status = response.readUInt32LE(8)
     if (!allowedStatuses.includes(status)) {
-      throw new Error(`SMB2 error: 0x${status.toString(16).padStart(8, '0')}`)
+      const statusHex = `0x${status.toString(16).padStart(8, '0')}`
+      const statusName = STATUS_NAMES[status] ?? 'UNKNOWN'
+      const ctx = context ? ` during ${context}` : ''
+      throw new Error(`SMB2 error${ctx}: ${statusHex} (${statusName})`)
     }
     return status
   }
@@ -290,7 +306,7 @@ export class SMB2Client {
     dialects.writeUInt16LE(0x0210, 2) // SMB 2.1
 
     const response = await this.sendRequest(SMB2_NEGOTIATE, Buffer.concat([payload, dialects]))
-    this.checkStatus(response)
+    this.checkStatus(response, [STATUS_SUCCESS], 'negotiate')
   }
 
   private async sessionSetup(username: string, password: string, domain: string): Promise<void> {
@@ -300,7 +316,7 @@ export class SMB2Client {
 
     const setup1 = this.buildSessionSetup(spnegoInit)
     const response1 = await this.sendRequest(SMB2_SESSION_SETUP, setup1)
-    this.checkStatus(response1, [STATUS_MORE_PROCESSING_REQUIRED])
+    this.checkStatus(response1, [STATUS_MORE_PROCESSING_REQUIRED], 'session setup (NTLM negotiate)')
 
     // Extract session ID from response
     this.sessionId = response1.readBigUInt64LE(40)
@@ -317,7 +333,7 @@ export class SMB2Client {
 
     const setup2 = this.buildSessionSetup(spnegoAuth)
     const response2 = await this.sendRequest(SMB2_SESSION_SETUP, setup2)
-    this.checkStatus(response2)
+    this.checkStatus(response2, [STATUS_SUCCESS], 'session setup (NTLM authenticate)')
   }
 
   private buildSessionSetup(securityBuffer: Buffer): Buffer {
@@ -349,9 +365,13 @@ export class SMB2Client {
     pathBuf.copy(payload, 8)
 
     const response = await this.sendRequest(SMB2_TREE_CONNECT, payload)
-    this.checkStatus(response)
+    this.checkStatus(response, [STATUS_SUCCESS], `tree connect (${pathStr})`)
 
     this.treeId = response.readUInt32LE(36)
+
+    // Detect DFS share (SMB2_SHAREFLAG_DFS = 0x00000001)
+    const shareFlags = response.readUInt32LE(SMB2_HEADER_SIZE + 4)
+    this.isDfs = (shareFlags & 0x00000001) !== 0
   }
 
   private async createFile(path: string): Promise<Buffer> {
@@ -362,7 +382,7 @@ export class SMB2Client {
     payload.writeUInt16LE(57, 0)   // StructureSize
     payload.writeUInt8(0, 2)       // SecurityFlags
     payload.writeUInt8(0, 3)       // RequestedOplockLevel
-    payload.writeUInt32LE(0, 4)    // ImpersonationLevel
+    payload.writeUInt32LE(2, 4)    // ImpersonationLevel: SecurityImpersonation
     // SmbCreateFlags (8 bytes at offset 8) = 0
     // Reserved (8 bytes at offset 16) = 0
     payload.writeUInt32LE(FILE_READ_DATA | FILE_READ_ATTRIBUTES, 24) // DesiredAccess
@@ -375,13 +395,11 @@ export class SMB2Client {
     // CreateContextsOffset/Length (offset 48-55) = 0
     nameBuf.copy(payload, 56)
 
-    const response = await this.sendRequest(SMB2_CREATE, payload)
-    this.checkStatus(response)
+    // Set DFS flag if the share is a DFS namespace
+    const flags = this.isDfs ? 0x10000000 : 0 // SMB2_FLAGS_DFS_OPERATIONS
+    const response = await this.sendRequest(SMB2_CREATE, payload, flags)
+    this.checkStatus(response, [STATUS_SUCCESS], `create file (${path})`)
 
-    // FileId is at offset 64+66 = header(64) + structureSize(2) + oplockLevel(1) + flags(1) + createAction(4) + timestamps(32) + allocationSize(8) + endOfFile(8) + fileAttributes(4) + reserved(4) = 64+64 = offset 128 from packet start
-    // Actually: response structure offset from header end:
-    // StructureSize(2) + OplockLevel(1) + Flags(1) + CreateAction(4) + CreationTime(8) + LastAccessTime(8) + LastWriteTime(8) + ChangeTime(8) + AllocationSize(8) + EndOfFile(8) + FileAttributes(4) + Reserved2(4) = 64
-    // FileId starts at structureOffset + 64
     const fileId = Buffer.from(response.subarray(SMB2_HEADER_SIZE + 64, SMB2_HEADER_SIZE + 80))
     return fileId
   }
@@ -435,7 +453,7 @@ export class SMB2Client {
     payload.writeUInt16LE(57, 0)   // StructureSize
     payload.writeUInt8(0, 2)       // SecurityFlags
     payload.writeUInt8(0, 3)       // RequestedOplockLevel
-    payload.writeUInt32LE(0, 4)    // ImpersonationLevel
+    payload.writeUInt32LE(2, 4)    // ImpersonationLevel: SecurityImpersonation
     payload.writeUInt32LE(FILE_LIST_DIRECTORY | FILE_READ_ATTRIBUTES, 24) // DesiredAccess
     payload.writeUInt32LE(0, 28)   // FileAttributes
     payload.writeUInt32LE(FILE_SHARE_READ, 32) // ShareAccess
@@ -445,8 +463,9 @@ export class SMB2Client {
     payload.writeUInt16LE(nameBuf.length, 46)  // NameLength
     nameBuf.copy(payload, 56)
 
-    const response = await this.sendRequest(SMB2_CREATE, payload)
-    this.checkStatus(response)
+    const flags = this.isDfs ? 0x10000000 : 0 // SMB2_FLAGS_DFS_OPERATIONS
+    const response = await this.sendRequest(SMB2_CREATE, payload, flags)
+    this.checkStatus(response, [STATUS_SUCCESS], `open directory (${path})`)
 
     return Buffer.from(response.subarray(SMB2_HEADER_SIZE + 64, SMB2_HEADER_SIZE + 80))
   }
