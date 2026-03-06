@@ -1,6 +1,5 @@
 import { useEffect, useState, useRef, memo } from 'react'
 import { Terminal as XTerm } from '@xterm/xterm'
-import { FitAddon } from '@xterm/addon-fit'
 import '@xterm/xterm/css/xterm.css'
 import { config } from '../config'
 import { useSessionStore } from '../stores/session-store'
@@ -69,7 +68,6 @@ function getStatusColor(connected: boolean): string {
 export const TerminalComponent = memo(function TerminalComponent({ sessionId }: TerminalProps) {
   const containerRef = useRef<HTMLDivElement>(null)
   const termRef = useRef<XTerm | null>(null)
-  const fitAddonRef = useRef<FitAddon | null>(null)
   const cleanupRef = useRef<(() => void) | null>(null)
   const menuRef = useRef<HTMLDivElement>(null)
 
@@ -103,6 +101,7 @@ export const TerminalComponent = memo(function TerminalComponent({ sessionId }: 
       fontFamily: config.terminal.fontFamily,
       cursorBlink: true,
       cursorStyle: 'block',
+      scrollback: 0,
       theme: {
         background: '#000000',
         foreground: '#ffffff',
@@ -111,13 +110,8 @@ export const TerminalComponent = memo(function TerminalComponent({ sessionId }: 
       disableStdin: true,
     })
 
-    const fitAddon = new FitAddon()
-    term.loadAddon(fitAddon)
     term.open(container)
-    fitAddon.fit()
-
     termRef.current = term
-    fitAddonRef.current = fitAddon
 
     const cleanup = tab.ws.onMessage((msg: ServerMessage) => {
       if (msg.type === 'screen') {
@@ -197,12 +191,6 @@ export const TerminalComponent = memo(function TerminalComponent({ sessionId }: 
     setKeyMenuOpen(false)
     containerRef.current?.focus()
   }
-
-  useEffect(() => {
-    const onResize = () => fitAddonRef.current?.fit()
-    window.addEventListener('resize', onResize)
-    return () => window.removeEventListener('resize', onResize)
-  }, [])
 
   return (
     <div className="flex flex-col h-full bg-zinc-950 w-fit">

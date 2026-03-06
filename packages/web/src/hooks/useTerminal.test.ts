@@ -9,17 +9,10 @@ const mockDisconnect = vi.hoisted(() => vi.fn())
 vi.mock('@xterm/xterm', () => ({
   Terminal: function () {
     return {
-      loadAddon: vi.fn(),
       open: vi.fn(),
       write: vi.fn(),
       dispose: vi.fn(),
     }
-  },
-}))
-
-vi.mock('@xterm/addon-fit', () => ({
-  FitAddon: function () {
-    return { fit: vi.fn() }
   },
 }))
 

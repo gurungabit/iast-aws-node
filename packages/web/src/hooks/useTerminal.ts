@@ -1,13 +1,11 @@
 import { useEffect, useRef, useCallback } from 'react'
 import { Terminal } from '@xterm/xterm'
-import { FitAddon } from '@xterm/addon-fit'
 import { config } from '../config'
 import { useSessionStore } from '../stores/session-store'
 import { TerminalWebSocket, type ServerMessage } from '../services/websocket'
 
 export function useTerminal(sessionId: string | null) {
   const termRef = useRef<Terminal | null>(null)
-  const fitAddonRef = useRef<FitAddon | null>(null)
   const containerRef = useRef<HTMLDivElement | null>(null)
 
   const { setWs, setConnected, updateScreen } = useSessionStore()
@@ -28,24 +26,17 @@ export function useTerminal(sessionId: string | null) {
         fontFamily: config.terminal.fontFamily,
         cursorBlink: true,
         cursorStyle: 'block',
+        scrollback: 0,
         theme: {
           background: '#000000',
           foreground: '#ffffff',
           cursor: '#00ff00',
         },
-        allowTransparency: true,
-        convertEol: false,
         disableStdin: true,
       })
 
-      const fitAddon = new FitAddon()
-      term.loadAddon(fitAddon)
-
       term.open(container)
-      fitAddon.fit()
-
       termRef.current = term
-      fitAddonRef.current = fitAddon
 
       // Set up WebSocket
       const ws = new TerminalWebSocket(sessionId)
@@ -112,13 +103,6 @@ export function useTerminal(sessionId: string | null) {
     const tab = useSessionStore.getState().tabs.get(sessionId)
     tab?.ws?.send({ type: 'disconnect' })
   }, [sessionId])
-
-  // Resize handler
-  useEffect(() => {
-    const onResize = () => fitAddonRef.current?.fit()
-    window.addEventListener('resize', onResize)
-    return () => window.removeEventListener('resize', onResize)
-  }, [])
 
   return {
     attach,

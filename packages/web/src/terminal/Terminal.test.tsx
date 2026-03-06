@@ -7,7 +7,6 @@ const mockDispose = vi.hoisted(() => vi.fn())
 vi.mock('@xterm/xterm', () => ({
   Terminal: function () {
     return {
-      loadAddon: vi.fn(),
       open: vi.fn(),
       write: mockWrite,
       dispose: mockDispose,
@@ -17,12 +16,6 @@ vi.mock('@xterm/xterm', () => ({
         getBoundingClientRect: () => ({ left: 0, top: 0 }),
       },
     }
-  },
-}))
-
-vi.mock('@xterm/addon-fit', () => ({
-  FitAddon: function () {
-    return { fit: vi.fn() }
   },
 }))
 
