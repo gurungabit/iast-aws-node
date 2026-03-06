@@ -26,7 +26,11 @@ export async function buildApp() {
   app.setSerializerCompiler(serializerCompiler)
 
   // Plugins
-  await app.register(fastifyCors, { origin: true, credentials: true })
+  await app.register(fastifyCors, {
+    origin: true,
+    credentials: true,
+    methods: ['GET', 'HEAD', 'PUT', 'PATCH', 'POST', 'DELETE', 'OPTIONS'],
+  })
   await app.register(fastifyWebsocket)
   await app.register(fastifySwagger, {
     openapi: {
