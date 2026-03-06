@@ -76,24 +76,19 @@ export const TerminalComponent = memo(function TerminalComponent({ sessionId }: 
   const setConnected = useSessionStore((s) => s.setConnected)
 
   const [keyMenuOpen, setKeyMenuOpen] = useState(false)
-  const [contextMenu, setContextMenu] = useState<{ x: number; y: number } | null>(null)
-  const contextMenuRef = useRef<HTMLDivElement>(null)
 
-  // Close menus on outside click
+  // Close menu on outside click
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
       if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
         setKeyMenuOpen(false)
       }
-      if (contextMenuRef.current && !contextMenuRef.current.contains(e.target as Node)) {
-        setContextMenu(null)
-      }
     }
-    if (keyMenuOpen || contextMenu) {
+    if (keyMenuOpen) {
       document.addEventListener('mousedown', handleClickOutside)
     }
     return () => document.removeEventListener('mousedown', handleClickOutside)
-  }, [keyMenuOpen, contextMenu])
+  }, [keyMenuOpen])
 
   useEffect(() => {
     const container = containerRef.current
@@ -191,20 +186,13 @@ export const TerminalComponent = memo(function TerminalComponent({ sessionId }: 
     }
   }
 
-  function handleContextMenu(e: React.MouseEvent) {
+  function handleBeforeInput(e: React.FormEvent) {
+    // Suppress contentEditable from actually inserting text
     e.preventDefault()
-    setContextMenu({ x: e.clientX, y: e.clientY })
-  }
-
-  function handleContextMenuPaste() {
-    setContextMenu(null)
-    pasteFromClipboard()
-    containerRef.current?.focus()
   }
 
   function handleClick(e: React.MouseEvent) {
     if (!tab?.ws || !termRef.current) return
-    setContextMenu(null)
     containerRef.current?.focus()
 
     const term = termRef.current
@@ -372,28 +360,15 @@ export const TerminalComponent = memo(function TerminalComponent({ sessionId }: 
         <div
           ref={containerRef}
           tabIndex={0}
+          contentEditable
+          suppressContentEditableWarning
           onKeyDown={handleKeyDown}
           onPaste={handlePaste}
-          onContextMenu={handleContextMenu}
+          onBeforeInput={handleBeforeInput}
           onClick={handleClick}
           className="p-1 focus:outline-none"
-          style={{ backgroundColor: '#000' }}
+          style={{ backgroundColor: '#000', caretColor: 'transparent' }}
         />
-        {contextMenu && (
-          <div
-            ref={contextMenuRef}
-            className="fixed z-50 min-w-[120px] py-1 rounded-md border shadow-lg bg-white dark:bg-zinc-800 border-gray-200 dark:border-zinc-700"
-            style={{ left: contextMenu.x, top: contextMenu.y }}
-          >
-            <button
-              type="button"
-              className="w-full px-3 py-1.5 text-left text-sm cursor-pointer hover:bg-gray-100 dark:hover:bg-zinc-700 text-gray-800 dark:text-zinc-200"
-              onClick={handleContextMenuPaste}
-            >
-              Paste
-            </button>
-          </div>
-        )}
         {!tab?.connected && (
           <div className="absolute inset-0 bg-zinc-950/95 flex items-center justify-center">
             <div className="text-center px-6">
