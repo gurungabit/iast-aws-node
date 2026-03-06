@@ -4,7 +4,7 @@
  */
 
 import { Socket } from 'net'
-import { createType1, createType3, wrapSpnego, wrapSpnegoAuth } from './ntlm.js'
+import { createType1, createType3, extractNtlmToken } from './ntlm.js'
 
 // SMB2 command codes
 const SMB2_NEGOTIATE = 0x0000
@@ -311,30 +311,25 @@ export class SMB2Client {
   }
 
   private async sessionSetup(username: string, password: string, domain: string): Promise<void> {
-    // Round 1: Send NTLM Type 1 (Negotiate)
+    // Round 1: Send raw NTLM Type 1 (no SPNEGO wrapping, matching reference)
     const type1 = createType1()
-    const spnegoInit = wrapSpnego(type1)
-
-    const setup1 = this.buildSessionSetup(spnegoInit)
+    const setup1 = this.buildSessionSetup(type1)
     const response1 = await this.sendRequest(SMB2_SESSION_SETUP, setup1)
     this.checkStatus(response1, [STATUS_MORE_PROCESSING_REQUIRED], 'session setup (NTLM negotiate)')
 
     // Extract session ID from response
     this.sessionId = response1.readBigUInt64LE(40)
 
-    // Extract NTLM Type 2 from SPNEGO response
+    // Extract NTLM Type 2 from response (may be raw NTLM or SPNEGO-wrapped)
     const secBufOffset1 = response1.readUInt16LE(SMB2_HEADER_SIZE + 4)
     const secBufLen1 = response1.readUInt16LE(SMB2_HEADER_SIZE + 6)
-    const spnegoResponse = response1.subarray(secBufOffset1, secBufOffset1 + secBufLen1)
-    console.log(`[SMB2] SPNEGO response: offset=${secBufOffset1}, len=${secBufLen1}, hex=${spnegoResponse.subarray(0, 40).toString('hex')}...`)
-    const type2 = extractNtlmFromSpnego(spnegoResponse)
-    console.log(`[SMB2] Type2 extracted: len=${type2.length}, hex=${type2.subarray(0, 48).toString('hex')}...`)
+    const responseBuf = response1.subarray(secBufOffset1, secBufOffset1 + secBufLen1)
+    const type2 = extractNtlmToken(responseBuf)
+    console.log(`[SMB2] Type2: ${type2.length}b, flags=0x${type2.readUInt32LE(20).toString(16)}`)
 
-    // Round 2: Send NTLM Type 3 (Authenticate)
+    // Round 2: Send raw NTLM Type 3 (no SPNEGO wrapping)
     const type3 = createType3(type1, type2, username, password, domain)
-    const spnegoAuth = wrapSpnegoAuth(type3)
-
-    const setup2 = this.buildSessionSetup(spnegoAuth)
+    const setup2 = this.buildSessionSetup(type3)
     const response2 = await this.sendRequest(SMB2_SESSION_SETUP, setup2)
     this.checkStatus(response2, [STATUS_SUCCESS], 'session setup (NTLM authenticate)')
   }
@@ -543,19 +538,3 @@ function parseDirEntries(buf: Buffer): DirEntry[] {
   return entries
 }
 
-/** Extract NTLM token from SPNEGO wrapper (simple ASN.1 search) */
-function extractNtlmFromSpnego(spnego: Buffer): Buffer {
-  // Find NTLMSSP signature in the SPNEGO blob
-  const sig = Buffer.from('NTLMSSP\0')
-  const idx = spnego.indexOf(sig)
-  if (idx === -1) {
-    throw new Error('NTLMSSP token not found in SPNEGO response')
-  }
-
-  // The NTLM message extends to the end of the containing OCTET STRING.
-  // Simple approach: find the NTLMSSP signature and extract everything from there
-  // to determine the actual NTLM message length from the ASN.1 structure.
-  // For robustness, we extract from the signature to the end of the buffer,
-  // since NTLM Type 2 messages are self-describing (have internal length fields).
-  return Buffer.from(spnego.subarray(idx))
-}
