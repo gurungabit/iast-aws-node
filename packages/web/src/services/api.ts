@@ -43,12 +43,5 @@ export async function apiPatch<T>(path: string, body: unknown): Promise<T> {
 }
 
 export async function apiDelete(path: string): Promise<void> {
-  const token = await getAccessToken()
-  const response = await fetch(`${config.apiUrl}${path}`, {
-    method: 'DELETE',
-    headers: { Authorization: `Bearer ${token}` },
-  })
-  if (!response.ok && response.status !== 204) {
-    throw new Error(`HTTP ${response.status}`)
-  }
+  await authFetch(path, { method: 'DELETE' })
 }
