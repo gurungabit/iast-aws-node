@@ -17,9 +17,9 @@
     "lint": "eslint packages/*/src",
     "format": "prettier --write \"packages/*/src/**/*.{ts,tsx,json,css}\"",
     "format:check": "prettier --check \"packages/*/src/**/*.{ts,tsx,json,css}\"",
-    "test": "vitest run",
-    "test:watch": "vitest",
-    "test:coverage": "vitest run --coverage",
+    "test": "vitest run -c packages/server/vitest.config.ts && vitest run -c packages/web/vitest.config.ts",
+    "test:watch": "vitest -c packages/web/vitest.config.ts",
+    "test:coverage": "vitest run -c packages/server/vitest.config.ts --coverage && vitest run -c packages/web/vitest.config.ts --coverage",
     "test:server": "vitest run -c packages/server/vitest.config.ts",
     "test:web": "vitest run -c packages/web/vitest.config.ts",
     "test:e2e": "playwright test"
