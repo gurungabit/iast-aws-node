@@ -2,11 +2,10 @@
  * DB2 client for BI Renew AST.
  *
  * Uses the `ibm_db` package for native DB2 connectivity.
- * Install: npm install ibm_db
- *
  * Requires IBM DB2 CLI/ODBC driver or Db2 Data Server Client.
- * Falls back gracefully if ibm_db is not installed.
  */
+
+import ibmdb, { type SQLParam } from 'ibm_db'
 
 export interface Db2Config {
   hostname: string
@@ -16,17 +15,7 @@ export interface Db2Config {
   password: string
 }
 
-export async function queryDb2(config: Db2Config, sql: string, params: unknown[] = []): Promise<unknown[]> {
-  // Dynamic import with error handling for optional dependency
-  let ibmdb: { open: (connStr: string) => Promise<{ query: (sql: string, params: unknown[]) => Promise<unknown[]>; close: () => Promise<void> }> }
-  try {
-    ibmdb = await (Function('return import("ibm_db")')() as Promise<typeof ibmdb>)
-  } catch {
-    throw new Error(
-      'DB2 integration requires the ibm_db package. Install it with: npm install ibm_db',
-    )
-  }
-
+export async function queryDb2(config: Db2Config, sql: string, params: SQLParam[] = []): Promise<Record<string, unknown>[]> {
   const connStr =
     `DATABASE=${config.database};` +
     `HOSTNAME=${config.hostname};` +
@@ -39,7 +28,7 @@ export async function queryDb2(config: Db2Config, sql: string, params: unknown[]
 
   try {
     const results = await conn.query(sql, params)
-    return results as unknown[]
+    return results as Record<string, unknown>[]
   } finally {
     await conn.close()
   }

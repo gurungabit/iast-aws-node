@@ -259,7 +259,7 @@ export async function runBiRenewAST(
          AND DATE_DELETED IS NULL
        WITH UR`,
       [prevBusinessDate],
-    )) as DbRecord[]
+    )) as unknown as DbRecord[]
     dbRecords = results
     reporter.reportProgress(0, 1, `Retrieved ${dbRecords.length} BI_RENEW records`)
   } catch {
