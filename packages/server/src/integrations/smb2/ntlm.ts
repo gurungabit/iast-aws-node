@@ -53,9 +53,9 @@ function parseAvPairs(targetInfo: Buffer): { nbDomain: string; dnsDomain: string
 
     const value = targetInfo.subarray(offset + 4, offset + 4 + avLen)
     if (avId === MsvAvNbDomainName) {
-      nbDomain = value.toString('utf16le')
+      nbDomain = value.toString('utf16le').replace(/\0/g, '')
     } else if (avId === MsvAvDnsDomainName) {
-      dnsDomain = value.toString('utf16le')
+      dnsDomain = value.toString('utf16le').replace(/\0/g, '')
     }
     offset += 4 + avLen
   }
@@ -92,7 +92,11 @@ function ntowfv2(password: string, username: string, domain: string): Buffer {
   const ntHash = Buffer.from(md4.arrayBuffer(passUtf16))
 
   // HMAC-MD5(ntHash, UTF-16LE(UPPER(username) + domain))
-  const identity = Buffer.from((username.toUpperCase() + domain).normalize(), 'utf16le')
+  const identityStr = username.toUpperCase() + domain
+  const identity = Buffer.from(identityStr, 'utf16le')
+
+  console.log(`[NTLM] identity="${identityStr}", pwdLen=${password.length}, ntHash=${ntHash.subarray(0, 4).toString('hex')}...`)
+
   return createHmac('md5', ntHash).update(identity).digest()
 }
 
