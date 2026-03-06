@@ -4,7 +4,7 @@ import { useSessionStore } from '../stores/session-store'
 import { useASTStore } from '../stores/ast-store'
 import { TerminalComponent } from '../terminal/Terminal'
 import { ASTPanel } from '../ast/components/ASTPanel'
-import { getSessions, createSession } from '../services/sessions'
+import { getSessions, createSession, deleteSession, renameSession } from '../services/sessions'
 import { TerminalWebSocket } from '../services/websocket'
 
 export const Route = createFileRoute('/')({
@@ -85,9 +85,19 @@ function TerminalPage() {
     }
   }
 
-  const handleCloseTab = (tabId: string) => {
+  const handleCloseTab = async (tabId: string) => {
+    // Disconnect WS before removing
+    const tab = tabs.get(tabId)
+    tab?.ws?.disconnect()
+
     removeTab(tabId)
     removeASTTab(tabId)
+
+    // Delete from server
+    deleteSession(tabId).catch((err) =>
+      console.error('Failed to delete session:', err),
+    )
+
     const remaining = Array.from(tabs.keys()).filter((id) => id !== tabId)
     if (remaining.length > 0) {
       const nextId = remaining[0]
@@ -110,8 +120,12 @@ function TerminalPage() {
   }
 
   const handleSaveEdit = (tabId: string) => {
-    if (editName.trim()) {
-      renameTab(tabId, editName.trim())
+    const name = editName.trim()
+    if (name) {
+      renameTab(tabId, name)
+      renameSession(tabId, name).catch((err) =>
+        console.error('Failed to rename session:', err),
+      )
     }
     setEditingTabId(null)
     setEditName('')

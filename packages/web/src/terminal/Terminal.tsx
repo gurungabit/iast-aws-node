@@ -124,6 +124,9 @@ export const TerminalComponent = memo(function TerminalComponent({ sessionId }: 
       }
     })
 
+    // Auto-connect to mainframe
+    tab.ws.send({ type: 'connect' })
+
     cleanupRef.current = () => {
       cleanup()
       term.dispose()
@@ -178,8 +181,8 @@ export const TerminalComponent = memo(function TerminalComponent({ sessionId }: 
     }
   }
 
-  const handleConnect = () => {
-    tab?.ws?.send({ type: 'connect', host: 'localhost', port: 3270 })
+  const handleReconnect = () => {
+    tab?.ws?.send({ type: 'connect' })
   }
 
   const handleDisconnect = () => {
@@ -306,10 +309,10 @@ export const TerminalComponent = memo(function TerminalComponent({ sessionId }: 
           {!tab?.connected ? (
             <button
               type="button"
-              onClick={handleConnect}
+              onClick={handleReconnect}
               className="px-3 py-1.5 text-xs bg-blue-600 text-white rounded cursor-pointer hover:bg-blue-700 transition-colors"
             >
-              Connect
+              Reconnect
             </button>
           ) : (
             <button
@@ -338,9 +341,9 @@ export const TerminalComponent = memo(function TerminalComponent({ sessionId }: 
         {!tab?.connected && (
           <div className="absolute inset-0 bg-zinc-950/95 flex items-center justify-center">
             <div className="text-center px-6">
-              <div className="text-zinc-100 text-sm font-medium">Terminal disconnected</div>
+              <div className="text-zinc-100 text-sm font-medium">Connecting...</div>
               <div className="text-zinc-400 text-xs mt-1">
-                Click Connect to start a TN3270 session.
+                Establishing TN3270 session
               </div>
             </div>
           </div>
