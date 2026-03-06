@@ -37,6 +37,7 @@ const STATUS_NAMES: Record<number, string> = {
   0xc00000ba: 'STATUS_FILE_IS_A_DIRECTORY',
   0xc0000257: 'STATUS_PATH_NOT_COVERED',
   0xc000005e: 'STATUS_NO_LOGON_SERVERS',
+  0xc0000203: 'STATUS_USER_SESSION_DELETED',
 }
 
 // Access/share/disposition constants for CREATE

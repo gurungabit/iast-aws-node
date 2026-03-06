@@ -200,7 +200,7 @@ export function createType3(
   // Session key (= ExportedSessionKey since KEY_EXCH not negotiated)
   const sessionBaseKey = createHmac('md5', responseKeyNT).update(ntProofStr).digest()
 
-  const domainBuf = Buffer.from(hashDomain, 'utf16le')
+  const domainBuf = Buffer.from(domain, 'utf16le')
   const userBuf = Buffer.from(username, 'utf16le')
   const workstationBuf = Buffer.from('', 'utf16le')
 
