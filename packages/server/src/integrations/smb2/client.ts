@@ -325,7 +325,9 @@ export class SMB2Client {
     const secBufOffset1 = response1.readUInt16LE(SMB2_HEADER_SIZE + 4)
     const secBufLen1 = response1.readUInt16LE(SMB2_HEADER_SIZE + 6)
     const spnegoResponse = response1.subarray(secBufOffset1, secBufOffset1 + secBufLen1)
+    console.log(`[SMB2] SPNEGO response: offset=${secBufOffset1}, len=${secBufLen1}, hex=${spnegoResponse.subarray(0, 40).toString('hex')}...`)
     const type2 = extractNtlmFromSpnego(spnegoResponse)
+    console.log(`[SMB2] Type2 extracted: len=${type2.length}, hex=${type2.subarray(0, 48).toString('hex')}...`)
 
     // Round 2: Send NTLM Type 3 (Authenticate)
     const type3 = createType3(type2, username, password, domain)

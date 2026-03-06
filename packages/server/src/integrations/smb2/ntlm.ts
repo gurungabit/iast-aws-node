@@ -143,6 +143,7 @@ export function createType3(
   // fall back to caller-provided domain
   const hashDomain = serverDomain || domain
   console.log(`[NTLM] server domain="${serverDomain}", config domain="${domain}", using="${hashDomain}" for NTLMv2`)
+  console.log(`[NTLM] serverChallenge=${serverChallenge.toString('hex')}, targetInfo(${targetInfo.length}b)=${targetInfo.subarray(0, 32).toString('hex')}...`)
   const responseKeyNT = ntowfv2(password, username, hashDomain)
   const { ntProofStr, ntChallengeResponse } = computeNtlmV2Response(
     responseKeyNT, serverChallenge, clientChallenge, targetInfo,
