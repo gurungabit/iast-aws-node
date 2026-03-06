@@ -84,12 +84,11 @@ port.on('message', async (msg: MainToWorkerMessage) => {
   try {
     switch (msg.type) {
       case 'connect': {
+        // Already connected — just resend current state (e.g. browser refresh)
         if (tnz) {
-          try {
-            tnz.shutdown()
-          } catch {
-            // ignore
-          }
+          send({ type: 'connected' })
+          updateScreen()
+          break
         }
 
         tnz = new Tnz(sessionName, {
@@ -103,6 +102,8 @@ port.on('message', async (msg: MainToWorkerMessage) => {
         ati.registerSession(sessionName, tnz)
 
         tnz.on('close', () => {
+          tnz = null
+          ati = null
           send({ type: 'disconnected' })
         })
 

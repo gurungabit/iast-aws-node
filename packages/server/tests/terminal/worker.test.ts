@@ -104,6 +104,24 @@ describe('worker.ts', () => {
       expect(mockAtiInstance.registerSession).toHaveBeenCalledWith('WEB', mockTnzInstance)
       expect(mockPostMessage).toHaveBeenCalledWith({ type: 'connected' })
     })
+
+    it('reuses existing connection on reconnect (browser refresh)', async () => {
+      // First connect
+      await messageHandler({ type: 'connect' })
+      mockPostMessage.mockClear()
+      mockTnzInstance.connect.mockClear()
+
+      // Second connect (simulates browser refresh)
+      await messageHandler({ type: 'connect' })
+
+      // Should NOT create a new TN3270 connection
+      expect(mockTnzInstance.connect).not.toHaveBeenCalled()
+      // Should still send connected + screen for the new browser WS
+      expect(mockPostMessage).toHaveBeenCalledWith({ type: 'connected' })
+      expect(mockPostMessage).toHaveBeenCalledWith(
+        expect.objectContaining({ type: 'screen' }),
+      )
+    })
   })
 
   describe('disconnect message', () => {
