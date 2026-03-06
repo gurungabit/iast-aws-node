@@ -86,17 +86,19 @@ function TerminalPage() {
   }
 
   const handleCloseTab = async (tabId: string) => {
-    // Disconnect WS before removing
+    // Disconnect WS
     const tab = tabs.get(tabId)
     tab?.ws?.disconnect()
 
+    // Delete from server first, before removing from UI
+    try {
+      await deleteSession(tabId)
+    } catch (err) {
+      console.error('Failed to delete session:', err)
+    }
+
     removeTab(tabId)
     removeASTTab(tabId)
-
-    // Delete from server
-    deleteSession(tabId).catch((err) =>
-      console.error('Failed to delete session:', err),
-    )
 
     const remaining = Array.from(tabs.keys()).filter((id) => id !== tabId)
     if (remaining.length > 0) {
