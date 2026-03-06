@@ -183,7 +183,7 @@ describe('runRoutExtractorAST', () => {
     ).rejects.toThrow('Username and password are required')
   })
 
-  it('throws when SMB not configured and no file uploaded in 412 mode', async () => {
+  it('throws when no file source configured and no file uploaded in 412 mode', async () => {
     const params = {
       username: 'user',
       password: 'pass',
@@ -192,7 +192,7 @@ describe('runRoutExtractorAST', () => {
 
     await expect(
       runRoutExtractorAST(mockAti, params, mockReporter, mockCtx),
-    ).rejects.toThrow('SMB_SHARE not configured')
+    ).rejects.toThrow('No 412 file source configured')
     expect(mockSession.authenticate).not.toHaveBeenCalled()
   })
 
@@ -396,7 +396,7 @@ describe('runRoutExtractorAST', () => {
 
       await expect(
         runRoutExtractorAST(mockAti, params, mockReporter, mockCtx),
-      ).rejects.toThrow('Failed to download 412 file')
+      ).rejects.toThrow('SMB unavailable')
 
       Object.assign(mockConfig, { smbShare: '' })
     })

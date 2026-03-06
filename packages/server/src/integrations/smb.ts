@@ -1,21 +1,10 @@
 /**
- * SMB network storage client for accessing corporate file shares.
- *
- * Uses child_process to invoke `smbclient` CLI (available on Linux/macOS).
- * This approach avoids native Node.js SMB packages which are often
- * unmaintained or require complex native compilation.
- *
- * For ROSA/Kubernetes deployments, smbclient is installed in the container image.
+ * SMB file access for 412 files.
+ * Pure-JS SMB2 client — connects directly to SMB share over the network.
+ * Works cross-platform without any CLI dependency.
  */
 
-import { execFile } from 'child_process'
-import { promisify } from 'util'
-import { writeFile, readFile, unlink } from 'fs/promises'
-import { tmpdir } from 'os'
-import { join } from 'path'
-import { randomUUID } from 'crypto'
-
-const execFileAsync = promisify(execFile)
+import { SMB2Client } from './smb2/index.js'
 
 export interface SmbConfig {
   share: string
@@ -24,51 +13,32 @@ export interface SmbConfig {
   password: string
 }
 
+/**
+ * Read a file from an SMB share using the built-in SMB2 client.
+ */
 export async function readSmbFile(config: SmbConfig, path: string): Promise<Buffer> {
-  const tmpPath = join(tmpdir(), `smb-${randomUUID()}.tmp`)
+  // Parse share: //server/sharename or \\server\sharename
+  const normalized = config.share.replace(/\\/g, '/')
+  const parts = normalized.split('/').filter(Boolean)
+  if (parts.length < 2) {
+    throw new Error(`Invalid SMB share format: ${config.share} (expected //server/share)`)
+  }
+  const host = parts[0]
+  const shareName = parts[1]
 
+  const client = new SMB2Client()
   try {
-    // smbclient //server/share -U domain/user%password -c "get remote/path local/path"
-    const authStr = config.domain
-      ? `${config.domain}/${config.username}%${config.password}`
-      : `${config.username}%${config.password}`
-
-    await execFileAsync('smbclient', [config.share, '-U', authStr, '-c', `get "${path}" "${tmpPath}"`], {
-      timeout: 60_000,
+    await client.connect({
+      host,
+      share: shareName,
+      domain: config.domain || undefined,
+      username: config.username,
+      password: config.password,
     })
-
-    return await readFile(tmpPath)
+    return await client.readFile(path)
   } catch (err) {
     throw new Error(`Failed to read SMB file ${path}: ${err}`)
   } finally {
-    try {
-      await unlink(tmpPath)
-    } catch {
-      // cleanup best-effort
-    }
-  }
-}
-
-export async function writeSmbFile(config: SmbConfig, path: string, data: Buffer): Promise<void> {
-  const tmpPath = join(tmpdir(), `smb-${randomUUID()}.tmp`)
-
-  try {
-    await writeFile(tmpPath, data)
-
-    const authStr = config.domain
-      ? `${config.domain}/${config.username}%${config.password}`
-      : `${config.username}%${config.password}`
-
-    await execFileAsync('smbclient', [config.share, '-U', authStr, '-c', `put "${tmpPath}" "${path}"`], {
-      timeout: 60_000,
-    })
-  } catch (err) {
-    throw new Error(`Failed to write SMB file ${path}: ${err}`)
-  } finally {
-    try {
-      await unlink(tmpPath)
-    } catch {
-      // cleanup best-effort
-    }
+    await client.disconnect()
   }
 }

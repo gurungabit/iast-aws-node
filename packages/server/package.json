@@ -23,6 +23,7 @@
     "fastify-type-provider-zod": "^6.1.0",
     "ibm_db": "^3.3.4",
     "jose": "^6.2.0",
+    "js-md4": "^0.3.2",
     "postgres": "^3.4.8",
     "tnz3270-node": "^0.2.0",
     "zod": "^4.3.6"

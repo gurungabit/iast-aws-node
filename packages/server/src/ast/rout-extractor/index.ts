@@ -1,6 +1,5 @@
 /**
  * RoutExtractor AST - Extract and filter Fire ROUT items.
- * Ported from Python rout_extractor.py.
  *
  * Two data source modes:
  * 1. 412 File Mode (default): Parse fixed-width FTP file, transform, filter,
@@ -20,6 +19,7 @@ import { parse412File, resolve412Path } from './file-412.js'
 import { applyAllFilters } from './filters.js'
 import { getPolicyTypeFromPdq } from './policy-types.js'
 import { RoutScreen } from './rout-screen.js'
+import { readSmbFile } from '../../integrations/smb.js'
 import { config as serverConfig } from '../../config.js'
 
 // Auth config for Fire system
@@ -191,36 +191,38 @@ async function prepareFrom412(
       return []
     }
   } else {
-    // Download from SMB
+    // Read 412 file via SMB2
     reporter.reportProgress(0, 1, 'Resolving 412 file path...')
     const filePath = resolve412Path(config.oc, config.file412Path)
-    reporter.reportProgress(0, 1, `Downloading 412 file from ${filePath}...`)
+
+    if (!serverConfig.smbShare) {
+      throw new Error(
+        'No 412 file source configured. Set SMB_SHARE or upload a file.',
+      )
+    }
 
     try {
-      const { readSmbFile } = await import('../../integrations/smb.js')
-      const smbConfig = {
+      reporter.reportProgress(0, 1, `Downloading 412 file via SMB...`)
+      const data = await readSmbFile({
         share: serverConfig.smbShare,
         domain: serverConfig.smbDomain,
         username: serverConfig.smbUsername,
         password: serverConfig.smbPassword,
-      }
-      const data = await readSmbFile(smbConfig, filePath)
+      }, filePath)
+
       const fileContent = data.toString('latin1')
       const dateOfRun = new Date().toLocaleDateString('en-US')
       reporter.reportProgress(0, 1, 'Parsing 412 file...')
       allItems = parse412File(fileContent, dateOfRun)
       reporter.reportProgress(0, 1, `Parsed ${allItems.length} records from 412 file`)
     } catch (err) {
-      const smbError = String(err)
-      if (!serverConfig.smbShare) {
-        throw new Error('SMB_SHARE not configured. Upload a 412 file or set SMB_SHARE, SMB_DOMAIN, SMB_USERNAME, SMB_PASSWORD env vars.')
-      }
-      reporter.reportProgress(0, 1, `412 file unavailable: ${smbError}`)
+      const errorMsg = String(err)
+      reporter.reportProgress(0, 1, `412 file unavailable: ${errorMsg}`)
       if (config.missing412Strategy === 'use_rout') {
         reporter.reportProgress(0, 1, 'Falling back to ROUT mode...')
         return prepareFromRout(config, reporter)
       }
-      throw new Error(`Failed to download 412 file: ${smbError}`)
+      throw err instanceof Error ? err : new Error(errorMsg)
     }
   }
 
