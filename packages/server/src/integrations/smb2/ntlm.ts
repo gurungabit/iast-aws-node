@@ -3,7 +3,7 @@
  * Implements NTLMv2 (Type 1 Negotiate, Type 2 Challenge parse, Type 3 Authenticate).
  */
 
-import { createHmac, randomBytes } from 'crypto'
+import { createHmac, createCipheriv, randomBytes } from 'crypto'
 import md4 from 'js-md4'
 
 const NTLMSSP_SIGNATURE = Buffer.from('NTLMSSP\0')
@@ -18,7 +18,8 @@ const FLAGS =
   0x00080000 | // NEGOTIATE_EXTENDED_SESSIONSECURITY
   0x00800000 | // NEGOTIATE_TARGET_INFO
   0x02000000 | // NEGOTIATE_VERSION
-  0x20000000   // NEGOTIATE_128
+  0x20000000 | // NEGOTIATE_128
+  0x40000000   // NEGOTIATE_KEY_EXCH
 
 /** Create NTLM Type 1 (Negotiate) message */
 export function createType1(): Buffer {
@@ -188,34 +189,37 @@ export function createType3(
   console.log(`[NTLM] server domain="${serverDomain}", config domain="${domain}", using="${hashDomain}" for NTLMv2`)
   console.log(`[NTLM] serverChallenge=${serverChallenge.toString('hex')}, targetInfo(${targetInfo.length}b)=${targetInfo.subarray(0, 32).toString('hex')}...`)
 
-  // Process targetInfo: detect MsvAvTimestamp (MIC support)
-  const { hasTimestamp } = processTargetInfo(targetInfo)
-  // TODO: MIC disabled for debugging — use original targetInfo to isolate auth issues
-  const processedTargetInfo = targetInfo
-  console.log(`[NTLM] hasTimestamp=${hasTimestamp}, targetInfo(${processedTargetInfo.length}b) [MIC disabled]`)
+  // Process targetInfo: add MsvAvFlags=0x02 if MsvAvTimestamp present (for MIC)
+  const { modified: processedTargetInfo, hasTimestamp } = processTargetInfo(targetInfo)
+  console.log(`[NTLM] hasTimestamp=${hasTimestamp}, processedTargetInfo(${processedTargetInfo.length}b)`)
 
   const responseKeyNT = ntowfv2(password, username, hashDomain)
   const { ntProofStr, ntChallengeResponse } = computeNtlmV2Response(
     responseKeyNT, serverChallenge, clientChallenge, processedTargetInfo,
   )
 
-  // Session key (= ExportedSessionKey since KEY_EXCH not negotiated)
+  // Session base key
   const sessionBaseKey = createHmac('md5', responseKeyNT).update(ntProofStr).digest()
+
+  // KEY_EXCH: generate random ExportedSessionKey, encrypt with SessionBaseKey
+  const exportedSessionKey = randomBytes(16)
+  const rc4Cipher = createCipheriv('rc4', sessionBaseKey, '')
+  const encryptedSessionKey = Buffer.concat([rc4Cipher.update(exportedSessionKey), rc4Cipher.final()])
+  console.log(`[NTLM] KEY_EXCH: sessionBaseKey=${sessionBaseKey.subarray(0, 4).toString('hex')}..., encSK(${encryptedSessionKey.length}b)`)
 
   const domainBuf = Buffer.from(hashDomain, 'utf16le')
   const userBuf = Buffer.from(username, 'utf16le')
   const workstationBuf = Buffer.from('', 'utf16le')
 
-  // LM response (MIC disabled: compute normally instead of zeroing)
-  const lmResponse = Buffer.concat([
-    createHmac('md5', responseKeyNT)
-      .update(Buffer.concat([serverChallenge, clientChallenge]))
-      .digest(),
-    clientChallenge,
-  ])
-
-  // EncryptedRandomSessionKey: empty since KEY_EXCH (0x40000000) not negotiated
-  const encryptedSessionKey = Buffer.alloc(0)
+  // LM response: 24 zero bytes when MsvAvTimestamp present (MS-NLMP 3.1.5.1.2)
+  const lmResponse = hasTimestamp
+    ? Buffer.alloc(24)
+    : Buffer.concat([
+        createHmac('md5', responseKeyNT)
+          .update(Buffer.concat([serverChallenge, clientChallenge]))
+          .digest(),
+        clientChallenge,
+      ])
 
   // Layout: fixed header (88 bytes = 64 base + 8 version + 16 MIC) + payloads
   let offset = 88
@@ -255,7 +259,7 @@ export function createType3(
   buf.writeUInt16LE(workstationBuf.length, 46)
   buf.writeUInt32LE(wsOffset, 48)
 
-  // Encrypted session key (empty — KEY_EXCH not negotiated)
+  // Encrypted session key (KEY_EXCH: RC4(SessionBaseKey, ExportedSessionKey))
   buf.writeUInt16LE(encryptedSessionKey.length, 52)
   buf.writeUInt16LE(encryptedSessionKey.length, 54)
   buf.writeUInt32LE(skOffset, 56)
@@ -277,11 +281,19 @@ export function createType3(
   workstationBuf.copy(buf, wsOffset)
   lmResponse.copy(buf, lmOffset)
   ntChallengeResponse.copy(buf, ntOffset)
+  encryptedSessionKey.copy(buf, skOffset)
 
-  // MIC disabled for debugging — no MIC computation
-  // When MIC is disabled, MsvAvFlags is not added to TargetInfo, so server won't check MIC
-  console.log(`[NTLM] MIC disabled, Type3 size=${buf.length}`)
+  // Compute MIC = HMAC_MD5(ExportedSessionKey, Type1 || Type2 || Type3)
+  // Type3 MIC field must be zeroed during computation (already is since Buffer.alloc)
+  if (hasTimestamp) {
+    const mic = createHmac('md5', exportedSessionKey)
+      .update(Buffer.concat([type1, type2, buf]))
+      .digest()
+    mic.copy(buf, 72)
+    console.log(`[NTLM] MIC computed with ExportedSessionKey: ${mic.toString('hex')}`)
+  }
 
+  console.log(`[NTLM] Type3 size=${buf.length}, flags=0x${FLAGS.toString(16)}, KEY_EXCH=true`)
   return buf
 }
 
