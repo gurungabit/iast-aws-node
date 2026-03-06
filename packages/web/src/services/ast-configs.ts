@@ -54,14 +54,23 @@ export async function createAstConfig(data: {
   astName: string
   configurationName: string
   visibility?: string
+  oc?: string
+  parallel?: boolean
+  testMode?: boolean
   params?: Record<string, unknown>
   tasks?: unknown[]
 }): Promise<SavedAstConfigWithAccess> {
+  const params = {
+    ...data.params,
+    oc: data.oc,
+    parallel: data.parallel,
+    testMode: data.testMode,
+  }
   const result = await apiPost<ServerAstConfig>('/ast-configs', {
     astName: data.astName,
     name: data.configurationName,
     visibility: data.visibility,
-    params: data.params,
+    params,
     tasks: data.tasks,
   })
   return mapServerConfig(result)
@@ -73,14 +82,20 @@ export async function updateAstConfig(
   data: {
     configurationName?: string
     visibility?: string
+    oc?: string
+    parallel?: boolean
+    testMode?: boolean
     params?: Record<string, unknown>
     tasks?: unknown[]
   },
 ): Promise<SavedAstConfigWithAccess> {
+  const params = data.params !== undefined || data.oc !== undefined || data.parallel !== undefined || data.testMode !== undefined
+    ? { ...data.params, oc: data.oc, parallel: data.parallel, testMode: data.testMode }
+    : undefined
   const result = await apiPatch<ServerAstConfig>(`/ast-configs/${configId}`, {
     name: data.configurationName,
     visibility: data.visibility,
-    params: data.params,
+    params,
     tasks: data.tasks,
   })
   return mapServerConfig(result)

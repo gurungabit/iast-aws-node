@@ -298,13 +298,11 @@ export function ASTFormWrapper({
       const result = await createSchedule({
         astName,
         scheduledTime,
-        timezone,
-        credentials: { username: credentials.username, password: credentials.password },
+        credentials: { userId: credentials.username, password: credentials.password },
         params: fullPayload,
-        notifyEmail: notifyEmail || undefined,
       })
 
-      setScheduleSuccess(`Scheduled! ID: ${result.scheduleId}`)
+      setScheduleSuccess(`Scheduled! ID: ${result.id}`)
       setScheduleMode(false)
     } catch (err) {
       setScheduleError(err instanceof Error ? err.message : 'Failed to schedule')

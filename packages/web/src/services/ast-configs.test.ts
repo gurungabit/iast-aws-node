@@ -79,19 +79,22 @@ describe('ast-configs service', () => {
   })
 
   describe('createAstConfig', () => {
-    it('maps configurationName to name in request body', async () => {
+    it('maps configurationName to name and merges oc/parallel/testMode into params', async () => {
       mockApiPost.mockResolvedValue(serverConfig)
       await createAstConfig({
         astName: 'login',
         configurationName: 'My Config',
         visibility: 'private',
-        params: { oc: '01' },
+        oc: '01',
+        parallel: false,
+        testMode: true,
+        params: { customField: 'value' },
       })
       expect(mockApiPost).toHaveBeenCalledWith('/ast-configs', {
         astName: 'login',
         name: 'My Config',
         visibility: 'private',
-        params: { oc: '01' },
+        params: { customField: 'value', oc: '01', parallel: false, testMode: true },
         tasks: undefined,
       })
     })
@@ -108,13 +111,19 @@ describe('ast-configs service', () => {
   })
 
   describe('updateAstConfig', () => {
-    it('maps configurationName to name and uses configId in URL', async () => {
+    it('maps configurationName to name and merges oc/parallel/testMode into params', async () => {
       mockApiPatch.mockResolvedValue(serverConfig)
-      await updateAstConfig('login', '1', { configurationName: 'Updated' })
+      await updateAstConfig('login', '1', {
+        configurationName: 'Updated',
+        oc: '02',
+        parallel: true,
+        testMode: false,
+        params: { someParam: 'x' },
+      })
       expect(mockApiPatch).toHaveBeenCalledWith('/ast-configs/1', {
         name: 'Updated',
         visibility: undefined,
-        params: undefined,
+        params: { someParam: 'x', oc: '02', parallel: true, testMode: false },
         tasks: undefined,
       })
     })
