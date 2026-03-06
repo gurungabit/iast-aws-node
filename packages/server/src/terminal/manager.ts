@@ -36,7 +36,7 @@ class TerminalManager {
         tn3270Secure: config.tn3270Secure,
       },
       ...(isTsx && {
-        execArgv: ['--import', 'tsx'],
+        execArgv: ['--import', 'tsx/esm'],
       }),
     })
 
