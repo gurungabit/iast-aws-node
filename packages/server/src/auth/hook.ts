@@ -1,6 +1,5 @@
 import type { FastifyRequest, FastifyReply } from 'fastify'
 import { verifyEntraToken } from './entra.js'
-import { config } from '../config.js'
 import { userService } from '../services/user.js'
 
 export interface AuthUser {
@@ -24,17 +23,6 @@ export async function authHook(request: FastifyRequest, reply: FastifyReply) {
     request.url === '/metrics' ||
     request.url.startsWith('/docs')
   ) {
-    return
-  }
-
-  // Dev mode bypass
-  if (!config.entraTenantId) {
-    request.user = {
-      id: 'dev-user-id',
-      email: 'dev@local',
-      displayName: 'Dev User',
-      entraId: 'dev-oid',
-    }
     return
   }
 

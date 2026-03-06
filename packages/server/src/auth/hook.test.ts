@@ -1,9 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 
-const { mockVerifyEntraToken, mockFindOrCreate, mockConfig } = vi.hoisted(() => ({
+const { mockVerifyEntraToken, mockFindOrCreate } = vi.hoisted(() => ({
   mockVerifyEntraToken: vi.fn(),
   mockFindOrCreate: vi.fn(),
-  mockConfig: { entraTenantId: 'test-tenant-id' },
 }))
 
 vi.mock('./entra.js', () => ({
@@ -13,12 +12,6 @@ vi.mock('./entra.js', () => ({
 vi.mock('../services/user.js', () => ({
   userService: {
     findOrCreate: mockFindOrCreate,
-  },
-}))
-
-vi.mock('../config.js', () => ({
-  get config() {
-    return mockConfig
   },
 }))
 
@@ -57,7 +50,6 @@ const callAuthHook: (request: MockRequest, reply: MockReply) => Promise<void> = 
 describe('authHook', () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    mockConfig.entraTenantId = 'test-tenant-id'
   })
 
   describe('skipped routes', () => {
@@ -108,26 +100,6 @@ describe('authHook', () => {
       await callAuthHook(request, reply)
 
       expect(reply.status).not.toHaveBeenCalled()
-    })
-  })
-
-  describe('dev mode bypass', () => {
-    it('sets dev user when entraTenantId is empty string', async () => {
-      mockConfig.entraTenantId = ''
-
-      const request = createMockRequest({ url: '/api/data' })
-      const reply = createMockReply()
-
-      await callAuthHook(request, reply)
-
-      expect(request.user).toEqual({
-        id: 'dev-user-id',
-        email: 'dev@local',
-        displayName: 'Dev User',
-        entraId: 'dev-oid',
-      })
-      expect(reply.status).not.toHaveBeenCalled()
-      expect(mockVerifyEntraToken).not.toHaveBeenCalled()
     })
   })
 

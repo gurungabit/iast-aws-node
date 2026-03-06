@@ -3,9 +3,6 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 const mocks = vi.hoisted(() => {
   return {
     verifyEntraToken: vi.fn(),
-    config: {
-      entraTenantId: 'test-tenant-id',
-    },
     userService: {
       findOrCreate: vi.fn(),
     },
@@ -14,10 +11,6 @@ const mocks = vi.hoisted(() => {
 
 vi.mock('./entra.js', () => ({
   verifyEntraToken: mocks.verifyEntraToken,
-}))
-
-vi.mock('../config.js', () => ({
-  config: mocks.config,
 }))
 
 vi.mock('../services/user.js', () => ({
@@ -29,38 +22,9 @@ import { verifyWsToken } from './ws-auth.js'
 describe('verifyWsToken', () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    mocks.config.entraTenantId = 'test-tenant-id'
   })
 
-  it('should return dev user when entraTenantId is empty (dev mode)', async () => {
-    mocks.config.entraTenantId = ''
-    const result = await verifyWsToken(undefined)
-    expect(result).toEqual({
-      id: 'dev-user-id',
-      email: 'dev@local',
-      displayName: 'Dev User',
-      entraId: 'dev-oid',
-    })
-  })
-
-  it('should return dev user regardless of token value when in dev mode', async () => {
-    mocks.config.entraTenantId = ''
-    const result = await verifyWsToken('some-token')
-    expect(result).toEqual({
-      id: 'dev-user-id',
-      email: 'dev@local',
-      displayName: 'Dev User',
-      entraId: 'dev-oid',
-    })
-  })
-
-  it('should return null when token is undefined and Entra is configured', async () => {
-    const result = await verifyWsToken(undefined)
-    expect(result).toBeNull()
-  })
-
-  it('should return null when token is undefined (not dev mode)', async () => {
-    mocks.config.entraTenantId = 'some-tenant'
+  it('should return null when token is undefined', async () => {
     const result = await verifyWsToken(undefined)
     expect(result).toBeNull()
   })
@@ -141,12 +105,6 @@ describe('verifyWsToken', () => {
 
     const result = await verifyWsToken('token')
     expect(result).toBeNull()
-  })
-
-  it('should not call verifyEntraToken in dev mode', async () => {
-    mocks.config.entraTenantId = ''
-    await verifyWsToken('token')
-    expect(mocks.verifyEntraToken).not.toHaveBeenCalled()
   })
 
   it('should not call verifyEntraToken when token is undefined', async () => {
