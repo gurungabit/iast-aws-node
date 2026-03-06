@@ -1,0 +1,25 @@
+{
+  "name": "iast-aws-node",
+  "private": true,
+  "workspaces": ["packages/*"],
+  "scripts": {
+    "dev:web": "npm -w packages/web run dev",
+    "dev:server": "npm -w packages/server run dev",
+    "build:web": "npm -w packages/web run build",
+    "build:server": "npm -w packages/server run build",
+    "lint": "eslint packages/*/src",
+    "format": "prettier --write \"packages/*/src/**/*.{ts,tsx,json,css}\"",
+    "format:check": "prettier --check \"packages/*/src/**/*.{ts,tsx,json,css}\""
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.21.0",
+    "eslint": "^9.21.0",
+    "eslint-config-prettier": "^10.1.1",
+    "eslint-plugin-react-hooks": "^5.2.0",
+    "eslint-plugin-react-refresh": "^0.4.19",
+    "globals": "^16.0.0",
+    "prettier": "^3.5.3",
+    "typescript": "^5.8.2",
+    "typescript-eslint": "^8.26.0"
+  }
+}
