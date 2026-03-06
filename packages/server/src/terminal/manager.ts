@@ -35,9 +35,8 @@ class TerminalManager {
         tn3270Port: config.tn3270Port,
         tn3270Secure: config.tn3270Secure,
       },
-      ...(isTsx && {
-        execArgv: ['--import', 'tsx/esm'],
-      }),
+      // In dev (tsx), inherit parent's execArgv so worker gets the same tsx loader hooks
+      ...(isTsx && { execArgv: process.execArgv }),
     })
 
     worker.on('error', (err) => {
