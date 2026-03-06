@@ -6,6 +6,9 @@
     "packages/*"
   ],
   "scripts": {
+    "docker:up": "docker compose up -d",
+    "docker:down": "docker compose down",
+    "docker:reset": "docker compose down -v && docker compose up -d",
     "dev": "npm -w packages/web run dev & npm -w packages/server run dev",
     "dev:web": "npm -w packages/web run dev",
     "dev:server": "npm -w packages/server run dev",
