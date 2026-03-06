@@ -62,7 +62,7 @@ describe('verifyEntraToken', () => {
       'my-jwt-token',
       expect.anything(),
       expect.objectContaining({
-        audience: 'test-client-id',
+        audience: ['test-client-id'],
         issuer: 'https://login.microsoftonline.com/test-tenant-id/v2.0',
       }),
     )
@@ -139,7 +139,7 @@ describe('verifyEntraToken', () => {
       'token',
       expect.anything(),
       expect.objectContaining({
-        audience: 'custom-audience',
+        audience: ['test-client-id', 'custom-audience'],
       }),
     )
   })

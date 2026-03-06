@@ -16,8 +16,11 @@ export async function verifyEntraToken(token: string): Promise<VerifiedToken> {
     throw new Error('Entra ID not configured')
   }
 
+  // Accept both raw client ID and api:// URI as valid audiences
+  const audiences = [config.entraClientId, config.entraAudience].filter(Boolean)
+
   const { payload } = (await jwtVerify(token, jwks, {
-    audience: config.entraAudience || config.entraClientId,
+    audience: audiences,
     issuer: `https://login.microsoftonline.com/${config.entraTenantId}/v2.0`,
   })) as JWTVerifyResult & {
     payload: { sub: string; preferred_username?: string; email?: string; name?: string; oid: string }
