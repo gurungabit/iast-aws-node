@@ -7,6 +7,8 @@ import { config } from '../config.js'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = dirname(__filename)
+const isTsx = __filename.endsWith('.ts')
+const workerFile = join(__dirname, isTsx ? 'worker.ts' : 'worker.js')
 
 interface WorkerEntry {
   worker: Worker
@@ -26,13 +28,16 @@ class TerminalManager {
       return this.workers.get(sessionId)!.worker
     }
 
-    const worker = new Worker(join(__dirname, 'worker.js'), {
+    const worker = new Worker(workerFile, {
       workerData: {
         sessionId,
         tn3270Host: config.tn3270Host,
         tn3270Port: config.tn3270Port,
         tn3270Secure: config.tn3270Secure,
       },
+      ...(isTsx && {
+        execArgv: ['--import', 'tsx'],
+      }),
     })
 
     worker.on('error', (err) => {
