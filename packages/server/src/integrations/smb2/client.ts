@@ -330,7 +330,7 @@ export class SMB2Client {
     console.log(`[SMB2] Type2 extracted: len=${type2.length}, hex=${type2.subarray(0, 48).toString('hex')}...`)
 
     // Round 2: Send NTLM Type 3 (Authenticate)
-    const type3 = createType3(type2, username, password, domain)
+    const type3 = createType3(type1, type2, username, password, domain)
     const spnegoAuth = wrapSpnegoAuth(type3)
 
     const setup2 = this.buildSessionSetup(spnegoAuth)

@@ -17,15 +17,21 @@ const FLAGS =
   0x00008000 | // NEGOTIATE_ALWAYS_SIGN
   0x00080000 | // NEGOTIATE_EXTENDED_SESSIONSECURITY
   0x00800000 | // NEGOTIATE_TARGET_INFO
+  0x02000000 | // NEGOTIATE_VERSION
   0x20000000   // NEGOTIATE_128
 
 /** Create NTLM Type 1 (Negotiate) message */
 export function createType1(): Buffer {
-  const buf = Buffer.alloc(32)
+  const buf = Buffer.alloc(40) // 32 base + 8 version
   NTLMSSP_SIGNATURE.copy(buf, 0)
   buf.writeUInt32LE(1, 8) // Type 1
   buf.writeUInt32LE(FLAGS, 12)
   // Domain and workstation fields left empty (offset 16-31)
+  // Version at offset 32
+  buf.writeUInt8(10, 32)        // ProductMajorVersion (Windows 10)
+  buf.writeUInt8(0, 33)         // ProductMinorVersion
+  buf.writeUInt16LE(19041, 34)  // ProductBuild
+  buf.writeUInt8(15, 39)        // NTLMRevisionCurrent = NTLMSSP_REVISION_W2K3
   return buf
 }
 
@@ -39,6 +45,8 @@ interface Type2Fields {
 // AvPair IDs from MS-NLMP
 const MsvAvNbDomainName = 2
 const MsvAvDnsDomainName = 4
+const MsvAvFlags = 6
+const MsvAvTimestamp = 7
 
 /** Parse AvPairs from Type 2 target info to extract domain names */
 function parseAvPairs(targetInfo: Buffer): { nbDomain: string; dnsDomain: string } {
@@ -61,6 +69,40 @@ function parseAvPairs(targetInfo: Buffer): { nbDomain: string; dnsDomain: string
   }
 
   return { nbDomain, dnsDomain }
+}
+
+/**
+ * Process TargetInfo for MIC support (MS-NLMP 3.1.5.1.2).
+ * If MsvAvTimestamp is present, adds MsvAvFlags=0x02 (MIC_PROVIDED) before MsvAvEOL.
+ * Returns the (possibly modified) TargetInfo and whether MIC should be computed.
+ */
+function processTargetInfo(targetInfo: Buffer): { modified: Buffer; hasTimestamp: boolean } {
+  let hasTimestamp = false
+  let hasFlags = false
+  let offset = 0
+
+  while (offset + 4 <= targetInfo.length) {
+    const avId = targetInfo.readUInt16LE(offset)
+    const avLen = targetInfo.readUInt16LE(offset + 2)
+    if (avId === 0) break // MsvAvEOL
+    if (avId === MsvAvTimestamp) hasTimestamp = true
+    if (avId === MsvAvFlags) hasFlags = true
+    offset += 4 + avLen
+  }
+
+  if (!hasTimestamp) return { modified: targetInfo, hasTimestamp: false }
+  // Already has flags — don't double-add
+  if (hasFlags) return { modified: targetInfo, hasTimestamp: true }
+
+  // Insert MsvAvFlags (AvId=6, Value=0x00000002) before MsvAvEOL
+  const beforeEol = targetInfo.subarray(0, offset)
+  const flagsPair = Buffer.alloc(8) // AvId(2) + AvLen(2) + Value(4)
+  flagsPair.writeUInt16LE(MsvAvFlags, 0)
+  flagsPair.writeUInt16LE(4, 2)
+  flagsPair.writeUInt32LE(0x00000002, 4) // MIC_PROVIDED
+  const eol = Buffer.alloc(4) // MsvAvEOL: AvId=0, AvLen=0
+
+  return { modified: Buffer.concat([beforeEol, flagsPair, eol]), hasTimestamp: true }
 }
 
 /** Parse NTLM Type 2 (Challenge) message */
@@ -131,6 +173,7 @@ function computeNtlmV2Response(
 
 /** Create NTLM Type 3 (Authenticate) message */
 export function createType3(
+  type1: Buffer,
   type2: Buffer,
   username: string,
   password: string,
@@ -144,33 +187,44 @@ export function createType3(
   const hashDomain = serverDomain || domain
   console.log(`[NTLM] server domain="${serverDomain}", config domain="${domain}", using="${hashDomain}" for NTLMv2`)
   console.log(`[NTLM] serverChallenge=${serverChallenge.toString('hex')}, targetInfo(${targetInfo.length}b)=${targetInfo.subarray(0, 32).toString('hex')}...`)
+
+  // Process targetInfo: add MsvAvFlags=0x02 if MsvAvTimestamp present (for MIC)
+  const { modified: processedTargetInfo, hasTimestamp } = processTargetInfo(targetInfo)
+  console.log(`[NTLM] hasTimestamp=${hasTimestamp}, processedTargetInfo(${processedTargetInfo.length}b)`)
+
   const responseKeyNT = ntowfv2(password, username, hashDomain)
   const { ntProofStr, ntChallengeResponse } = computeNtlmV2Response(
-    responseKeyNT, serverChallenge, clientChallenge, targetInfo,
+    responseKeyNT, serverChallenge, clientChallenge, processedTargetInfo,
   )
 
-  // Session key
+  // Session key (= ExportedSessionKey since KEY_EXCH not negotiated)
   const sessionBaseKey = createHmac('md5', responseKeyNT).update(ntProofStr).digest()
 
-  const domainBuf = Buffer.from(domain, 'utf16le')
+  const domainBuf = Buffer.from(hashDomain, 'utf16le')
   const userBuf = Buffer.from(username, 'utf16le')
   const workstationBuf = Buffer.from('', 'utf16le')
 
-  // Layout: fixed header (88 bytes) + domain + user + workstation + lmResponse(24) + ntResponse + sessionKey(16)
-  const lmResponse = Buffer.concat([
-    createHmac('md5', responseKeyNT)
-      .update(Buffer.concat([serverChallenge, clientChallenge]))
-      .digest(),
-    clientChallenge,
-  ])
+  // LM response: 24 zero bytes when MsvAvTimestamp present (MS-NLMP 3.1.5.1.2)
+  const lmResponse = hasTimestamp
+    ? Buffer.alloc(24)
+    : Buffer.concat([
+        createHmac('md5', responseKeyNT)
+          .update(Buffer.concat([serverChallenge, clientChallenge]))
+          .digest(),
+        clientChallenge,
+      ])
 
+  // EncryptedRandomSessionKey: empty since KEY_EXCH (0x40000000) not negotiated
+  const encryptedSessionKey = Buffer.alloc(0)
+
+  // Layout: fixed header (88 bytes = 64 base + 8 version + 16 MIC) + payloads
   let offset = 88
   const domainOffset = offset; offset += domainBuf.length
   const userOffset = offset; offset += userBuf.length
   const wsOffset = offset; offset += workstationBuf.length
   const lmOffset = offset; offset += lmResponse.length
   const ntOffset = offset; offset += ntChallengeResponse.length
-  const skOffset = offset; offset += sessionBaseKey.length
+  const skOffset = offset; offset += encryptedSessionKey.length
 
   const buf = Buffer.alloc(offset)
   NTLMSSP_SIGNATURE.copy(buf, 0)
@@ -201,13 +255,21 @@ export function createType3(
   buf.writeUInt16LE(workstationBuf.length, 46)
   buf.writeUInt32LE(wsOffset, 48)
 
-  // Session key
-  buf.writeUInt16LE(sessionBaseKey.length, 52)
-  buf.writeUInt16LE(sessionBaseKey.length, 54)
+  // Encrypted session key (empty — KEY_EXCH not negotiated)
+  buf.writeUInt16LE(encryptedSessionKey.length, 52)
+  buf.writeUInt16LE(encryptedSessionKey.length, 54)
   buf.writeUInt32LE(skOffset, 56)
 
   // Flags
   buf.writeUInt32LE(FLAGS, 60)
+
+  // Version at offset 64
+  buf.writeUInt8(10, 64)        // ProductMajorVersion (Windows 10)
+  buf.writeUInt8(0, 65)         // ProductMinorVersion
+  buf.writeUInt16LE(19041, 66)  // ProductBuild
+  buf.writeUInt8(15, 71)        // NTLMRevisionCurrent = NTLMSSP_REVISION_W2K3
+
+  // MIC at offset 72 (16 bytes) — zeroed initially, computed below
 
   // Copy payloads
   domainBuf.copy(buf, domainOffset)
@@ -215,7 +277,16 @@ export function createType3(
   workstationBuf.copy(buf, wsOffset)
   lmResponse.copy(buf, lmOffset)
   ntChallengeResponse.copy(buf, ntOffset)
-  sessionBaseKey.copy(buf, skOffset)
+
+  // Compute MIC = HMAC_MD5(ExportedSessionKey, Type1 || Type2 || Type3)
+  // Type3 MIC field must be zeroed during computation (already is since Buffer.alloc)
+  if (hasTimestamp) {
+    const mic = createHmac('md5', sessionBaseKey)
+      .update(Buffer.concat([type1, type2, buf]))
+      .digest()
+    mic.copy(buf, 72)
+    console.log(`[NTLM] MIC computed: ${mic.toString('hex')}`)
+  }
 
   return buf
 }
