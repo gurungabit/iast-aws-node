@@ -22,27 +22,17 @@ declare module '@tanstack/react-router' {
   }
 }
 
-// Initialize MSAL only if configured
-const msalClientId = import.meta.env.VITE_MSAL_CLIENT_ID
-let msalInstance: PublicClientApplication | null = null
-
-if (msalClientId) {
-  msalInstance = new PublicClientApplication(msalConfig)
-  setMsalInstance(msalInstance)
-}
+const msalInstance = new PublicClientApplication(msalConfig)
+setMsalInstance(msalInstance)
 
 export function App() {
-  const core = (
-    <QueryClientProvider client={queryClient}>
-      <RouterProvider router={router} />
-    </QueryClientProvider>
+  return (
+    <MsalProvider instance={msalInstance}>
+      <QueryClientProvider client={queryClient}>
+        <RouterProvider router={router} />
+      </QueryClientProvider>
+    </MsalProvider>
   )
-
-  if (msalInstance) {
-    return <MsalProvider instance={msalInstance}>{core}</MsalProvider>
-  }
-
-  return core
 }
 
 createRoot(document.getElementById('root')!).render(

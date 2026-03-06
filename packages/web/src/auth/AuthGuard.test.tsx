@@ -22,20 +22,7 @@ describe('AuthGuard', () => {
     vi.clearAllMocks()
   })
 
-  it('renders children in dev mode (no VITE_MSAL_CLIENT_ID)', () => {
-    // In test env, VITE_MSAL_CLIENT_ID is not set, so dev mode is active
-    mockUseAuth.mockReturnValue({
-      isAuthenticated: true,
-      isLoading: false,
-      login: vi.fn(),
-    })
-    render(<AuthGuard><div>Child Content</div></AuthGuard>)
-    expect(screen.getByText('Child Content')).toBeDefined()
-  })
-
   it('shows loading state when isLoading', () => {
-    // Force MSAL mode by stubbing env
-    vi.stubEnv('VITE_MSAL_CLIENT_ID', 'test-client-id')
     mockUseAuth.mockReturnValue({
       isAuthenticated: false,
       isLoading: true,
@@ -43,11 +30,9 @@ describe('AuthGuard', () => {
     })
     render(<AuthGuard><div>Child</div></AuthGuard>)
     expect(screen.getByText('Loading...')).toBeDefined()
-    vi.unstubAllEnvs()
   })
 
   it('shows redirecting when not authenticated', () => {
-    vi.stubEnv('VITE_MSAL_CLIENT_ID', 'test-client-id')
     mockUseAuth.mockReturnValue({
       isAuthenticated: false,
       isLoading: false,
@@ -55,11 +40,9 @@ describe('AuthGuard', () => {
     })
     render(<AuthGuard><div>Child</div></AuthGuard>)
     expect(screen.getByText('Redirecting to sign in...')).toBeDefined()
-    vi.unstubAllEnvs()
   })
 
-  it('renders children when authenticated in MSAL mode', () => {
-    vi.stubEnv('VITE_MSAL_CLIENT_ID', 'test-client-id')
+  it('renders children when authenticated', () => {
     mockUseAuth.mockReturnValue({
       isAuthenticated: true,
       isLoading: false,
@@ -67,6 +50,16 @@ describe('AuthGuard', () => {
     })
     render(<AuthGuard><div>Authenticated Child</div></AuthGuard>)
     expect(screen.getByText('Authenticated Child')).toBeDefined()
-    vi.unstubAllEnvs()
+  })
+
+  it('calls login when not authenticated and not loading', () => {
+    const login = vi.fn()
+    mockUseAuth.mockReturnValue({
+      isAuthenticated: false,
+      isLoading: false,
+      login,
+    })
+    render(<AuthGuard><div>Child</div></AuthGuard>)
+    expect(login).toHaveBeenCalled()
   })
 })

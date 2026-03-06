@@ -18,28 +18,7 @@ export interface UseAuthReturn {
   logout: () => Promise<void>
 }
 
-// Dev mode stub when MSAL is not configured
-const devAuth: UseAuthReturn = {
-  isAuthenticated: true,
-  isLoading: false,
-  user: { id: 'dev-user', name: 'Dev User', email: 'dev@local' },
-  getAccessToken: async () => null,
-  login: async () => {},
-  logout: async () => {},
-}
-
 export function useAuth(): UseAuthReturn {
-  const msalAuth = useMsalAuth()
-
-  // Dev mode bypass
-  if (!import.meta.env.VITE_MSAL_CLIENT_ID) {
-    return devAuth
-  }
-
-  return msalAuth
-}
-
-function useMsalAuth(): UseAuthReturn {
   const { instance, accounts, inProgress } = useMsal()
 
   const account = accounts[0]

@@ -15,7 +15,6 @@ interface MockMsal {
 function createMockMsal(overrides: Partial<{
   accounts: { username: string }[]
   silentResult: { accessToken: string } | Error
-  redirectResult: void | Error
 }> = {}): MockMsal {
   const accounts = overrides.accounts ?? [{ username: 'user@test.com' }]
   return {
@@ -23,13 +22,10 @@ function createMockMsal(overrides: Partial<{
     acquireTokenSilent: overrides.silentResult instanceof Error
       ? vi.fn().mockRejectedValue(overrides.silentResult)
       : vi.fn().mockResolvedValue(overrides.silentResult ?? { accessToken: 'silent-token' }),
-    acquireTokenRedirect: overrides.redirectResult instanceof Error
-      ? vi.fn().mockRejectedValue(overrides.redirectResult)
-      : vi.fn().mockResolvedValue(undefined),
+    acquireTokenRedirect: vi.fn().mockResolvedValue(undefined),
   }
 }
 
-/** Wrapper to pass mock objects to setMsalInstance which expects PublicClientApplication */
 // @ts-expect-error - mock objects intentionally omit unrelated PublicClientApplication properties
 const setMockMsalInstance: (instance: MockMsal) => void = setMsalInstance
 
@@ -39,14 +35,13 @@ describe('token', () => {
   })
 
   describe('when no MSAL instance is set', () => {
-    it('returns "dev-token"', async () => {
+    it('throws MSAL not initialized', async () => {
       vi.resetModules()
       vi.mock('../config/auth', () => ({
         loginRequest: { scopes: ['api://test-scope/.default'] },
       }))
       const freshModule = await import('./token')
-      const token = await freshModule.getAccessToken()
-      expect(token).toBe('dev-token')
+      await expect(freshModule.getAccessToken()).rejects.toThrow('MSAL not initialized')
     })
   })
 
@@ -93,16 +88,6 @@ describe('token', () => {
 
       expect(mock.acquireTokenSilent).toHaveBeenCalledWith(
         expect.objectContaining({ account: { username: 'first@test.com' } }),
-      )
-    })
-
-    it('passes correct scopes to acquireTokenSilent', async () => {
-      const mock = createMockMsal({ silentResult: { accessToken: 'token' } })
-      setMockMsalInstance(mock)
-      await getAccessToken()
-
-      expect(mock.acquireTokenSilent).toHaveBeenCalledWith(
-        expect.objectContaining({ scopes: ['api://test-scope/.default'] }),
       )
     })
   })

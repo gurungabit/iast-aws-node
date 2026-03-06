@@ -9,8 +9,7 @@ export function setMsalInstance(instance: PublicClientApplication) {
 
 export async function getAccessToken(): Promise<string> {
   if (!msalInstance) {
-    // Dev mode - no MSAL
-    return 'dev-token'
+    throw new Error('MSAL not initialized')
   }
 
   const accounts = msalInstance.getAllAccounts()

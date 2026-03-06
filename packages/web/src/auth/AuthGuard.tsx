@@ -11,18 +11,12 @@ export function AuthGuard({ children }: AuthGuardProps): ReactNode {
   const { isAuthenticated, isLoading, login } = useAuth()
   const { theme, toggleTheme } = useTheme()
 
-  const devMode = !import.meta.env.VITE_MSAL_CLIENT_ID
-
   // Auto-redirect to MSAL login when not authenticated
   useEffect(() => {
-    if (!devMode && !isLoading && !isAuthenticated) {
+    if (!isLoading && !isAuthenticated) {
       void login()
     }
-  }, [devMode, isLoading, isAuthenticated, login])
-
-  if (devMode) {
-    return <>{children}</>
-  }
+  }, [isLoading, isAuthenticated, login])
 
   if (isLoading || !isAuthenticated) {
     return (

@@ -25,7 +25,6 @@ vi.mock('@azure/msal-react', () => ({
     }],
     inProgress: 'none',
   }),
-  useIsAuthenticated: () => true,
 }))
 
 vi.mock('@azure/msal-browser', () => ({
@@ -39,49 +38,9 @@ vi.mock('../config/auth', () => ({
 
 import { useAuth } from './useAuth'
 
-// In test environment, VITE_MSAL_CLIENT_ID is not set, so dev mode is used
-describe('useAuth (dev mode)', () => {
-  it('returns isAuthenticated true', () => {
-    const { result } = renderHook(() => useAuth())
-    expect(result.current.isAuthenticated).toBe(true)
-  })
-
-  it('returns isLoading false', () => {
-    const { result } = renderHook(() => useAuth())
-    expect(result.current.isLoading).toBe(false)
-  })
-
-  it('returns dev user info', () => {
-    const { result } = renderHook(() => useAuth())
-    expect(result.current.user).toEqual({
-      id: 'dev-user',
-      name: 'Dev User',
-      email: 'dev@local',
-    })
-  })
-
-  it('getAccessToken returns null', async () => {
-    const { result } = renderHook(() => useAuth())
-    const token = await result.current.getAccessToken()
-    expect(token).toBeNull()
-  })
-
-  it('login is a no-op', async () => {
-    const { result } = renderHook(() => useAuth())
-    await expect(result.current.login()).resolves.toBeUndefined()
-  })
-
-  it('logout is a no-op', async () => {
-    const { result } = renderHook(() => useAuth())
-    await expect(result.current.logout()).resolves.toBeUndefined()
-  })
-})
-
-// Test MSAL path by stubbing the env variable
-describe('useAuth (MSAL mode)', () => {
+describe('useAuth', () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    vi.stubEnv('VITE_MSAL_CLIENT_ID', 'test-client-id')
     msalMocks.acquireTokenSilent.mockResolvedValue({ accessToken: 'test-token' })
   })
 
