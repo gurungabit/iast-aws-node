@@ -18,6 +18,7 @@ export function SessionSelector() {
       const ws = new TerminalWebSocket(session.id)
       await ws.connect()
       setWs(session.id, ws)
+      localStorage.setItem('iast-active-session', session.id)
     } catch (err) {
       console.error('Failed to create session:', err)
     } finally {
@@ -35,7 +36,10 @@ export function SessionSelector() {
       {Array.from(tabs.values()).map((tab) => (
         <button
           key={tab.sessionId}
-          onClick={() => setActiveTab(tab.sessionId)}
+          onClick={() => {
+            setActiveTab(tab.sessionId)
+            localStorage.setItem('iast-active-session', tab.sessionId)
+          }}
           className={cn(
             'group flex items-center gap-2 rounded-t px-3 py-2 text-sm transition-colors cursor-pointer',
             activeTabId === tab.sessionId

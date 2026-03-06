@@ -1,5 +1,5 @@
 import type { PublicClientApplication } from '@azure/msal-browser'
-import { apiScopes } from '../config/auth'
+import { loginRequest } from '../config/auth'
 
 let msalInstance: PublicClientApplication | null = null
 
@@ -18,14 +18,16 @@ export async function getAccessToken(): Promise<string> {
 
   try {
     const response = await msalInstance.acquireTokenSilent({
-      scopes: apiScopes.accessAsUser,
+      ...loginRequest,
       account: accounts[0],
     })
     return response.accessToken
   } catch {
-    const response = await msalInstance.acquireTokenPopup({
-      scopes: apiScopes.accessAsUser,
+    await msalInstance.acquireTokenRedirect({
+      ...loginRequest,
+      account: accounts[0],
     })
-    return response.accessToken
+    // Will redirect — this line won't be reached
+    throw new Error('Redirecting for authentication')
   }
 }

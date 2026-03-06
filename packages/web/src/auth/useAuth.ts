@@ -1,5 +1,5 @@
 import { useCallback, useMemo } from 'react'
-import { useMsal, useIsAuthenticated } from '@azure/msal-react'
+import { useMsal } from '@azure/msal-react'
 import { InteractionStatus, InteractionRequiredAuthError } from '@azure/msal-browser'
 import { loginRequest } from '../config/auth'
 
@@ -41,10 +41,10 @@ export function useAuth(): UseAuthReturn {
 
 function useMsalAuth(): UseAuthReturn {
   const { instance, accounts, inProgress } = useMsal()
-  const isAuthenticated = useIsAuthenticated()
-  const isLoading = inProgress !== InteractionStatus.None
 
   const account = accounts[0]
+  const isAuthenticated = !!account
+  const isLoading = inProgress !== InteractionStatus.None
 
   const user = useMemo<UserInfo | null>(() => {
     if (!account) return null
@@ -77,12 +77,20 @@ function useMsalAuth(): UseAuthReturn {
   }, [account, instance, inProgress])
 
   const login = useCallback(async () => {
+    if (inProgress !== InteractionStatus.None) return
+
     try {
-      await instance.loginRedirect(loginRequest)
-    } catch (error) {
-      console.error('Login failed:', error)
+      // Try silent SSO first (picks up existing Azure session)
+      await instance.ssoSilent(loginRequest)
+    } catch {
+      // No existing session — fall back to redirect
+      try {
+        await instance.loginRedirect(loginRequest)
+      } catch (error) {
+        console.error('Login failed:', error)
+      }
     }
-  }, [instance])
+  }, [instance, inProgress])
 
   const logout = useCallback(async () => {
     try {

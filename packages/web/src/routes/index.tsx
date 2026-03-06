@@ -1,11 +1,13 @@
 import { createFileRoute } from '@tanstack/react-router'
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useSessionStore } from '../stores/session-store'
 import { SessionSelector } from '../terminal/SessionSelector'
 import { TerminalComponent } from '../terminal/Terminal'
 import { ASTPanel } from '../ast/components/ASTPanel'
 import { Button } from '../components/ui/Button'
 import { Input } from '../components/ui/Input'
+import { getSessions, createSession } from '../services/sessions'
+import { TerminalWebSocket } from '../services/websocket'
 
 export const Route = createFileRoute('/')({
   component: TerminalPage,
@@ -14,6 +16,54 @@ export const Route = createFileRoute('/')({
 function TerminalPage() {
   const activeTabId = useSessionStore((s) => s.activeTabId)
   const tab = useSessionStore((s) => (s.activeTabId ? s.tabs.get(s.activeTabId) : null))
+  const [loaded, setLoaded] = useState(false)
+  const initRef = useRef(false)
+
+  const { addTab, setWs, setActiveTab } = useSessionStore()
+
+  // Auto-load existing sessions or create one on mount
+  useEffect(() => {
+    if (initRef.current) return
+    initRef.current = true
+
+    const init = async () => {
+      try {
+        let sessions = await getSessions()
+
+        if (sessions.length === 0) {
+          const newSession = await createSession('Terminal')
+          sessions = [newSession]
+        }
+
+        const stored = localStorage.getItem('iast-active-session')
+
+        for (const s of sessions) {
+          addTab(s.id, s.name || `Session ${s.id.slice(0, 6)}`)
+          const ws = new TerminalWebSocket(s.id)
+          await ws.connect()
+          setWs(s.id, ws)
+        }
+
+        const activeId = sessions.find((s) => s.id === stored)?.id ?? sessions[0].id
+        setActiveTab(activeId)
+        localStorage.setItem('iast-active-session', activeId)
+      } catch (err) {
+        console.error('Failed to initialize sessions:', err)
+      } finally {
+        setLoaded(true)
+      }
+    }
+
+    init()
+  }, [addTab, setWs, setActiveTab])
+
+  if (!loaded) {
+    return (
+      <div className="flex h-full items-center justify-center">
+        <div className="text-sm text-gray-500 dark:text-zinc-400">Loading sessions...</div>
+      </div>
+    )
+  }
 
   return (
     <div className="flex h-full flex-col">

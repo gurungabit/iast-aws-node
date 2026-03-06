@@ -4,6 +4,7 @@ import { renderHook, act } from '@testing-library/react'
 const msalMocks = vi.hoisted(() => ({
   acquireTokenSilent: vi.fn(),
   acquireTokenRedirect: vi.fn(),
+  ssoSilent: vi.fn(),
   loginRedirect: vi.fn(),
   logoutRedirect: vi.fn(),
 }))
@@ -13,6 +14,7 @@ vi.mock('@azure/msal-react', () => ({
     instance: {
       acquireTokenSilent: msalMocks.acquireTokenSilent,
       acquireTokenRedirect: msalMocks.acquireTokenRedirect,
+      ssoSilent: msalMocks.ssoSilent,
       loginRedirect: msalMocks.loginRedirect,
       logoutRedirect: msalMocks.logoutRedirect,
     },
@@ -117,11 +119,23 @@ describe('useAuth (MSAL mode)', () => {
     expect(msalMocks.acquireTokenRedirect).toHaveBeenCalled()
   })
 
-  it('login calls loginRedirect', async () => {
+  it('login tries ssoSilent first', async () => {
+    msalMocks.ssoSilent.mockResolvedValueOnce({})
     const { result } = renderHook(() => useAuth())
     await act(async () => {
       await result.current.login()
     })
+    expect(msalMocks.ssoSilent).toHaveBeenCalled()
+    expect(msalMocks.loginRedirect).not.toHaveBeenCalled()
+  })
+
+  it('login falls back to loginRedirect when ssoSilent fails', async () => {
+    msalMocks.ssoSilent.mockRejectedValueOnce(new Error('no session'))
+    const { result } = renderHook(() => useAuth())
+    await act(async () => {
+      await result.current.login()
+    })
+    expect(msalMocks.ssoSilent).toHaveBeenCalled()
     expect(msalMocks.loginRedirect).toHaveBeenCalled()
   })
 

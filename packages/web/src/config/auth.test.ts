@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { msalConfig, loginRequest, apiScopes } from './auth'
+import { msalConfig, loginRequest } from './auth'
 
 describe('auth config', () => {
   describe('msalConfig', () => {
@@ -26,9 +26,18 @@ describe('auth config', () => {
       expect(msalConfig.auth.postLogoutRedirectUri).toBeDefined()
     })
 
+    it('has navigateToLoginRequestUrl enabled', () => {
+      expect(msalConfig.auth.navigateToLoginRequestUrl).toBe(true)
+    })
+
     it('has cache configuration', () => {
       expect(msalConfig.cache).toBeDefined()
       expect(msalConfig.cache!.cacheLocation).toBe('localStorage')
+    })
+
+    it('has system logger configuration', () => {
+      expect(msalConfig.system).toBeDefined()
+      expect(msalConfig.system!.loggerOptions).toBeDefined()
     })
   })
 
@@ -46,17 +55,6 @@ describe('auth config', () => {
       loginRequest.scopes.forEach((scope) => {
         expect(typeof scope).toBe('string')
       })
-    })
-  })
-
-  describe('apiScopes', () => {
-    it('has accessAsUser array', () => {
-      expect(apiScopes.accessAsUser).toBeDefined()
-      expect(Array.isArray(apiScopes.accessAsUser)).toBe(true)
-    })
-
-    it('accessAsUser has at least one scope', () => {
-      expect(apiScopes.accessAsUser.length).toBeGreaterThan(0)
     })
   })
 })
