@@ -139,7 +139,6 @@ describe('api', () => {
       expect(mockFetch).toHaveBeenCalledWith('http://localhost:3000/sessions/1', {
         method: 'DELETE',
         headers: {
-          'Content-Type': 'application/json',
           Authorization: 'Bearer test-token',
         },
       })

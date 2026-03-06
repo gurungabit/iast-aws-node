@@ -12,7 +12,7 @@ vi.mock('./api', () => ({
   apiDelete: mockApiDelete,
 }))
 
-import { getSchedules, createSchedule, cancelSchedule, runScheduleNow } from './schedules'
+import { getSchedules, createSchedule, cancelSchedule } from './schedules'
 
 describe('schedules service', () => {
   beforeEach(() => {
@@ -39,14 +39,13 @@ describe('schedules service', () => {
       const data = {
         astName: 'login',
         scheduledTime: '2026-06-01T10:00:00Z',
-        timezone: 'America/New_York',
-        credentials: { username: 'user', password: 'pass' },
+        credentials: { userId: 'user', password: 'pass' },
         params: {},
       }
-      mockApiPost.mockResolvedValue({ scheduleId: 'sched-1' })
+      mockApiPost.mockResolvedValue({ id: 'sched-1', astName: 'login', scheduledTime: '2026-06-01T10:00:00Z', status: 'pending' })
       const result = await createSchedule(data)
       expect(mockApiPost).toHaveBeenCalledWith('/schedules', data)
-      expect(result.scheduleId).toBe('sched-1')
+      expect(result.id).toBe('sched-1')
     })
   })
 
@@ -58,11 +57,4 @@ describe('schedules service', () => {
     })
   })
 
-  describe('runScheduleNow', () => {
-    it('calls apiPost with /schedules/:id/run', async () => {
-      mockApiPost.mockResolvedValue(undefined)
-      await runScheduleNow('sched-1')
-      expect(mockApiPost).toHaveBeenCalledWith('/schedules/sched-1/run')
-    })
-  })
 })

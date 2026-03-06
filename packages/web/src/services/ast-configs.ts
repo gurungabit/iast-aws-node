@@ -3,62 +3,102 @@ import type { SavedAstConfigWithAccess } from '../ast/types'
 
 export type AstConfigListScope = 'mine' | 'public' | 'all'
 
-export async function listAstConfigs(
-  astName: string,
-  scope: AstConfigListScope = 'all',
-): Promise<SavedAstConfigWithAccess[]> {
-  return apiGet<SavedAstConfigWithAccess[]>(`/ast-configs?astName=${astName}&scope=${scope}`)
+// Server returns { id, name, ... } but frontend uses { configId, configurationName, ... }
+interface ServerAstConfig {
+  id: string
+  astName: string
+  ownerId: string
+  name: string
+  visibility: string
+  params: Record<string, unknown>
+  tasks?: unknown[]
+  createdAt: string
+  updatedAt: string
 }
 
-export async function getAstConfig(
-  astName: string,
-  configId: string,
-): Promise<SavedAstConfigWithAccess> {
-  return apiGet<SavedAstConfigWithAccess>(`/ast-configs/${astName}/${configId}`)
+function mapServerConfig(s: ServerAstConfig): SavedAstConfigWithAccess {
+  return {
+    configId: s.id,
+    astName: s.astName,
+    configurationName: s.name,
+    oc: (s.params?.oc as string) ?? '',
+    visibility: s.visibility as 'private' | 'public',
+    parallel: (s.params?.parallel as boolean) ?? false,
+    testMode: (s.params?.testMode as boolean) ?? false,
+    multiTask: (s.params?.multiTask as boolean) ?? false,
+    tasks: (s.tasks ?? []) as SavedAstConfigWithAccess['tasks'],
+    params: s.params ?? {},
+    ownerAlias: s.ownerId,
+    isOwner: true,
+    canEdit: true,
+    createdAt: s.createdAt,
+    updatedAt: s.updatedAt,
+  }
+}
+
+export async function listAstConfigs(
+  astName?: string,
+  _scope: AstConfigListScope = 'all',
+): Promise<SavedAstConfigWithAccess[]> {
+  const query = astName ? `?astName=${astName}` : ''
+  const results = await apiGet<ServerAstConfig[]>(`/ast-configs${query}`)
+  return results.map(mapServerConfig)
+}
+
+export async function getAstConfig(configId: string): Promise<SavedAstConfigWithAccess> {
+  const result = await apiGet<ServerAstConfig>(`/ast-configs/${configId}`)
+  return mapServerConfig(result)
 }
 
 export async function createAstConfig(data: {
   astName: string
-  category: string
   configurationName: string
-  oc: string
-  parallel: boolean
-  testMode: boolean
-  visibility: string
-  params: Record<string, unknown>
-  multiTask?: boolean
+  visibility?: string
+  params?: Record<string, unknown>
   tasks?: unknown[]
 }): Promise<SavedAstConfigWithAccess> {
-  return apiPost<SavedAstConfigWithAccess>('/ast-configs', data)
+  const result = await apiPost<ServerAstConfig>('/ast-configs', {
+    astName: data.astName,
+    name: data.configurationName,
+    visibility: data.visibility,
+    params: data.params,
+    tasks: data.tasks,
+  })
+  return mapServerConfig(result)
 }
 
 export async function updateAstConfig(
-  astName: string,
+  _astName: string,
   configId: string,
   data: {
     configurationName?: string
-    oc?: string
-    parallel?: boolean
-    testMode?: boolean
     visibility?: string
     params?: Record<string, unknown>
-    multiTask?: boolean
     tasks?: unknown[]
   },
 ): Promise<SavedAstConfigWithAccess> {
-  return apiPatch<SavedAstConfigWithAccess>(`/ast-configs/${astName}/${configId}`, data)
+  const result = await apiPatch<ServerAstConfig>(`/ast-configs/${configId}`, {
+    name: data.configurationName,
+    visibility: data.visibility,
+    params: data.params,
+    tasks: data.tasks,
+  })
+  return mapServerConfig(result)
 }
 
 export async function cloneAstConfig(
-  astName: string,
+  _astName: string,
   configId: string,
   data: { configurationName: string },
 ): Promise<SavedAstConfigWithAccess> {
-  return apiPost<SavedAstConfigWithAccess>(`/ast-configs/${astName}/${configId}/clone`, data)
+  const result = await apiPost<ServerAstConfig>(`/ast-configs/${configId}/clone`, {
+    name: data.configurationName,
+  })
+  return mapServerConfig(result)
 }
 
-export async function deleteAstConfig(astName: string, configId: string): Promise<void> {
-  await apiDelete(`/ast-configs/${astName}/${configId}`)
+export async function deleteAstConfig(_astName: string, configId: string): Promise<void> {
+  await apiDelete(`/ast-configs/${configId}`)
 }
 
 export interface RunAstConfigResult {
@@ -75,7 +115,7 @@ export interface RunAstConfigResult {
 }
 
 export async function runAstConfig(
-  astName: string,
+  _astName: string,
   configId: string,
   data: {
     username: string
@@ -84,5 +124,5 @@ export async function runAstConfig(
     userLocalDate: string
   },
 ): Promise<RunAstConfigResult> {
-  return apiPost<RunAstConfigResult>(`/ast-configs/${astName}/${configId}/run`, data)
+  return apiPost<RunAstConfigResult>(`/ast-configs/${configId}/run`, data)
 }

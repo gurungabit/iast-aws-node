@@ -96,7 +96,8 @@ export async function autoLauncherRoutes(app: FastifyInstance) {
     },
     async (request, reply) => {
       await autoLauncherService.remove(request.params.id, request.user.id)
-      return reply.status(204).send()
+      reply.code(204)
+      return
     },
   )
 

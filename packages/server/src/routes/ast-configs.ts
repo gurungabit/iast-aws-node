@@ -99,7 +99,8 @@ export async function astConfigRoutes(app: FastifyInstance) {
     },
     async (request, reply) => {
       await astConfigService.remove(request.params.id, request.user.id)
-      return reply.status(204).send()
+      reply.code(204)
+      return
     },
   )
 
