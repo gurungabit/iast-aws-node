@@ -3,7 +3,7 @@
  * Implements NTLMv2 (Type 1 Negotiate, Type 2 Challenge parse, Type 3 Authenticate).
  */
 
-import { createHmac, createCipheriv, randomBytes } from 'crypto'
+import { createHmac, randomBytes } from 'crypto'
 import md4 from 'js-md4'
 
 const NTLMSSP_SIGNATURE = Buffer.from('NTLMSSP\0')
@@ -201,10 +201,9 @@ export function createType3(
   // Session base key
   const sessionBaseKey = createHmac('md5', responseKeyNT).update(ntProofStr).digest()
 
-  // KEY_EXCH: generate random ExportedSessionKey, encrypt with SessionBaseKey
+  // KEY_EXCH: generate random ExportedSessionKey, encrypt with RC4(SessionBaseKey)
   const exportedSessionKey = randomBytes(16)
-  const rc4Cipher = createCipheriv('rc4', sessionBaseKey, '')
-  const encryptedSessionKey = Buffer.concat([rc4Cipher.update(exportedSessionKey), rc4Cipher.final()])
+  const encryptedSessionKey = rc4(sessionBaseKey, exportedSessionKey)
   console.log(`[NTLM] KEY_EXCH: sessionBaseKey=${sessionBaseKey.subarray(0, 4).toString('hex')}..., encSK(${encryptedSessionKey.length}b)`)
 
   const domainBuf = Buffer.from(hashDomain, 'utf16le')
@@ -328,6 +327,28 @@ function buildSpnegoInit(mechType: Buffer, mechToken: Buffer): Buffer {
   // Application [0] with SPNEGO OID
   const spnegoOid = Buffer.from([0x06, 0x06, 0x2b, 0x06, 0x01, 0x05, 0x05, 0x02]) // 1.3.6.1.5.5.2
   return asn1Wrap(0x60, Buffer.concat([spnegoOid, contextTag]))
+}
+
+/** RC4 stream cipher (needed for KEY_EXCH; OpenSSL 3.x disables RC4) */
+function rc4(key: Buffer, data: Buffer): Buffer {
+  // Key-Scheduling Algorithm (KSA)
+  const S = new Uint8Array(256)
+  for (let i = 0; i < 256; i++) S[i] = i
+  let j = 0
+  for (let i = 0; i < 256; i++) {
+    j = (j + S[i] + key[i % key.length]) & 0xff
+    const tmp = S[i]; S[i] = S[j]; S[j] = tmp
+  }
+  // Pseudo-Random Generation Algorithm (PRGA)
+  const out = Buffer.alloc(data.length)
+  let a = 0, b = 0
+  for (let k = 0; k < data.length; k++) {
+    a = (a + 1) & 0xff
+    b = (b + S[a]) & 0xff
+    const tmp = S[a]; S[a] = S[b]; S[b] = tmp
+    out[k] = data[k] ^ S[(S[a] + S[b]) & 0xff]
+  }
+  return out
 }
 
 function asn1Wrap(tag: number, data: Buffer): Buffer {
