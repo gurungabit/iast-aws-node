@@ -130,6 +130,12 @@ function attachLocal(
         // persistOnly batches: DB only, don't forward items to browser
         if (msg.persistOnly) return
       }
+      if (msg.type === 'ast.status') {
+        // Persist paused/running status transitions to DB
+        if (msg.status === 'paused' || msg.status === 'running') {
+          executionService.updateStatus(msg.executionId, msg.status).catch(() => {})
+        }
+      }
       if (msg.type === 'ast.complete') {
         // Flush remaining items before completion
         flushDbBuffer()

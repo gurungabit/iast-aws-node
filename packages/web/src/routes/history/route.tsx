@@ -674,8 +674,18 @@ function HistoryPage() {
   const [selectedExecution, setSelectedExecution] = useState<ExecutionDto | null>(null)
   const [selectedPolicy, setSelectedPolicy] = useState<PolicyDto | null>(null)
 
+  // Refetch execution list when AutoLauncher steps transition
+  // (step completes → nextStepIndex changes → new execution appears in DB)
+  const alStepKey = useASTStore((s) => {
+    for (const tab of Object.values(s.tabs)) {
+      const run = tab.autoLauncherRun
+      if (run) return `${run.runId}:${String(run.nextStepIndex)}:${run.status}`
+    }
+    return null
+  })
+
   const { data: executions = [], isLoading: isLoadingExecs } = useQuery({
-    queryKey: ['history', date],
+    queryKey: ['history', date, alStepKey],
     queryFn: () => apiGet<ExecutionDto[]>(`/history?date=${date}`),
   })
 

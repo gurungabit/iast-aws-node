@@ -75,8 +75,16 @@ export function ASTFormWrapper({
   const setFormOptions = useASTStore((state) => state.setFormOptions)
   const clearAutoLauncherRun = useASTStore((state) => state.clearAutoLauncherRun)
 
-  const { status, isRunning, lastResult, progress, itemResults, statusMessages, clearLogs } =
-    useAST()
+  const {
+    status,
+    isRunning,
+    lastResult,
+    progress,
+    itemResults,
+    statusMessages,
+    controlAST,
+    clearLogs,
+  } = useAST()
 
   const [scheduleMode, setScheduleMode] = useFormField<boolean>('schedule.enabled', false)
   const [scheduledTime, setScheduledTime] = useFormField<string>('schedule.time', '')
@@ -709,15 +717,60 @@ export function ASTFormWrapper({
             </div>
           )}
 
-          {/* Progress Bar */}
+          {/* Progress Bar + Controls */}
           {isRunning && progress && (
-            <ProgressBar
-              value={progress.percentage}
-              label={`Processing ${String(progress.current)} of ${String(progress.total)}`}
-              currentItem={progress.currentItem}
-              message={progress.message}
-              variant={progress.itemStatus === 'failed' ? 'error' : 'default'}
-            />
+            <div className="space-y-2">
+              <ProgressBar
+                value={progress.percentage}
+                label={`Processing ${String(progress.current)} of ${String(progress.total)}`}
+                currentItem={progress.currentItem}
+                message={progress.message}
+                variant={progress.itemStatus === 'failed' ? 'error' : 'default'}
+              />
+              <div className="flex items-center gap-2">
+                {status === 'paused' ? (
+                  <Button
+                    type="button"
+                    variant="primary"
+                    size="sm"
+                    onClick={() => controlAST('resume')}
+                  >
+                    <svg className="w-3.5 h-3.5 mr-1" fill="currentColor" viewBox="0 0 20 20">
+                      <path d="M6.3 2.84A1.5 1.5 0 004 4.11v11.78a1.5 1.5 0 002.3 1.27l9.344-5.891a1.5 1.5 0 000-2.538L6.3 2.84z" />
+                    </svg>
+                    Resume
+                  </Button>
+                ) : (
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    size="sm"
+                    onClick={() => controlAST('pause')}
+                  >
+                    <svg className="w-3.5 h-3.5 mr-1" fill="currentColor" viewBox="0 0 20 20">
+                      <path d="M5.75 3a.75.75 0 00-.75.75v12.5c0 .414.336.75.75.75h1.5a.75.75 0 00.75-.75V3.75A.75.75 0 007.25 3h-1.5zM12.75 3a.75.75 0 00-.75.75v12.5c0 .414.336.75.75.75h1.5a.75.75 0 00.75-.75V3.75a.75.75 0 00-.75-.75h-1.5z" />
+                    </svg>
+                    Pause
+                  </Button>
+                )}
+                <Button
+                  type="button"
+                  variant="danger-outline"
+                  size="sm"
+                  onClick={() => controlAST('cancel')}
+                >
+                  <svg className="w-3.5 h-3.5 mr-1" fill="currentColor" viewBox="0 0 20 20">
+                    <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.28 7.22a.75.75 0 00-1.06 1.06L8.94 10l-1.72 1.72a.75.75 0 101.06 1.06L10 11.06l1.72 1.72a.75.75 0 101.06-1.06L11.06 10l1.72-1.72a.75.75 0 00-1.06-1.06L10 8.94 8.28 7.22z" clipRule="evenodd" />
+                  </svg>
+                  Cancel
+                </Button>
+                {status === 'paused' && (
+                  <span className="text-xs text-yellow-600 dark:text-yellow-400 font-medium">
+                    Paused
+                  </span>
+                )}
+              </div>
+            </div>
           )}
 
           {scheduleSuccess && (
