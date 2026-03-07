@@ -410,19 +410,74 @@ async function resolveDfs(
   const requestedSubPath = fullRequestPath.substring(`\\${host}\\${share}`.length).replace(/^\\+/, '')
   const fullSubPath = filePathBs
   const unqueried = fullSubPath.substring(requestedSubPath.length).replace(/^\\+/, '')
-  const actualFilePath = remainingFromRequest
+  let actualFilePath = remainingFromRequest
     ? (unqueried ? `${remainingFromRequest}\\${unqueried}` : remainingFromRequest)
     : (unqueried || filePathBs)
 
   console.log(`[SMB2] DFS file path: "${actualFilePath}" (consumed=${consumedChars} chars from "${matchedPath}")`)
 
   // If target is a different server, close current and connect to target
+  const rootTarget = target
   if (target.server.toLowerCase() !== host.toLowerCase()) {
     transport.close()
     const tgt = await connectAndAuth(target.server, port, timeout, domain, username, password)
     transport = tgt.transport
     sessionId = tgt.sessionId
     signingKey = tgt.signingKey
+  }
+
+  // If the root referral pointed us to a namespace server (not the final target),
+  // do a link referral on the namespace server to find the actual file server.
+  // This is needed when the matched path was just the root (no sub-path).
+  const isRootReferral = matchedPath === `\\${host}\\${share}`
+  if (isRootReferral) {
+    console.log(`[SMB2] Root referral resolved → trying link referral on ${rootTarget.server}...`)
+    // Connect to IPC$ on namespace server
+    const nsIpcPath = `\\\\${rootTarget.server}\\IPC$`
+    const nsIpcResp = await signedSend(
+      transport, SMB2_TREE_CONNECT, buildTreeConnectBody(nsIpcPath),
+      signingKey, { sessionId },
+    )
+    assertStatus(nsIpcResp, 'TreeConnect(IPC$ on namespace)', [STATUS_SUCCESS])
+    const nsIpcTreeId = nsIpcResp.treeId
+
+    // Try link referrals with progressively shorter paths on the namespace server
+    let linkTarget: DfsTarget | null = null
+    for (const dfsPath of pathsToTry) {
+      // Skip the bare root path (we already resolved that)
+      if (dfsPath === `\\${host}\\${share}`) continue
+      linkTarget = await tryDfsReferral(transport, sessionId, signingKey, nsIpcTreeId, dfsPath)
+      if (linkTarget) {
+        matchedPath = dfsPath
+        break
+      }
+    }
+
+    if (linkTarget) {
+      // Recompute file path from link referral
+      const linkConsumed = linkTarget.pathConsumed
+      const linkMatchedPath = matchedPath
+      const linkRemaining = linkMatchedPath.substring(linkConsumed).replace(/^\\+/, '')
+      const linkRequestedSub = linkMatchedPath.substring(`\\${host}\\${share}`.length).replace(/^\\+/, '')
+      const linkUnqueried = filePathBs.substring(linkRequestedSub.length).replace(/^\\+/, '')
+      actualFilePath = linkRemaining
+        ? (linkUnqueried ? `${linkRemaining}\\${linkUnqueried}` : linkRemaining)
+        : (linkUnqueried || filePathBs)
+
+      console.log(`[SMB2] DFS link resolved "${linkMatchedPath}" → \\\\${linkTarget.server}\\${linkTarget.share}, file=${actualFilePath}`)
+
+      // If link target is a different server, reconnect
+      if (linkTarget.server.toLowerCase() !== rootTarget.server.toLowerCase()) {
+        transport.close()
+        const lt = await connectAndAuth(linkTarget.server, port, timeout, domain, username, password)
+        transport = lt.transport
+        sessionId = lt.sessionId
+        signingKey = lt.signingKey
+      }
+
+      target = linkTarget
+    }
+    // If no link referral found, continue with root target (might work for some DFS setups)
   }
 
   // TreeConnect to target share
