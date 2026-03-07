@@ -438,11 +438,16 @@ async function resolveDfs(
 }
 
 function parseDfsReferralResponse(body: Buffer): DfsTarget {
-  // IOCTL response: OutputOffset(4) at offset 24, OutputCount(4) at offset 28
-  if (body.length < 32) throw new Error(`IOCTL response too small: ${body.length} bytes`)
+  // IOCTL response layout:
+  //   0: StructureSize(2) + Reserved(2) + CtlCode(4) + FileId(16) = 24 bytes
+  //  24: InputOffset(4) + InputCount(4)    = 8 bytes
+  //  32: OutputOffset(4) + OutputCount(4)  = 8 bytes  ← these!
+  //  40: Flags(4) + Reserved2(4)           = 8 bytes
+  //  48: Buffer (variable)
+  if (body.length < 40) throw new Error(`IOCTL response too small: ${body.length} bytes`)
 
-  const outputOffset = body.readUInt32LE(24) - SMB2_HEADER_SIZE
-  const outputCount = body.readUInt32LE(28)
+  const outputOffset = body.readUInt32LE(32) - SMB2_HEADER_SIZE
+  const outputCount = body.readUInt32LE(36)
 
   if (outputOffset < 0 || outputOffset + outputCount > body.length) {
     throw new Error(`IOCTL output bounds invalid: offset=${outputOffset}, count=${outputCount}, bodyLen=${body.length}`)
