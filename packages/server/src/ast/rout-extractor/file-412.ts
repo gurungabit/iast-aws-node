@@ -68,7 +68,8 @@ const FIELD_SPECS: Array<[string, number, number]> = [
 
 function extractField(line: string, start1Based: number, length: number): string {
   const start0 = start1Based - 1
-  return line.slice(start0, start0 + length).trim()
+  // eslint-disable-next-line no-control-regex
+  return line.slice(start0, start0 + length).replace(/\u0000/g, '').trim()
 }
 
 function parse412Line(line: string): Record<string, string> {
