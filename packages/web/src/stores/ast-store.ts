@@ -41,6 +41,7 @@ export interface TabASTState {
   credentials: { username: string; password: string }
   formOptions: { testMode: boolean; parallel: boolean }
   customFields: Record<string, unknown>
+  startedAt: number | null
 }
 
 function createDefaultTabState(): TabASTState {
@@ -56,6 +57,7 @@ function createDefaultTabState(): TabASTState {
     credentials: { username: '', password: '' },
     formOptions: { testMode: false, parallel: false },
     customFields: {},
+    startedAt: null,
   }
 }
 
@@ -73,7 +75,16 @@ interface ASTStore {
 
   // Execution
   executeAST: (tabId: string, astName: string, params?: Record<string, unknown>) => void
-  handleASTStatus: (tabId: string, info: { astName: string; status: ASTStatus; message?: string; error?: string; duration?: number }) => void
+  handleASTStatus: (
+    tabId: string,
+    info: {
+      astName: string
+      status: ASTStatus
+      message?: string
+      error?: string
+      duration?: number
+    },
+  ) => void
   handleASTProgress: (tabId: string, progress: ASTProgress) => void
   handleASTItemResults: (tabId: string, items: ASTItemResult[]) => void
   handleASTComplete: (tabId: string, result: ASTResult) => void
@@ -81,13 +92,23 @@ interface ASTStore {
   clearLogs: (tabId: string) => void
 
   // AutoLauncher
-  beginAutoLauncherRun: (tabId: string, config: {
-    runId: string
-    launcherId: string
-    steps: Array<{ astName: string; configId: string; order: number; stepLabel?: string; taskLabel?: string | null; configName?: string }>
-    source?: AutoLauncherRunSource
-    displayName?: string
-  }) => void
+  beginAutoLauncherRun: (
+    tabId: string,
+    config: {
+      runId: string
+      launcherId: string
+      steps: Array<{
+        astName: string
+        configId: string
+        order: number
+        stepLabel?: string
+        taskLabel?: string | null
+        configName?: string
+      }>
+      source?: AutoLauncherRunSource
+      displayName?: string
+    },
+  ) => void
   clearAutoLauncherRun: (tabId: string) => void
 }
 
@@ -167,6 +188,7 @@ export const useASTStore = create<ASTStore>((set) => ({
             progress: null,
             itemResults: [],
             statusMessages: [`Starting ${astName}...`],
+            startedAt: Date.now(),
           },
         },
       }
@@ -250,6 +272,8 @@ export const useASTStore = create<ASTStore>((set) => ({
     set((state) => {
       const tab = state.tabs[tabId]
       if (!tab) return state
+      const duration = tab.startedAt ? (Date.now() - tab.startedAt) / 1000 : undefined
+      const resultWithDuration = { ...result, duration: result.duration ?? duration }
       return {
         tabs: {
           ...state.tabs,
@@ -257,8 +281,12 @@ export const useASTStore = create<ASTStore>((set) => ({
             ...tab,
             status: result.status,
             runningAST: null,
-            lastResult: result,
-            statusMessages: [...tab.statusMessages, result.message || `Completed with status: ${result.status}`],
+            lastResult: resultWithDuration,
+            startedAt: null,
+            statusMessages: [
+              ...tab.statusMessages,
+              result.message || `Completed with status: ${result.status}`,
+            ],
           },
         },
       }

@@ -153,7 +153,7 @@ function makeRouteItem(overrides: Partial<RouteItem> = {}): RouteItem {
 
 describe('runRoutExtractorAST', () => {
   let mockAti: Ati
-  let mockReporter: Pick<ProgressReporter, 'reportProgress' | 'addItem'> & { reportProgress: ReturnType<typeof vi.fn>; addItem: ReturnType<typeof vi.fn> }
+  let mockReporter: Pick<ProgressReporter, 'reportProgress' | 'addItem' | 'addItemsPersistOnly'> & { reportProgress: ReturnType<typeof vi.fn>; addItem: ReturnType<typeof vi.fn>; addItemsPersistOnly: ReturnType<typeof vi.fn> }
   let mockCtx: ASTContext
 
   beforeEach(() => {
@@ -164,6 +164,7 @@ describe('runRoutExtractorAST', () => {
     mockReporter = {
       reportProgress: vi.fn(),
       addItem: vi.fn(),
+      addItemsPersistOnly: vi.fn(),
     }
 
     mockCtx = {
@@ -350,13 +351,15 @@ describe('runRoutExtractorAST', () => {
         expect.any(String),
         expect.any(String),
       )
-      // Item has needsPdqEnrichment=false so it should be a bulk item
-      expect(mockReporter.addItem).toHaveBeenCalledWith(
-        expect.objectContaining({
-          policyNumber: 'ABC123',
-          status: 'success',
-          durationMs: 0,
-        }),
+      // Item has needsPdqEnrichment=false so it should be a bulk item (persist only)
+      expect(mockReporter.addItemsPersistOnly).toHaveBeenCalledWith(
+        expect.arrayContaining([
+          expect.objectContaining({
+            policyNumber: 'ABC123',
+            status: 'success',
+            durationMs: 0,
+          }),
+        ]),
       )
       // No host authentication needed for bulk-only items
       expect(mockSession.authenticate).not.toHaveBeenCalled()
@@ -445,13 +448,15 @@ describe('runRoutExtractorAST', () => {
 
       expect(mockReadSmbFile).toHaveBeenCalled()
       expect(parse412File).toHaveBeenCalled()
-      // Bulk item reported
-      expect(mockReporter.addItem).toHaveBeenCalledWith(
-        expect.objectContaining({
-          policyNumber: 'SMB001',
-          status: 'success',
-          durationMs: 0,
-        }),
+      // Bulk item reported (persist only)
+      expect(mockReporter.addItemsPersistOnly).toHaveBeenCalledWith(
+        expect.arrayContaining([
+          expect.objectContaining({
+            policyNumber: 'SMB001',
+            status: 'success',
+            durationMs: 0,
+          }),
+        ]),
       )
 
       Object.assign(mockConfig, { smbShare: '' })
@@ -632,7 +637,7 @@ describe('runRoutExtractorAST', () => {
   })
 
   describe('bulk items (pre-computed results)', () => {
-    it('reports bulk items immediately without host authentication', async () => {
+    it('reports bulk items via addItemsPersistOnly without host authentication', async () => {
       const items = [
         makeRouteItem({ policyNumber: 'BULK001', needsPdqEnrichment: false }),
         makeRouteItem({ policyNumber: 'BULK002', needsPdqEnrichment: false }),
@@ -650,13 +655,13 @@ describe('runRoutExtractorAST', () => {
 
       // All items are bulk - no authentication needed
       expect(mockSession.authenticate).not.toHaveBeenCalled()
-      // Both items reported
-      expect(mockReporter.addItem).toHaveBeenCalledTimes(2)
-      expect(mockReporter.addItem).toHaveBeenCalledWith(
-        expect.objectContaining({ policyNumber: 'BULK001', durationMs: 0 }),
-      )
-      expect(mockReporter.addItem).toHaveBeenCalledWith(
-        expect.objectContaining({ policyNumber: 'BULK002', durationMs: 0 }),
+      // Both items reported via addItemsPersistOnly (single call with array)
+      expect(mockReporter.addItemsPersistOnly).toHaveBeenCalledTimes(1)
+      expect(mockReporter.addItemsPersistOnly).toHaveBeenCalledWith(
+        expect.arrayContaining([
+          expect.objectContaining({ policyNumber: 'BULK001', durationMs: 0 }),
+          expect.objectContaining({ policyNumber: 'BULK002', durationMs: 0 }),
+        ]),
       )
     })
 
@@ -675,6 +680,7 @@ describe('runRoutExtractorAST', () => {
 
       await runRoutExtractorAST(mockAti, params, mockReporter, mockCtx)
 
+      expect(mockReporter.addItemsPersistOnly).toHaveBeenCalledTimes(1)
       expect(mockReporter.reportProgress).toHaveBeenCalledWith(
         0, 1, 'Storing 1 pre-computed records...',
       )
@@ -707,11 +713,13 @@ describe('runRoutExtractorAST', () => {
 
       // Should authenticate for the PDQ item
       expect(mockSession.authenticate).toHaveBeenCalled()
-      // Bulk item reported immediately, PDQ item processed via host
-      expect(mockReporter.addItem).toHaveBeenCalledTimes(2)
-      expect(mockReporter.addItem).toHaveBeenCalledWith(
-        expect.objectContaining({ policyNumber: 'BULK100', durationMs: 0 }),
+      // Bulk item reported via addItemsPersistOnly
+      expect(mockReporter.addItemsPersistOnly).toHaveBeenCalledWith(
+        expect.arrayContaining([
+          expect.objectContaining({ policyNumber: 'BULK100', durationMs: 0 }),
+        ]),
       )
+      // PDQ item processed via host and reported via addItem
       expect(mockReporter.addItem).toHaveBeenCalledWith(
         expect.objectContaining({ policyNumber: 'PDQ100', status: 'success' }),
       )

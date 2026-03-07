@@ -7,6 +7,7 @@ describe('StatusBadge', () => {
     { status: 'idle', label: 'Ready' },
     { status: 'running', label: 'Running' },
     { status: 'paused', label: 'Paused' },
+    { status: 'completed', label: 'Completed' },
     { status: 'success', label: 'Success' },
     { status: 'failed', label: 'Failed' },
     { status: 'timeout', label: 'Timeout' },

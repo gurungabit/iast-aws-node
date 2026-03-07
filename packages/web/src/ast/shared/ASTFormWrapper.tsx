@@ -75,17 +75,27 @@ export function ASTFormWrapper({
   const setFormOptions = useASTStore((state) => state.setFormOptions)
   const clearAutoLauncherRun = useASTStore((state) => state.clearAutoLauncherRun)
 
-  const { status, isRunning, lastResult, progress, itemResults, statusMessages, clearLogs } = useAST()
+  const { status, isRunning, lastResult, progress, itemResults, statusMessages, clearLogs } =
+    useAST()
 
   const [scheduleMode, setScheduleMode] = useFormField<boolean>('schedule.enabled', false)
   const [scheduledTime, setScheduledTime] = useFormField<string>('schedule.time', '')
   const [_timezone, setTimezone] = useFormField<string>('schedule.timezone', 'America/Chicago')
   const [notifyEmail, setNotifyEmail] = useFormField<string>('schedule.email', '')
 
-  const [selectedConfigId, setSelectedConfigId] = useFormField<string>(`astConfig.${astName}.selectedId`, '')
-  const [configurationName, setConfigurationName] = useFormField<string>(`astConfig.${astName}.configurationName`, '')
+  const [selectedConfigId, setSelectedConfigId] = useFormField<string>(
+    `astConfig.${astName}.selectedId`,
+    '',
+  )
+  const [configurationName, setConfigurationName] = useFormField<string>(
+    `astConfig.${astName}.configurationName`,
+    '',
+  )
   const [oc, setOc] = useFormField<string>(`astConfig.${astName}.oc`, '')
-  const [visibility, setVisibility] = useFormField<AstConfigVisibility>(`astConfig.${astName}.visibility`, 'private')
+  const [visibility, setVisibility] = useFormField<AstConfigVisibility>(
+    `astConfig.${astName}.visibility`,
+    'private',
+  )
 
   const supportsMultiTask = Boolean(renderTaskInputs && getDefaultTaskParams)
   const [multiTask, setMultiTask] = useFormField<boolean>(`astConfig.${astName}.multiTask`, false)
@@ -123,11 +133,15 @@ export function ASTFormWrapper({
     if (!autoLauncherRun) return null
     const running = autoLauncherRun.steps.find((s) => s.status === 'running')
     if (running) return running
-    const idx = Math.max(0, autoLauncherRun.nextStepIndex > 0 ? autoLauncherRun.nextStepIndex - 1 : 0)
+    const idx = Math.max(
+      0,
+      autoLauncherRun.nextStepIndex > 0 ? autoLauncherRun.nextStepIndex - 1 : 0,
+    )
     return autoLauncherRun.steps[idx] ?? null
   }, [autoLauncherRun])
 
-  const isCredentialsValid = credentials.username.trim().length > 0 && credentials.password.trim().length > 0
+  const isCredentialsValid =
+    credentials.username.trim().length > 0 && credentials.password.trim().length > 0
   const isConfigMetaValid = configurationName.trim().length > 0 && isOcCode(oc)
   const hasLogs = statusMessages.length > 0 || itemResults.length > 0
   const showMultiTaskProgress = isMultiTaskRun && autoLauncherRun !== null
@@ -149,11 +163,14 @@ export function ASTFormWrapper({
         const items = await listAstConfigs(astName, scope)
         if (!cancelled) setConfigs(items)
       } catch (err) {
-        if (!cancelled) setConfigError(err instanceof Error ? err.message : 'Failed to load configs')
+        if (!cancelled)
+          setConfigError(err instanceof Error ? err.message : 'Failed to load configs')
       }
     }
     void load()
-    return () => { cancelled = true }
+    return () => {
+      cancelled = true
+    }
   }, [astName])
 
   function handleSetUsername(username: string) {
@@ -316,10 +333,16 @@ export function ASTFormWrapper({
   }
 
   const primaryActionLabel = isMultiTaskActive
-    ? isUpdatingExisting ? 'Update and Run All' : 'Save and Run All'
+    ? isUpdatingExisting
+      ? 'Update and Run All'
+      : 'Save and Run All'
     : scheduleMode
-      ? isUpdatingExisting ? 'Update and Schedule' : 'Save and Schedule'
-      : isUpdatingExisting ? 'Update and Run' : 'Save and Run'
+      ? isUpdatingExisting
+        ? 'Update and Schedule'
+        : 'Save and Schedule'
+      : isUpdatingExisting
+        ? 'Update and Run'
+        : 'Save and Run'
 
   async function handleSaveOnly() {
     try {
@@ -394,10 +417,12 @@ export function ASTFormWrapper({
       const saved = await saveConfig()
 
       useASTStore.getState().clearLogs(activeTabId)
-      useASTStore.getState().addStatusMessage(
-        activeTabId,
-        `Starting multi-task run: ${saved.configurationName} (${String(tasks.length)} tasks)`,
-      )
+      useASTStore
+        .getState()
+        .addStatusMessage(
+          activeTabId,
+          `Starting multi-task run: ${saved.configurationName} (${String(tasks.length)} tasks)`,
+        )
 
       const result = await runAstConfig(astName, saved.configId, {
         username: credentials.username,
@@ -430,10 +455,12 @@ export function ASTFormWrapper({
         displayName: saved.configurationName,
       })
 
-      useASTStore.getState().addStatusMessage(
-        activeTabId,
-        `Multi-task run kicked off (runId=${result.runId}). Terminal will process tasks sequentially.`,
-      )
+      useASTStore
+        .getState()
+        .addStatusMessage(
+          activeTabId,
+          `Multi-task run kicked off (runId=${result.runId}). Terminal will process tasks sequentially.`,
+        )
 
       setConfigSuccess(`Running ${String(result.taskCount)} task(s) sequentially`)
     } catch (err) {
@@ -450,7 +477,19 @@ export function ASTFormWrapper({
       footer={
         <div className="flex flex-col gap-1">
           <div className="flex items-center gap-2">
-            <StatusBadge status={status as 'idle' | 'running' | 'paused' | 'success' | 'failed' | 'timeout' | 'cancelled'} />
+            <StatusBadge
+              status={
+                status as
+                  | 'idle'
+                  | 'running'
+                  | 'paused'
+                  | 'completed'
+                  | 'success'
+                  | 'failed'
+                  | 'timeout'
+                  | 'cancelled'
+              }
+            />
             {lastResult?.duration && !isRunning && (
               <span className="text-xs text-gray-400 dark:text-zinc-500">
                 {lastResult.duration.toFixed(1)}s
@@ -458,7 +497,9 @@ export function ASTFormWrapper({
             )}
           </div>
           {lastResult?.message && !isRunning && (
-            <p className="text-xs text-gray-600 dark:text-zinc-400 break-words">{lastResult.message}</p>
+            <p className="text-xs text-gray-600 dark:text-zinc-400 break-words">
+              {lastResult.message}
+            </p>
           )}
         </div>
       }
@@ -480,7 +521,10 @@ export function ASTFormWrapper({
                     disabled={isRunning || isScheduling || isSavingConfig || isDeletingConfig}
                     onChange={(id) => {
                       setShowDeleteConfirm(false)
-                      if (!id) { clearConfigSelection(); return }
+                      if (!id) {
+                        clearConfigSelection()
+                        return
+                      }
                       const found = configs.find((c) => c.configId === id)
                       if (found) applyConfigSelection(found)
                     }}
@@ -496,18 +540,46 @@ export function ASTFormWrapper({
                       className="p-2 rounded cursor-pointer text-zinc-400 hover:text-red-500 hover:bg-red-500/10 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                       onClick={() => setShowDeleteConfirm((v) => !v)}
                     >
-                      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4">
-                        <path fillRule="evenodd" d="M8.75 1A2.75 2.75 0 006 3.75v.443c-.795.077-1.584.176-2.365.298a.75.75 0 10.23 1.482l.149-.022.841 10.518A2.75 2.75 0 007.596 19h4.807a2.75 2.75 0 002.742-2.53l.841-10.519.149.023a.75.75 0 00.23-1.482A41.03 41.03 0 0014 4.193V3.75A2.75 2.75 0 0011.25 1h-2.5zM10 4c.84 0 1.673.025 2.5.075V3.75c0-.69-.56-1.25-1.25-1.25h-2.5c-.69 0-1.25.56-1.25 1.25v.325C8.327 4.025 9.16 4 10 4zM8.58 7.72a.75.75 0 00-1.5.06l.3 7.5a.75.75 0 101.5-.06l-.3-7.5zm4.34.06a.75.75 0 10-1.5-.06l-.3 7.5a.75.75 0 101.5.06l.3-7.5z" clipRule="evenodd" />
+                      <svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        viewBox="0 0 20 20"
+                        fill="currentColor"
+                        className="w-4 h-4"
+                      >
+                        <path
+                          fillRule="evenodd"
+                          d="M8.75 1A2.75 2.75 0 006 3.75v.443c-.795.077-1.584.176-2.365.298a.75.75 0 10.23 1.482l.149-.022.841 10.518A2.75 2.75 0 007.596 19h4.807a2.75 2.75 0 002.742-2.53l.841-10.519.149.023a.75.75 0 00.23-1.482A41.03 41.03 0 0014 4.193V3.75A2.75 2.75 0 0011.25 1h-2.5zM10 4c.84 0 1.673.025 2.5.075V3.75c0-.69-.56-1.25-1.25-1.25h-2.5c-.69 0-1.25.56-1.25 1.25v.325C8.327 4.025 9.16 4 10 4zM8.58 7.72a.75.75 0 00-1.5.06l.3 7.5a.75.75 0 101.5-.06l-.3-7.5zm4.34.06a.75.75 0 10-1.5-.06l-.3 7.5a.75.75 0 101.5.06l.3-7.5z"
+                          clipRule="evenodd"
+                        />
                       </svg>
                     </button>
                     {showDeleteConfirm && (
                       <div className="absolute right-0 top-full mt-1 z-20 w-64 p-3 rounded-lg border border-red-200 dark:border-red-800/60 bg-white dark:bg-zinc-800 shadow-lg">
                         <p className="text-xs text-gray-700 dark:text-zinc-300 mb-2">
-                          Delete <strong className="text-gray-900 dark:text-zinc-100">{selectedConfig!.configurationName}</strong>? This cannot be undone.
+                          Delete{' '}
+                          <strong className="text-gray-900 dark:text-zinc-100">
+                            {selectedConfig!.configurationName}
+                          </strong>
+                          ? This cannot be undone.
                         </p>
                         <div className="flex gap-2 justify-end">
-                          <Button type="button" variant="secondary" size="sm" onClick={() => setShowDeleteConfirm(false)}>Cancel</Button>
-                          <Button type="button" variant="danger" size="sm" isLoading={isDeletingConfig} onClick={() => void handleDeleteConfig()}>Delete</Button>
+                          <Button
+                            type="button"
+                            variant="secondary"
+                            size="sm"
+                            onClick={() => setShowDeleteConfirm(false)}
+                          >
+                            Cancel
+                          </Button>
+                          <Button
+                            type="button"
+                            variant="danger"
+                            size="sm"
+                            isLoading={isDeletingConfig}
+                            onClick={() => void handleDeleteConfig()}
+                          >
+                            Delete
+                          </Button>
                         </div>
                       </div>
                     )}
@@ -543,7 +615,9 @@ export function ASTFormWrapper({
                 required
               />
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-zinc-300 mb-1">OC</label>
+                <label className="block text-sm font-medium text-gray-700 dark:text-zinc-300 mb-1">
+                  OC
+                </label>
                 <OcSelector
                   value={oc}
                   onChange={setOc}
@@ -574,7 +648,9 @@ export function ASTFormWrapper({
                 label="Multi-Task Mode"
                 description="Run the same AST multiple times with different parameters"
                 checked={multiTask}
-                onChange={(e: React.ChangeEvent<HTMLInputElement>) => setMultiTask(e.target.checked)}
+                onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+                  setMultiTask(e.target.checked)
+                }
                 disabled={isRunning || isScheduling || isRunningMultiTask}
               />
             )}
@@ -582,21 +658,27 @@ export function ASTFormWrapper({
               label="Public Config"
               description="Public configs can be used by others but not edited"
               checked={visibility === 'public'}
-              onChange={(e: React.ChangeEvent<HTMLInputElement>) => setVisibility(e.target.checked ? 'public' : 'private')}
+              onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+                setVisibility(e.target.checked ? 'public' : 'private')
+              }
               disabled={isRunning || isScheduling || isSavingConfig}
             />
             <Toggle
               label="Schedule for Later"
               description="Run this automation at a specific time"
               checked={scheduleMode}
-              onChange={(e: React.ChangeEvent<HTMLInputElement>) => setScheduleMode(e.target.checked)}
+              onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+                setScheduleMode(e.target.checked)
+              }
               disabled={isRunning || isScheduling || isMultiTaskActive}
             />
             <Toggle
               label="Test Mode"
               description="Run without making actual changes"
               checked={formOptions.testMode}
-              onChange={(e: React.ChangeEvent<HTMLInputElement>) => handleSetTestMode(e.target.checked)}
+              onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+                handleSetTestMode(e.target.checked)
+              }
               disabled={isRunning || isScheduling}
             />
             {showParallel && (
@@ -604,7 +686,9 @@ export function ASTFormWrapper({
                 label="Parallel Processing"
                 description="Process items concurrently (faster but uses more resources)"
                 checked={formOptions.parallel}
-                onChange={(e: React.ChangeEvent<HTMLInputElement>) => handleSetParallel(e.target.checked)}
+                onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+                  handleSetParallel(e.target.checked)
+                }
                 disabled={isRunning || isScheduling}
               />
             )}
@@ -665,7 +749,15 @@ export function ASTFormWrapper({
               </div>
               {!autoLauncherIsRunning && activeTabId ? (
                 <div className="mt-2">
-                  <Button type="button" variant="secondary" size="sm" onClick={() => { clearLogs(); clearAutoLauncherRun(activeTabId) }}>
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    size="sm"
+                    onClick={() => {
+                      clearLogs()
+                      clearAutoLauncherRun(activeTabId)
+                    }}
+                  >
                     Clear AutoLauncher Output
                   </Button>
                 </div>
@@ -693,17 +785,26 @@ export function ASTFormWrapper({
                 size="md"
                 className="flex-1"
                 isLoading={isRunning || isScheduling || isSavingConfig || isRunningMultiTask}
-                disabled={!isConfigMetaValid || !isCredentialsValid || isRunning || isScheduling || isRunningMultiTask}
+                disabled={
+                  !isConfigMetaValid ||
+                  !isCredentialsValid ||
+                  isRunning ||
+                  isScheduling ||
+                  isRunningMultiTask
+                }
                 onClick={() => {
                   if (isMultiTaskActive) void handleSaveAndRunAll()
                   else if (scheduleMode) void handleSchedule()
                   else void handleSaveAndRun()
                 }}
               >
-                {isRunningMultiTask ? 'Submitting...'
-                  : isScheduling ? 'Scheduling...'
-                  : isRunning ? 'Processing...'
-                  : primaryActionLabel}
+                {isRunningMultiTask
+                  ? 'Submitting...'
+                  : isScheduling
+                    ? 'Scheduling...'
+                    : isRunning
+                      ? 'Processing...'
+                      : primaryActionLabel}
               </Button>
             </div>
             {configSuccess && (
@@ -728,20 +829,32 @@ export function ASTFormWrapper({
                   </div>
                   <div className="flex items-center gap-2">
                     {!autoLauncherIsRunning && activeTabId && (
-                      <Button type="button" variant="danger-outline" size="sm" onClick={() => { clearLogs(); clearAutoLauncherRun(activeTabId) }}>
+                      <Button
+                        type="button"
+                        variant="danger-outline"
+                        size="sm"
+                        onClick={() => {
+                          clearLogs()
+                          clearAutoLauncherRun(activeTabId)
+                        }}
+                      >
                         Clear Results
                       </Button>
                     )}
-                    <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${
-                      autoLauncherRun.status === 'running'
-                        ? 'text-blue-700 bg-blue-100 dark:text-blue-300 dark:bg-blue-900/40'
-                        : autoLauncherRun.status === 'completed'
-                          ? 'text-green-700 bg-green-100 dark:text-green-300 dark:bg-green-900/40'
-                          : 'text-red-700 bg-red-100 dark:text-red-300 dark:bg-red-900/40'
-                    }`}>
-                      {autoLauncherRun.status === 'completed' ? 'All tasks complete'
-                        : autoLauncherRun.status === 'failed' ? 'Failed'
-                        : `Running task ${String(autoLauncherRun.steps.filter((s) => s.status === 'success' || s.status === 'failed').length + 1)} of ${String(autoLauncherRun.steps.length)}`}
+                    <span
+                      className={`text-xs font-medium px-2 py-0.5 rounded-full ${
+                        autoLauncherRun.status === 'running'
+                          ? 'text-blue-700 bg-blue-100 dark:text-blue-300 dark:bg-blue-900/40'
+                          : autoLauncherRun.status === 'completed'
+                            ? 'text-green-700 bg-green-100 dark:text-green-300 dark:bg-green-900/40'
+                            : 'text-red-700 bg-red-100 dark:text-red-300 dark:bg-red-900/40'
+                      }`}
+                    >
+                      {autoLauncherRun.status === 'completed'
+                        ? 'All tasks complete'
+                        : autoLauncherRun.status === 'failed'
+                          ? 'Failed'
+                          : `Running task ${String(autoLauncherRun.steps.filter((s) => s.status === 'success' || s.status === 'failed').length + 1)} of ${String(autoLauncherRun.steps.length)}`}
                     </span>
                   </div>
                 </div>
@@ -750,28 +863,43 @@ export function ASTFormWrapper({
                     <div
                       key={`${String(step.order)}-${String(idx)}`}
                       className={`flex items-center gap-2 px-2 py-1.5 rounded text-xs ${
-                        step.status === 'running' ? 'bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800'
-                        : step.status === 'success' ? 'bg-green-50 dark:bg-green-900/10'
-                        : step.status === 'failed' ? 'bg-red-50 dark:bg-red-900/10'
-                        : 'bg-transparent'
+                        step.status === 'running'
+                          ? 'bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800'
+                          : step.status === 'success'
+                            ? 'bg-green-50 dark:bg-green-900/10'
+                            : step.status === 'failed'
+                              ? 'bg-red-50 dark:bg-red-900/10'
+                              : 'bg-transparent'
                       }`}
                     >
                       <span className="shrink-0 w-4 text-center">
-                        {step.status === 'running' ? <span className="inline-block w-2 h-2 rounded-full bg-blue-500 animate-pulse" />
-                        : step.status === 'success' ? <span className="text-green-600 dark:text-green-400">&#10003;</span>
-                        : step.status === 'failed' ? <span className="text-red-600 dark:text-red-400">&#10007;</span>
-                        : <span className="inline-block w-2 h-2 rounded-full bg-gray-300 dark:bg-zinc-600" />}
+                        {step.status === 'running' ? (
+                          <span className="inline-block w-2 h-2 rounded-full bg-blue-500 animate-pulse" />
+                        ) : step.status === 'success' ? (
+                          <span className="text-green-600 dark:text-green-400">&#10003;</span>
+                        ) : step.status === 'failed' ? (
+                          <span className="text-red-600 dark:text-red-400">&#10007;</span>
+                        ) : (
+                          <span className="inline-block w-2 h-2 rounded-full bg-gray-300 dark:bg-zinc-600" />
+                        )}
                       </span>
-                      <span className={`font-medium ${
-                        step.status === 'running' ? 'text-blue-800 dark:text-blue-200'
-                        : step.status === 'success' ? 'text-green-800 dark:text-green-300'
-                        : step.status === 'failed' ? 'text-red-800 dark:text-red-300'
-                        : 'text-gray-600 dark:text-zinc-400'
-                      }`}>
+                      <span
+                        className={`font-medium ${
+                          step.status === 'running'
+                            ? 'text-blue-800 dark:text-blue-200'
+                            : step.status === 'success'
+                              ? 'text-green-800 dark:text-green-300'
+                              : step.status === 'failed'
+                                ? 'text-red-800 dark:text-red-300'
+                                : 'text-gray-600 dark:text-zinc-400'
+                        }`}
+                      >
                         Task {String(idx + 1)}
                       </span>
                       {step.error && (
-                        <span className="text-red-600 dark:text-red-400 truncate ml-1">— {step.error}</span>
+                        <span className="text-red-600 dark:text-red-400 truncate ml-1">
+                          — {step.error}
+                        </span>
                       )}
                     </div>
                   ))}
@@ -791,7 +919,25 @@ export function ASTFormWrapper({
               {itemResults.length > 0 && (
                 <div>
                   <h4 className="text-xs font-medium text-zinc-500 mb-1">Results</h4>
-                  <ItemResultList items={itemResults.map((r) => ({ itemId: r.policyNumber || r.id, status: r.status === 'failure' ? 'failed' : r.status === 'error' ? 'failed' : r.status as 'success' | 'failed' | 'skipped' | 'pending' | 'running', durationMs: r.durationMs, error: r.error }))} maxHeight="250px" />
+                  <ItemResultList
+                    items={itemResults.map((r) => ({
+                      itemId: r.policyNumber || r.id,
+                      status:
+                        r.status === 'failure'
+                          ? 'failed'
+                          : r.status === 'error'
+                            ? 'failed'
+                            : (r.status as
+                                | 'success'
+                                | 'failed'
+                                | 'skipped'
+                                | 'pending'
+                                | 'running'),
+                      durationMs: r.durationMs,
+                      error: r.error,
+                    }))}
+                    maxHeight="250px"
+                  />
                 </div>
               )}
             </div>
@@ -815,7 +961,20 @@ export function ASTFormWrapper({
             {itemResults.length > 0 && (
               <div>
                 <h4 className="text-xs font-medium text-zinc-500 mb-1">Results</h4>
-                <ItemResultList items={itemResults.map((r) => ({ itemId: r.policyNumber || r.id, status: r.status === 'failure' ? 'failed' : r.status === 'error' ? 'failed' : r.status as 'success' | 'failed' | 'skipped' | 'pending' | 'running', durationMs: r.durationMs, error: r.error }))} maxHeight="250px" />
+                <ItemResultList
+                  items={itemResults.map((r) => ({
+                    itemId: r.policyNumber || r.id,
+                    status:
+                      r.status === 'failure'
+                        ? 'failed'
+                        : r.status === 'error'
+                          ? 'failed'
+                          : (r.status as 'success' | 'failed' | 'skipped' | 'pending' | 'running'),
+                    durationMs: r.durationMs,
+                    error: r.error,
+                  }))}
+                  maxHeight="250px"
+                />
               </div>
             )}
           </div>

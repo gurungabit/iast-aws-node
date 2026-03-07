@@ -97,6 +97,16 @@ describe('useASTStore', () => {
       expect(tab.runningAST).toBe('login')
       expect(tab.itemResults).toEqual([])
     })
+
+    it('records startedAt timestamp', () => {
+      act(() => {
+        useASTStore.getState().initTab('tab-1')
+        useASTStore.getState().executeAST('tab-1', 'login')
+      })
+      const tab = useASTStore.getState().tabs['tab-1']
+      expect(tab.startedAt).toBeTypeOf('number')
+      expect(tab.startedAt).toBeGreaterThan(0)
+    })
   })
 
   describe('handleASTStatus', () => {
@@ -177,6 +187,32 @@ describe('useASTStore', () => {
       })
       const tab = useASTStore.getState().tabs['tab-1']
       expect(tab.status).toBe('failed')
+    })
+
+    it('computes duration from startedAt', () => {
+      act(() => {
+        useASTStore.getState().initTab('tab-1')
+        useASTStore.getState().executeAST('tab-1', 'login')
+      })
+      // Simulate some elapsed time
+      act(() => {
+        useASTStore.getState().handleASTComplete('tab-1', { status: 'completed' })
+      })
+      const tab = useASTStore.getState().tabs['tab-1']
+      expect(tab.lastResult).toBeDefined()
+      expect(tab.lastResult!.duration).toBeTypeOf('number')
+      expect(tab.lastResult!.duration).toBeGreaterThanOrEqual(0)
+      expect(tab.startedAt).toBeNull()
+    })
+
+    it('preserves explicit duration over computed one', () => {
+      act(() => {
+        useASTStore.getState().initTab('tab-1')
+        useASTStore.getState().executeAST('tab-1', 'login')
+        useASTStore.getState().handleASTComplete('tab-1', { status: 'completed', duration: 42.5 })
+      })
+      const tab = useASTStore.getState().tabs['tab-1']
+      expect(tab.lastResult!.duration).toBe(42.5)
     })
   })
 

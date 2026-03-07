@@ -62,10 +62,13 @@ const SMB2_0_IOCTL_IS_FSCTL = 0x00000001
 
 let messageIdCounter = 0n
 
-function buildSmb2Header(command: number, opts: {
-  sessionId?: bigint
-  treeId?: number
-} = {}): Buffer {
+function buildSmb2Header(
+  command: number,
+  opts: {
+    sessionId?: bigint
+    treeId?: number
+  } = {},
+): Buffer {
   const hdr = Buffer.alloc(SMB2_HEADER_SIZE)
   SMB2_MAGIC.copy(hdr, 0)
   hdr.writeUInt16LE(SMB2_HEADER_SIZE, 4) // StructureSize
@@ -161,7 +164,11 @@ class Smb2Transport {
   private pendingReject: ((err: Error) => void) | null = null
   private closed = false
 
-  constructor(private host: string, private port: number, private timeout: number) {
+  constructor(
+    private host: string,
+    private port: number,
+    private timeout: number,
+  ) {
     this.socket = new Socket()
     this.socket.on('data', (chunk: Buffer) => this.onData(chunk))
     this.socket.on('error', (err) => {
@@ -228,8 +235,14 @@ class Smb2Transport {
         reject(new Error(`Request timeout (${this.timeout}ms)`))
       }, this.timeout)
 
-      this.pendingResolve = (pkt) => { clearTimeout(timer); resolve(pkt) }
-      this.pendingReject = (err) => { clearTimeout(timer); reject(err) }
+      this.pendingResolve = (pkt) => {
+        clearTimeout(timer)
+        resolve(pkt)
+      }
+      this.pendingReject = (err) => {
+        clearTimeout(timer)
+        reject(err)
+      }
       this.socket.write(data)
 
       this.tryDeliver()
@@ -238,7 +251,11 @@ class Smb2Transport {
 
   close() {
     this.closed = true
-    try { this.socket.destroy() } catch {}
+    try {
+      this.socket.destroy()
+    } catch {
+      /* socket already destroyed */
+    }
   }
 }
 
@@ -271,7 +288,9 @@ async function connectAndAuth(
   // Session Setup 1 (NTLM Type 1)
   const type1Raw = createType1()
   const ss1Resp = await unsignedSend(
-    transport, SMB2_SESSION_SETUP, buildSessionSetupBody(wrapSpnegoInit(type1Raw)),
+    transport,
+    SMB2_SESSION_SETUP,
+    buildSessionSetupBody(wrapSpnegoInit(type1Raw)),
   )
   assertStatus(ss1Resp, 'SessionSetup1', [STATUS_MORE_PROCESSING_REQUIRED])
 
@@ -282,10 +301,16 @@ async function connectAndAuth(
 
   // Session Setup 2 (NTLM Type 3 with MIC)
   const { type3, sessionBaseKey } = createType3(
-    type1Raw, type2Info, username, password, serverDomain,
+    type1Raw,
+    type2Info,
+    username,
+    password,
+    serverDomain,
   )
   const ss2Resp = await unsignedSend(
-    transport, SMB2_SESSION_SETUP, buildSessionSetupBody(wrapSpnegoAuth(type3)),
+    transport,
+    SMB2_SESSION_SETUP,
+    buildSessionSetupBody(wrapSpnegoAuth(type3)),
     { sessionId },
   )
   assertStatus(ss2Resp, 'SessionSetup2', [STATUS_SUCCESS])
@@ -313,10 +338,10 @@ async function tryDfsReferral(
   dfsPath: string,
 ): Promise<DfsTarget | null> {
   const ioctlBody = buildIoctlDfsBody(dfsPath)
-  const ioctlResp = await signedSend(
-    transport, SMB2_IOCTL, ioctlBody,
-    signingKey, { sessionId, treeId: ipcTreeId },
-  )
+  const ioctlResp = await signedSend(transport, SMB2_IOCTL, ioctlBody, signingKey, {
+    sessionId,
+    treeId: ipcTreeId,
+  })
 
   if (ioctlResp.status !== STATUS_SUCCESS) {
     return null
@@ -355,8 +380,11 @@ async function resolveDfs(
   // Connect to IPC$ once
   const ipcPath = `\\\\${host}\\IPC$`
   const ipcResp = await signedSend(
-    transport, SMB2_TREE_CONNECT, buildTreeConnectBody(ipcPath),
-    signingKey, { sessionId },
+    transport,
+    SMB2_TREE_CONNECT,
+    buildTreeConnectBody(ipcPath),
+    signingKey,
+    { sessionId },
   )
   assertStatus(ipcResp, 'TreeConnect(IPC$)', [STATUS_SUCCESS])
   const ipcTreeId = ipcResp.treeId
@@ -388,7 +416,9 @@ async function resolveDfs(
   }
 
   if (!target) {
-    throw new Error(`DFS referral resolution failed for \\\\${host}\\${share}\\${filePathBs} (tried ${pathsToTry.length} paths)`)
+    throw new Error(
+      `DFS referral resolution failed for \\\\${host}\\${share}\\${filePathBs} (tried ${pathsToTry.length} paths)`,
+    )
   }
 
   // Compute the file path on the target share:
@@ -413,8 +443,11 @@ async function resolveDfs(
     // Connect to IPC$ on namespace server
     const nsIpcPath = `\\\\${rootTarget.server}\\IPC$`
     const nsIpcResp = await signedSend(
-      transport, SMB2_TREE_CONNECT, buildTreeConnectBody(nsIpcPath),
-      signingKey, { sessionId },
+      transport,
+      SMB2_TREE_CONNECT,
+      buildTreeConnectBody(nsIpcPath),
+      signingKey,
+      { sessionId },
     )
     assertStatus(nsIpcResp, 'TreeConnect(IPC$ on namespace)', [STATUS_SUCCESS])
     const nsIpcTreeId = nsIpcResp.treeId
@@ -438,7 +471,14 @@ async function resolveDfs(
       // If link target is a different server, reconnect
       if (linkTarget.server.toLowerCase() !== rootTarget.server.toLowerCase()) {
         transport.close()
-        const lt = await connectAndAuth(linkTarget.server, port, timeout, domain, username, password)
+        const lt = await connectAndAuth(
+          linkTarget.server,
+          port,
+          timeout,
+          domain,
+          username,
+          password,
+        )
         transport = lt.transport
         sessionId = lt.sessionId
         signingKey = lt.signingKey
@@ -452,8 +492,11 @@ async function resolveDfs(
   // TreeConnect to target share
   const targetSharePath = `\\\\${target.server}\\${target.share}`
   const treeResp = await signedSend(
-    transport, SMB2_TREE_CONNECT, buildTreeConnectBody(targetSharePath),
-    signingKey, { sessionId },
+    transport,
+    SMB2_TREE_CONNECT,
+    buildTreeConnectBody(targetSharePath),
+    signingKey,
+    { sessionId },
   )
   assertStatus(treeResp, `TreeConnect(${targetSharePath})`, [STATUS_SUCCESS])
 
@@ -495,7 +538,9 @@ function parseDfsReferralResponse(body: Buffer): DfsTarget {
   const outputCount = body.readUInt32LE(36)
 
   if (outputOffset < 0 || outputOffset + outputCount > body.length) {
-    throw new Error(`IOCTL output bounds invalid: offset=${outputOffset}, count=${outputCount}, bodyLen=${body.length}`)
+    throw new Error(
+      `IOCTL output bounds invalid: offset=${outputOffset}, count=${outputCount}, bodyLen=${body.length}`,
+    )
   }
 
   const output = body.subarray(outputOffset, outputOffset + outputCount)
@@ -512,12 +557,13 @@ function parseDfsReferralResponse(body: Buffer): DfsTarget {
   if (entryStart + 4 > output.length) throw new Error('Referral entry header truncated')
 
   const version = output.readUInt16LE(entryStart)
-  const entrySize = output.readUInt16LE(entryStart + 2)
+  const _entrySize = output.readUInt16LE(entryStart + 2)
 
   let networkAddress: string
 
   if (version === 3 || version === 4) {
-    if (entryStart + 20 > output.length) throw new Error(`V${version} referral entry truncated (need 20 bytes)`)
+    if (entryStart + 20 > output.length)
+      throw new Error(`V${version} referral entry truncated (need 20 bytes)`)
     const entryFlags = output.readUInt16LE(entryStart + 6)
     if (entryFlags & 0x0002) {
       // NameListReferral — use SpecialName
@@ -573,15 +619,23 @@ export async function readFile(config: Smb2ClientConfig, filePath: string): Prom
   const timeout = config.timeout ?? 30_000
 
   let { transport, sessionId, signingKey } = await connectAndAuth(
-    config.host, port, timeout, config.domain, config.username, config.password,
+    config.host,
+    port,
+    timeout,
+    config.domain,
+    config.username,
+    config.password,
   )
 
   try {
     // Try TreeConnect to the requested share
     const sharePath = `\\\\${config.host}\\${config.share}`
     const treeResp = await signedSend(
-      transport, SMB2_TREE_CONNECT, buildTreeConnectBody(sharePath),
-      signingKey, { sessionId },
+      transport,
+      SMB2_TREE_CONNECT,
+      buildTreeConnectBody(sharePath),
+      signingKey,
+      { sessionId },
     )
 
     let treeId: number
@@ -590,9 +644,17 @@ export async function readFile(config: Smb2ClientConfig, filePath: string): Prom
     if (treeResp.status === STATUS_BAD_NETWORK_NAME) {
       // DFS namespace — resolve via multi-level referral
       const dfs = await resolveDfs(
-        transport, sessionId, signingKey,
-        config.host, config.share, filePath,
-        port, timeout, config.domain, config.username, config.password,
+        transport,
+        sessionId,
+        signingKey,
+        config.host,
+        config.share,
+        filePath,
+        port,
+        timeout,
+        config.domain,
+        config.username,
+        config.password,
       )
       transport = dfs.transport
       sessionId = dfs.sessionId
@@ -607,10 +669,10 @@ export async function readFile(config: Smb2ClientConfig, filePath: string): Prom
     // ── Create (open file) ──
     const normalizedPath = actualFilePath.replace(/\//g, '\\').replace(/^\\+/, '')
     const createBody = buildCreateBody(normalizedPath)
-    const createResp = await signedSend(
-      transport, SMB2_CREATE, createBody,
-      signingKey, { sessionId, treeId },
-    )
+    const createResp = await signedSend(transport, SMB2_CREATE, createBody, signingKey, {
+      sessionId,
+      treeId,
+    })
     assertStatus(createResp, `Create(${normalizedPath})`, [STATUS_SUCCESS])
 
     const fileId = Buffer.from(createResp.body.subarray(64, 80))
@@ -625,10 +687,10 @@ export async function readFile(config: Smb2ClientConfig, filePath: string): Prom
     while (readOffset < fileSize) {
       const readLen = Math.min(maxReadSize, fileSize - readOffset)
       const readBody = buildReadBody(fileId, readOffset, readLen)
-      const readResp = await signedSend(
-        transport, SMB2_READ, readBody,
-        signingKey, { sessionId, treeId },
-      )
+      const readResp = await signedSend(transport, SMB2_READ, readBody, signingKey, {
+        sessionId,
+        treeId,
+      })
       assertStatus(readResp, `Read(offset=${readOffset})`, [STATUS_SUCCESS])
 
       const dataOffset = readResp.body.readUInt8(2) - SMB2_HEADER_SIZE
@@ -640,7 +702,9 @@ export async function readFile(config: Smb2ClientConfig, filePath: string): Prom
       if (currentMb > lastProgressMb) {
         lastProgressMb = currentMb
         const pct = ((readOffset / fileSize) * 100).toFixed(1)
-        console.log(`[SMB2] Download: ${(readOffset / 1024 / 1024).toFixed(1)} / ${(fileSize / 1024 / 1024).toFixed(1)} MB (${pct}%)`)
+        console.log(
+          `[SMB2] Download: ${(readOffset / 1024 / 1024).toFixed(1)} / ${(fileSize / 1024 / 1024).toFixed(1)} MB (${pct}%)`,
+        )
       }
     }
 

@@ -47,8 +47,8 @@ describe('ProgressReporter', () => {
       // Add an item so flush has something to send
       reporter.addItem(createItemResult('1'))
 
-      // Advance past the flush interval (200ms)
-      vi.advanceTimersByTime(200)
+      // Advance past the flush interval (300ms)
+      vi.advanceTimersByTime(300)
 
       // flush should have been called and sent the item
       expect(port.postMessage).toHaveBeenCalledWith(
@@ -65,25 +65,25 @@ describe('ProgressReporter', () => {
 
       reporter.addItem(createItemResult('1'))
 
-      // No message sent yet (batch size = 50, only 1 item)
+      // No message sent yet (batch size = 500, only 1 item)
       expect(port.postMessage).not.toHaveBeenCalled()
       reporter.dispose()
     })
 
-    it('flushes automatically when batch size (50) is reached', () => {
+    it('flushes automatically when batch size (500) is reached', () => {
       const port = createMockPort()
       const reporter = new ProgressReporter('exe_123', port)
 
-      for (let i = 0; i < 50; i++) {
+      for (let i = 0; i < 500; i++) {
         reporter.addItem(createItemResult(String(i)))
       }
 
-      // Should have flushed once (at 50 items)
+      // Should have flushed once (at 500 items)
       expect(port.postMessage).toHaveBeenCalledTimes(1)
       const msg = vi.mocked(port.postMessage).mock.calls[0][0]
       expect(msg.type).toBe('ast.item_result_batch')
       expect(msg.executionId).toBe('exe_123')
-      expect(msg.items).toHaveLength(50)
+      expect(msg.items).toHaveLength(500)
       reporter.dispose()
     })
 
@@ -91,14 +91,14 @@ describe('ProgressReporter', () => {
       const port = createMockPort()
       const reporter = new ProgressReporter('exe_123', port)
 
-      for (let i = 0; i < 120; i++) {
+      for (let i = 0; i < 1200; i++) {
         reporter.addItem(createItemResult(String(i)))
       }
 
-      // 120 items -> 2 flushes at 50, 20 remaining in buffer
+      // 1200 items -> 2 flushes at 500, 200 remaining in buffer
       expect(port.postMessage).toHaveBeenCalledTimes(2)
-      expect(vi.mocked(port.postMessage).mock.calls[0][0].items).toHaveLength(50)
-      expect(vi.mocked(port.postMessage).mock.calls[1][0].items).toHaveLength(50)
+      expect(vi.mocked(port.postMessage).mock.calls[0][0].items).toHaveLength(500)
+      expect(vi.mocked(port.postMessage).mock.calls[1][0].items).toHaveLength(500)
       reporter.dispose()
     })
   })
@@ -323,18 +323,18 @@ describe('ProgressReporter', () => {
   })
 
   describe('periodic flush via timer', () => {
-    it('flushes buffer every 200ms via setInterval', () => {
+    it('flushes buffer every 300ms via setInterval', () => {
       const port = createMockPort()
       const reporter = new ProgressReporter('exe_123', port)
 
       reporter.addItem(createItemResult('1'))
-      vi.advanceTimersByTime(200)
+      vi.advanceTimersByTime(300)
 
       expect(port.postMessage).toHaveBeenCalledTimes(1)
       expect(vi.mocked(port.postMessage).mock.calls[0][0].type).toBe('ast.item_result_batch')
 
       reporter.addItem(createItemResult('2'))
-      vi.advanceTimersByTime(200)
+      vi.advanceTimersByTime(300)
 
       expect(port.postMessage).toHaveBeenCalledTimes(2)
       reporter.dispose()

@@ -1,4 +1,12 @@
-export type ASTStatus = 'idle' | 'running' | 'paused' | 'success' | 'failed' | 'timeout' | 'cancelled'
+export type ASTStatus =
+  | 'idle'
+  | 'running'
+  | 'paused'
+  | 'completed'
+  | 'success'
+  | 'failed'
+  | 'timeout'
+  | 'cancelled'
 
 export interface StatusBadgeProps {
   status: ASTStatus
@@ -17,6 +25,10 @@ const statusConfig: Record<ASTStatus, { label: string; className: string }> = {
   paused: {
     label: 'Paused',
     className: 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400',
+  },
+  completed: {
+    label: 'Completed',
+    className: 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400',
   },
   success: {
     label: 'Success',

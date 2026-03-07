@@ -222,7 +222,7 @@ describe('terminalWsRoutes', () => {
     expect(socket.send).toHaveBeenCalledWith(JSON.stringify({ type: 'connected' }))
   })
 
-  it('persists ast.item_result_batch to execution service', async () => {
+  it('persists ast.item_result_batch to execution service on flush', async () => {
     mockVerifyWsToken.mockResolvedValue({ id: 'user-1', email: 'a@b.com', displayName: 'User', entraId: 'oid' })
 
     const socket = createMockSocket()
@@ -241,6 +241,13 @@ describe('terminalWsRoutes', () => {
       items: [{ id: 'i1', policyNumber: 'POL1', status: 'success', durationMs: 100 }],
     }
     workerMsgHandler(batchMsg)
+
+    // DB writes are buffered — trigger flush via socket close
+    const closeHandler = socket._handlers['close']
+    closeHandler()
+
+    // Wait for any async flush
+    await new Promise((r) => setTimeout(r, 0))
 
     expect(mockExecutionService.batchInsertPolicies).toHaveBeenCalledWith(
       'exec-1',

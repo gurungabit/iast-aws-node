@@ -57,7 +57,9 @@ const VERSION = Buffer.from([0x0a, 0x00, 0x63, 0x45, 0x00, 0x00, 0x00, 0x0f])
 // ── SPNEGO OIDs ──
 
 const OID_SPNEGO = Buffer.from([0x06, 0x06, 0x2b, 0x06, 0x01, 0x05, 0x05, 0x02])
-const OID_NTLMSSP = Buffer.from([0x06, 0x0a, 0x2b, 0x06, 0x01, 0x04, 0x01, 0x82, 0x37, 0x02, 0x02, 0x0a])
+const OID_NTLMSSP = Buffer.from([
+  0x06, 0x0a, 0x2b, 0x06, 0x01, 0x04, 0x01, 0x82, 0x37, 0x02, 0x02, 0x0a,
+])
 
 // ═══════════════════════════════════════════════════════════════
 // ASN.1 DER helpers
@@ -89,10 +91,7 @@ export function wrapSpnegoInit(ntlmToken: Buffer): Buffer {
   // mechToken: [2] OCTET STRING
   const mechToken = asn1Wrap(0xa2, asn1Wrap(0x04, ntlmToken))
   // NegTokenInit: SEQUENCE { [0] mechTypes, [2] mechToken }
-  const negTokenInit = asn1Wrap(0x30, Buffer.concat([
-    asn1Wrap(0xa0, mechTypes),
-    mechToken,
-  ]))
+  const negTokenInit = asn1Wrap(0x30, Buffer.concat([asn1Wrap(0xa0, mechTypes), mechToken]))
   // [0] EXPLICIT NegTokenInit
   const innerApp = asn1Wrap(0xa0, negTokenInit)
   // APPLICATION [0] { OID_SPNEGO, [0] NegTokenInit }
@@ -128,7 +127,10 @@ function bufferIndexOf(haystack: Buffer, needle: Buffer): number {
   for (let i = 0; i <= haystack.length - needle.length; i++) {
     let match = true
     for (let j = 0; j < needle.length; j++) {
-      if (haystack[i + j] !== needle[j]) { match = false; break }
+      if (haystack[i + j] !== needle[j]) {
+        match = false
+        break
+      }
     }
     if (match) return i
   }
@@ -157,7 +159,7 @@ export function createType1(): Buffer {
 
 export interface Type2Info {
   serverChallenge: Buffer
-  targetInfo: Buffer    // raw TargetInfo AV_PAIRs
+  targetInfo: Buffer // raw TargetInfo AV_PAIRs
   flags: number
   /** The exact Type 2 message bytes (for MIC computation — only the NTLM bytes, no SPNEGO) */
   rawType2: Buffer
@@ -194,7 +196,10 @@ export function parseType2(raw: Buffer): Type2Info {
 // TargetInfo processing
 // ═══════════════════════════════════════════════════════════════
 
-interface AvPair { id: number, data: Buffer }
+interface AvPair {
+  id: number
+  data: Buffer
+}
 
 function parseAvPairs(buf: Buffer): AvPair[] {
   const pairs: AvPair[] = []
@@ -229,7 +234,7 @@ function serializeAvPairs(pairs: AvPair[]): Buffer {
  */
 export function getNetBiosDomain(targetInfo: Buffer): string {
   const pairs = parseAvPairs(targetInfo)
-  const nbDomain = pairs.find(p => p.id === MsvAvNbDomainName)
+  const nbDomain = pairs.find((p) => p.id === MsvAvNbDomainName)
   return nbDomain ? nbDomain.data.toString('utf16le') : ''
 }
 
@@ -239,7 +244,7 @@ export function getNetBiosDomain(targetInfo: Buffer): string {
  */
 function getTimestamp(targetInfo: Buffer): Buffer | null {
   const pairs = parseAvPairs(targetInfo)
-  const ts = pairs.find(p => p.id === MsvAvTimestamp)
+  const ts = pairs.find((p) => p.id === MsvAvTimestamp)
   return ts ? ts.data : null
 }
 
@@ -259,7 +264,7 @@ function processTargetInfo(targetInfo: Buffer): {
 
   if (hasMic) {
     // Remove any existing MsvAvFlags
-    const filtered = pairs.filter(p => p.id !== MsvAvFlags)
+    const filtered = pairs.filter((p) => p.id !== MsvAvFlags)
     // Add MsvAvFlags = 0x02 (MIC_PROVIDED)
     const flagData = Buffer.alloc(4)
     flagData.writeUInt32LE(0x02, 0)
@@ -380,12 +385,18 @@ export function createType3(
 
   // Compute payload offsets
   let offset = headerSize
-  const lmOff = offset; offset += lmResponse.length
-  const ntOff = offset; offset += ntChallengeResponse.length
-  const domOff = offset; offset += domainBuf.length
-  const userOff = offset; offset += userBuf.length
-  const wsOff = offset; offset += wsBuf.length
-  const eskOff = offset; offset += encryptedSessionKey.length
+  const lmOff = offset
+  offset += lmResponse.length
+  const ntOff = offset
+  offset += ntChallengeResponse.length
+  const domOff = offset
+  offset += domainBuf.length
+  const userOff = offset
+  offset += userBuf.length
+  const wsOff = offset
+  offset += wsBuf.length
+  const eskOff = offset
+  offset += encryptedSessionKey.length
 
   const totalLen = offset
   const type3 = Buffer.alloc(totalLen)
@@ -398,7 +409,7 @@ export function createType3(
   // LmChallengeResponseFields (offset 12)
   type3.writeUInt16LE(lmResponse.length, 12) // Len
   type3.writeUInt16LE(lmResponse.length, 14) // MaxLen
-  type3.writeUInt32LE(lmOff, 16)             // Offset
+  type3.writeUInt32LE(lmOff, 16) // Offset
 
   // NtChallengeResponseFields (offset 20)
   type3.writeUInt16LE(ntChallengeResponse.length, 20)
@@ -478,8 +489,8 @@ function expandDesKey(key56: Buffer): Buffer {
 /** DES-ECB encrypt using des.js (OpenSSL 3.x disables DES-ECB) */
 function desEncrypt(key7: Buffer, data: Buffer): Buffer {
   const key8 = expandDesKey(key7)
-  const cipher = DES.create({ type: 'encrypt', key: Array.from(key8) as any })
-  const result = cipher.update(Array.from(data) as any)
+  const cipher = DES.create({ type: 'encrypt', key: Array.from(key8) as number[] })
+  const result = cipher.update(Array.from(data) as number[])
   return Buffer.from(result)
 }
 
