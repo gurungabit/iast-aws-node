@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react'
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { Pause, Play, Square } from 'lucide-react'
 import { Card } from '../../components/ui/Card'
 import { StatusBadge } from '../../components/ui/StatusBadge'
 import { Toggle } from '../../components/ui/Toggle'
@@ -729,41 +730,35 @@ export function ASTFormWrapper({
               />
               <div className="flex items-center gap-2">
                 {status === 'paused' ? (
-                  <Button
+                  <button
                     type="button"
-                    variant="primary"
-                    size="sm"
                     onClick={() => controlAST('resume')}
+                    className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded border cursor-pointer transition-colors
+                      bg-emerald-600 text-white border-emerald-600 hover:bg-emerald-700"
                   >
-                    <svg className="w-3.5 h-3.5 mr-1" fill="currentColor" viewBox="0 0 20 20">
-                      <path d="M6.3 2.84A1.5 1.5 0 004 4.11v11.78a1.5 1.5 0 002.3 1.27l9.344-5.891a1.5 1.5 0 000-2.538L6.3 2.84z" />
-                    </svg>
+                    <Play className="w-3.5 h-3.5" fill="currentColor" />
                     Resume
-                  </Button>
+                  </button>
                 ) : (
-                  <Button
+                  <button
                     type="button"
-                    variant="secondary"
-                    size="sm"
                     onClick={() => controlAST('pause')}
+                    className="flex items-center gap-1.5 px-3 py-1.5 text-xs rounded border cursor-pointer transition-colors
+                      bg-yellow-600 text-white border-yellow-600 hover:bg-yellow-700"
                   >
-                    <svg className="w-3.5 h-3.5 mr-1" fill="currentColor" viewBox="0 0 20 20">
-                      <path d="M5.75 3a.75.75 0 00-.75.75v12.5c0 .414.336.75.75.75h1.5a.75.75 0 00.75-.75V3.75A.75.75 0 007.25 3h-1.5zM12.75 3a.75.75 0 00-.75.75v12.5c0 .414.336.75.75.75h1.5a.75.75 0 00.75-.75V3.75a.75.75 0 00-.75-.75h-1.5z" />
-                    </svg>
+                    <Pause className="w-3.5 h-3.5" />
                     Pause
-                  </Button>
+                  </button>
                 )}
-                <Button
+                <button
                   type="button"
-                  variant="danger-outline"
-                  size="sm"
                   onClick={() => controlAST('cancel')}
+                  className="flex items-center gap-1.5 px-3 py-1.5 text-xs rounded border cursor-pointer transition-colors
+                    bg-red-600 text-white border-red-600 hover:bg-red-700"
                 >
-                  <svg className="w-3.5 h-3.5 mr-1" fill="currentColor" viewBox="0 0 20 20">
-                    <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.28 7.22a.75.75 0 00-1.06 1.06L8.94 10l-1.72 1.72a.75.75 0 101.06 1.06L10 11.06l1.72 1.72a.75.75 0 101.06-1.06L11.06 10l1.72-1.72a.75.75 0 00-1.06-1.06L10 8.94 8.28 7.22z" clipRule="evenodd" />
-                  </svg>
-                  Cancel
-                </Button>
+                  <Square className="w-3 h-3" fill="currentColor" />
+                  Stop
+                </button>
                 {status === 'paused' && (
                   <span className="text-xs text-yellow-600 dark:text-yellow-400 font-medium">
                     Paused
