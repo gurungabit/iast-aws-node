@@ -287,7 +287,7 @@ export class RoutScreen {
       }
 
       // FSS -> PDQControl
-      await this.session.waitForKeyboard(1)
+      // await this.session.waitForKeyboard(1)
       await this.session.fillFieldAtPosition(40, 36, 'PDQ')
       await this.session.enter()
 
