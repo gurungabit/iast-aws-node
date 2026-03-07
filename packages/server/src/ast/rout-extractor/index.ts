@@ -268,11 +268,7 @@ async function prepareFrom412(
       const filePath = resolve412Path(config.oc, config.file412Path)
 
       try {
-        reporter.reportProgress(
-          0,
-          1,
-          `Downloading 412 file from ${filePath}...`,
-        )
+        reporter.reportProgress(0, 1, `Downloading 412 file from ${filePath}...`)
         const data = await readSmbFile(
           {
             share: DFS_SHARE,

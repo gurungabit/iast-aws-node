@@ -1,8 +1,7 @@
-import { useRef, useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
 import {
   Search,
   Download,
-  Plus,
   X,
   ArrowUp,
   ArrowDown,
@@ -32,23 +31,9 @@ interface ServerRow {
   data: Record<string, unknown> | null
 }
 
-interface FilterEntry {
-  id: string
-  field: string
-  op: 'eq' | 'neq' | 'contains' | 'starts_with'
-  value: string
-}
-
 interface SortEntry {
   column: string
   direction: 'asc' | 'desc'
-}
-
-interface FieldDef {
-  key: string
-  label: string
-  type: 'text' | 'select'
-  options?: { value: string; label: string }[]
 }
 
 interface ColDef {
@@ -130,32 +115,6 @@ const SERV_UNDR_OPTIONS = [
   { value: 'U', label: 'U - UND' },
 ]
 
-const TEXT_OPS = [
-  { value: 'contains', label: 'contains' },
-  { value: 'eq', label: 'equals' },
-  { value: 'starts_with', label: 'starts with' },
-  { value: 'neq', label: 'not equal' },
-] as const
-
-const FILTER_FIELDS: FieldDef[] = [
-  { key: 'officeNum', label: 'Office', type: 'select', options: OFFICE_OPTIONS },
-  { key: 'policyNumber', label: 'Policy Number', type: 'text' },
-  { key: 'policyItem', label: 'Item Type', type: 'select', options: ITEM_TYPE_OPTIONS },
-  { key: 'sectionOfRout', label: 'Section', type: 'select', options: SECTION_OPTIONS },
-  { key: 'policyType', label: 'Policy Type', type: 'text' },
-  { key: 'status', label: 'Status', type: 'select', options: STATUS_OPTIONS },
-  { key: 'gfuDate', label: 'GFU Date', type: 'text' },
-  { key: 'gfuCode', label: 'GFU Code', type: 'text' },
-  { key: 'agentNafo', label: 'Agent/AFO', type: 'text' },
-  { key: 'description', label: 'Description', type: 'text' },
-  { key: '_anyError', label: 'Error Code (any)', type: 'text' },
-  { key: 'flmpCode', label: 'FLMP', type: 'text' },
-  { key: 'queueName', label: 'Queue', type: 'text' },
-  { key: 'queueDetail', label: 'Queue Detail', type: 'text' },
-  { key: 'servOrUndr', label: 'Serv/Undr', type: 'select', options: SERV_UNDR_OPTIONS },
-  { key: 'systemPolicyType', label: 'Policy Code', type: 'text' },
-]
-
 const TABLE_COLUMNS: ColDef[] = [
   { key: 'officeNum', label: 'Office', minW: 55 },
   { key: 'policyNumber', label: 'Policy', minW: 105 },
@@ -193,12 +152,6 @@ function todayStr(): string {
   return new Date().toISOString().split('T')[0] ?? ''
 }
 
-function daysAgoStr(days: number): string {
-  const d = new Date()
-  d.setDate(d.getDate() - days)
-  return d.toISOString().split('T')[0] ?? ''
-}
-
 function cellValue(data: Record<string, unknown> | null, key: string): string {
   if (!data) return ''
   const v = data[key]
@@ -233,40 +186,110 @@ function exportCsv(rows: ServerRow[]): void {
 // ---------------------------------------------------------------------------
 
 const inputCls =
-  'w-full px-2.5 py-1.5 text-sm rounded-md border border-gray-300 dark:border-zinc-600 bg-white dark:bg-zinc-800 text-gray-900 dark:text-zinc-100 placeholder-gray-400 dark:placeholder-zinc-500 focus:outline-none focus:ring-2 focus:ring-blue-500/40'
+  'w-full px-2 py-1.5 text-sm rounded-md border border-gray-300 dark:border-zinc-600 bg-white dark:bg-zinc-800 text-gray-900 dark:text-zinc-100 placeholder-gray-400 dark:placeholder-zinc-500 focus:outline-none focus:ring-2 focus:ring-blue-500/40'
 
 const selectCls =
   'w-full px-2 py-1.5 text-sm rounded-md border border-gray-300 dark:border-zinc-600 bg-white dark:bg-zinc-800 text-gray-900 dark:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-blue-500/40 cursor-pointer'
+
+const labelCls = 'block text-[11px] font-medium text-gray-500 dark:text-zinc-400 mb-0.5'
 
 // ---------------------------------------------------------------------------
 // Component
 // ---------------------------------------------------------------------------
 
+interface Filters {
+  officeNum: string
+  policyNumber: string
+  policyItem: string
+  sectionOfRout: string
+  policyType: string
+  status: string
+  gfuDate: string
+  gfuCode: string
+  agentNafo: string
+  description: string
+  errorSearch: string
+  flmpCode: string
+  queueName: string
+  queueDetail: string
+  servOrUndr: string
+  systemPolicyType: string
+}
+
+const EMPTY_FILTERS: Filters = {
+  officeNum: '',
+  policyNumber: '',
+  policyItem: '',
+  sectionOfRout: '',
+  policyType: '',
+  status: '',
+  gfuDate: '',
+  gfuCode: '',
+  agentNafo: '',
+  description: '',
+  errorSearch: '',
+  flmpCode: '',
+  queueName: '',
+  queueDetail: '',
+  servOrUndr: '',
+  systemPolicyType: '',
+}
+
+function buildFilterPayload(filters: Filters) {
+  const result: Array<{ field: string; op: string; value: string }> = []
+
+  // Select fields → exact match
+  const selectFields: (keyof Filters)[] = [
+    'officeNum',
+    'policyItem',
+    'sectionOfRout',
+    'status',
+    'servOrUndr',
+  ]
+  for (const key of selectFields) {
+    if (filters[key]) result.push({ field: key, op: 'eq', value: filters[key] })
+  }
+
+  // Text fields → contains (wildcard)
+  const textFields: Array<{ key: keyof Filters; field: string }> = [
+    { key: 'policyNumber', field: 'policyNumber' },
+    { key: 'policyType', field: 'policyType' },
+    { key: 'gfuDate', field: 'gfuDate' },
+    { key: 'gfuCode', field: 'gfuCode' },
+    { key: 'agentNafo', field: 'agentNafo' },
+    { key: 'description', field: 'description' },
+    { key: 'flmpCode', field: 'flmpCode' },
+    { key: 'queueName', field: 'queueName' },
+    { key: 'queueDetail', field: 'queueDetail' },
+    { key: 'systemPolicyType', field: 'systemPolicyType' },
+  ]
+  for (const { key, field } of textFields) {
+    if (filters[key]) result.push({ field, op: 'contains', value: filters[key] })
+  }
+
+  // Error search → special _anyError field
+  if (filters.errorSearch) {
+    result.push({ field: '_anyError', op: 'contains', value: filters.errorSearch })
+  }
+
+  return result
+}
+
 export function DataInquiryModal({ isOpen, onClose }: DataInquiryModalProps): React.ReactNode {
-  const filterIdRef = useRef(0)
-  const fieldMap = useMemo(() => new Map(FILTER_FIELDS.map((f) => [f.key, f])), [])
-
-  // Date range
-  const [dateFrom, setDateFrom] = useState(daysAgoStr(7))
-  const [dateTo, setDateTo] = useState(todayStr())
-
-  // Filters
-  const [filters, setFilters] = useState<FilterEntry[]>([])
-
-  // Sort
+  const [filters, setFilters] = useState<Filters>({ ...EMPTY_FILTERS })
   const [sorts, setSorts] = useState<SortEntry[]>([])
-
-  // Data
   const [rows, setRows] = useState<ServerRow[]>([])
   const [total, setTotal] = useState(0)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [hasSearched, setHasSearched] = useState(false)
-
-  // Pagination
   const [page, setPage] = useState(0)
   const [pageSize, setPageSize] = useState(500)
-  const totalPages = Math.max(1, Math.ceil(total / pageSize))
+  const totalPages = useMemo(() => Math.max(1, Math.ceil(total / pageSize)), [total, pageSize])
+
+  function setFilter<K extends keyof Filters>(key: K, value: Filters[K]) {
+    setFilters((prev) => ({ ...prev, [key]: value }))
+  }
 
   // ----------------------------
   // Search
@@ -277,11 +300,7 @@ export function DataInquiryModal({ isOpen, onClose }: DataInquiryModalProps): Re
     try {
       const result = await apiPost<{ rows: ServerRow[]; total: number }>('/data-inquiry', {
         astName: 'rout_extractor',
-        dateFrom,
-        dateTo,
-        filters: filters
-          .filter((f) => f.value.trim() !== '')
-          .map((f) => ({ field: f.field, op: f.op, value: f.value })),
+        filters: buildFilterPayload(filters),
         sort: sortOverride ?? sorts,
         limit: pageSize,
         offset,
@@ -310,63 +329,21 @@ export function DataInquiryModal({ isOpen, onClose }: DataInquiryModalProps): Re
   function handlePageSizeChange(newSize: number) {
     setPageSize(newSize)
     setPage(0)
-    if (hasSearched) {
-      void doSearch(0)
-    }
-  }
-
-  // ----------------------------
-  // Filters
-  // ----------------------------
-  function addFilter() {
-    filterIdRef.current++
-    setFilters((prev) => [
-      ...prev,
-      {
-        id: String(filterIdRef.current),
-        field: FILTER_FIELDS[0].key,
-        op: FILTER_FIELDS[0].type === 'select' ? 'eq' : 'contains',
-        value: '',
-      },
-    ])
-  }
-
-  function removeFilter(id: string) {
-    setFilters((prev) => prev.filter((f) => f.id !== id))
-  }
-
-  function updateFilterField(id: string, newField: string) {
-    const def = fieldMap.get(newField)
-    setFilters((prev) =>
-      prev.map((f) =>
-        f.id === id
-          ? {
-              ...f,
-              field: newField,
-              op: (def?.type === 'select' ? 'eq' : 'contains') as FilterEntry['op'],
-              value: '',
-            }
-          : f,
-      ),
-    )
-  }
-
-  function updateFilterOp(id: string, op: FilterEntry['op']) {
-    setFilters((prev) => prev.map((f) => (f.id === id ? { ...f, op } : f)))
-  }
-
-  function updateFilterValue(id: string, value: string) {
-    setFilters((prev) => prev.map((f) => (f.id === id ? { ...f, value } : f)))
+    if (hasSearched) void doSearch(0)
   }
 
   function clearAll() {
-    setFilters([])
+    setFilters({ ...EMPTY_FILTERS })
     setSorts([])
     setRows([])
     setTotal(0)
     setHasSearched(false)
     setError('')
     setPage(0)
+  }
+
+  function handleKeyDown(e: React.KeyboardEvent) {
+    if (e.key === 'Enter') handleSearch()
   }
 
   // ----------------------------
@@ -390,14 +367,9 @@ export function DataInquiryModal({ isOpen, onClose }: DataInquiryModalProps): Re
     }
 
     setSorts(newSorts)
-    if (hasSearched) {
-      void doSearch(0, newSorts)
-    }
+    if (hasSearched) void doSearch(0, newSorts)
   }
 
-  // ----------------------------
-  // Render helpers
-  // ----------------------------
   function renderSortIndicator(column: string) {
     const idx = sorts.findIndex((s) => s.column === column)
     if (idx < 0) {
@@ -411,6 +383,49 @@ export function DataInquiryModal({ isOpen, onClose }: DataInquiryModalProps): Re
         )}
         {dir === 'asc' ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />}
       </span>
+    )
+  }
+
+  // ----------------------------
+  // Render helpers
+  // ----------------------------
+  function renderSelect(
+    label: string,
+    key: keyof Filters,
+    options: { value: string; label: string }[],
+  ) {
+    return (
+      <div>
+        <label className={labelCls}>{label}</label>
+        <select
+          value={filters[key]}
+          onChange={(e) => setFilter(key, e.target.value)}
+          className={selectCls}
+        >
+          <option value="">All</option>
+          {options.map((o) => (
+            <option key={o.value} value={o.value}>
+              {o.label}
+            </option>
+          ))}
+        </select>
+      </div>
+    )
+  }
+
+  function renderText(label: string, key: keyof Filters, placeholder?: string) {
+    return (
+      <div>
+        <label className={labelCls}>{label}</label>
+        <input
+          type="text"
+          value={filters[key]}
+          onChange={(e) => setFilter(key, e.target.value)}
+          onKeyDown={handleKeyDown}
+          placeholder={placeholder ?? ''}
+          className={inputCls}
+        />
+      </div>
     )
   }
 
@@ -450,33 +465,35 @@ export function DataInquiryModal({ isOpen, onClose }: DataInquiryModalProps): Re
   return (
     <Modal isOpen={isOpen} onClose={onClose} title="Data Inquiry" size="full" footer={footer}>
       <div className="space-y-4">
-        {/* Date range + search controls */}
-        <div className="flex flex-wrap items-end gap-3">
-          <div className="space-y-1">
-            <label className="block text-xs font-medium text-gray-600 dark:text-zinc-400">
-              Date From
-            </label>
-            <input
-              type="date"
-              value={dateFrom}
-              onChange={(e) => setDateFrom(e.target.value)}
-              max={dateTo}
-              className={cn(inputCls, 'w-36')}
-            />
-          </div>
-          <div className="space-y-1">
-            <label className="block text-xs font-medium text-gray-600 dark:text-zinc-400">
-              Date To
-            </label>
-            <input
-              type="date"
-              value={dateTo}
-              onChange={(e) => setDateTo(e.target.value)}
-              min={dateFrom}
-              max={todayStr()}
-              className={cn(inputCls, 'w-36')}
-            />
-          </div>
+        {/* Filter grid */}
+        <div className="grid grid-cols-4 gap-x-3 gap-y-2">
+          {/* Row 1 */}
+          {renderSelect('Office', 'officeNum', OFFICE_OPTIONS)}
+          {renderText('Policy (UU-HH-TTTT-C)', 'policyNumber', '*')}
+          {renderSelect('Item Type', 'policyItem', ITEM_TYPE_OPTIONS)}
+          {renderSelect('Section of Rout', 'sectionOfRout', SECTION_OPTIONS)}
+
+          {/* Row 2 */}
+          {renderText('Policy Type', 'policyType', '*')}
+          {renderSelect('Status', 'status', STATUS_OPTIONS)}
+          {renderText('Date (mm/dd/yy)', 'gfuDate')}
+          {renderText('GFU Code', 'gfuCode', '*')}
+
+          {/* Row 3 */}
+          {renderText('Agent/AFO', 'agentNafo', '*')}
+          {renderText('Description', 'description', '*')}
+          {renderText('Error (any field)', 'errorSearch', '*')}
+          {renderText('FLMP', 'flmpCode', '*')}
+
+          {/* Row 4 */}
+          {renderText('Queue', 'queueName', '*')}
+          {renderText('Queue Detail', 'queueDetail', '*')}
+          {renderSelect('S/U', 'servOrUndr', SERV_UNDR_OPTIONS)}
+          {renderText('Policy Code', 'systemPolicyType', '*')}
+        </div>
+
+        {/* Action buttons */}
+        <div className="flex items-center gap-2">
           <Button
             type="button"
             variant="primary"
@@ -504,103 +521,6 @@ export function DataInquiryModal({ isOpen, onClose }: DataInquiryModalProps): Re
           </Button>
         </div>
 
-        {/* Filter builder */}
-        <div className="space-y-2">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold text-gray-700 dark:text-zinc-300 uppercase tracking-wide">
-              Filters
-            </span>
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              leftIcon={<Plus className="h-3.5 w-3.5" />}
-              onClick={addFilter}
-            >
-              Add Filter
-            </Button>
-          </div>
-
-          {filters.length === 0 && (
-            <p className="text-xs text-gray-400 dark:text-zinc-500 italic">
-              No filters applied. Click &quot;Add Filter&quot; to narrow results.
-            </p>
-          )}
-
-          {filters.map((filter) => {
-            const def = fieldMap.get(filter.field)
-            const isSelect = def?.type === 'select'
-            return (
-              <div key={filter.id} className="flex items-center gap-2">
-                {/* Field */}
-                <select
-                  value={filter.field}
-                  onChange={(e) => updateFilterField(filter.id, e.target.value)}
-                  className={cn(selectCls, 'w-40 flex-shrink-0')}
-                >
-                  {FILTER_FIELDS.map((f) => (
-                    <option key={f.key} value={f.key}>
-                      {f.label}
-                    </option>
-                  ))}
-                </select>
-
-                {/* Operator (text fields only) */}
-                {!isSelect && (
-                  <select
-                    value={filter.op}
-                    onChange={(e) => updateFilterOp(filter.id, e.target.value as FilterEntry['op'])}
-                    className={cn(selectCls, 'w-28 flex-shrink-0')}
-                  >
-                    {TEXT_OPS.map((o) => (
-                      <option key={o.value} value={o.value}>
-                        {o.label}
-                      </option>
-                    ))}
-                  </select>
-                )}
-
-                {/* Value */}
-                {isSelect ? (
-                  <select
-                    value={filter.value}
-                    onChange={(e) => updateFilterValue(filter.id, e.target.value)}
-                    className={cn(selectCls, 'flex-1 min-w-0')}
-                  >
-                    <option value="">(any)</option>
-                    {def.options?.map((opt) => (
-                      <option key={opt.value} value={opt.value}>
-                        {opt.label}
-                      </option>
-                    ))}
-                  </select>
-                ) : (
-                  <input
-                    type="text"
-                    value={filter.value}
-                    onChange={(e) => updateFilterValue(filter.id, e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter') handleSearch()
-                    }}
-                    placeholder="Value..."
-                    className={cn(inputCls, 'flex-1 min-w-0')}
-                  />
-                )}
-
-                {/* Remove */}
-                <button
-                  type="button"
-                  onClick={() => removeFilter(filter.id)}
-                  className="p-1 text-gray-400 hover:text-red-500 dark:text-zinc-500 dark:hover:text-red-400 cursor-pointer rounded transition-colors"
-                  title="Remove filter"
-                >
-                  <X className="h-4 w-4" />
-                </button>
-              </div>
-            )
-          })}
-        </div>
-
         {/* Error message */}
         {error && (
           <div className="p-3 rounded-md bg-red-50 dark:bg-red-900/20 text-sm text-red-700 dark:text-red-400">
@@ -608,7 +528,7 @@ export function DataInquiryModal({ isOpen, onClose }: DataInquiryModalProps): Re
           </div>
         )}
 
-        {/* Hint for sort */}
+        {/* Sort hint */}
         {hasSearched && rows.length > 0 && (
           <p className="text-[11px] text-gray-400 dark:text-zinc-500">
             Click column headers to sort. Shift+Click to add multi-column sort.
@@ -618,7 +538,7 @@ export function DataInquiryModal({ isOpen, onClose }: DataInquiryModalProps): Re
         {/* Results table */}
         {hasSearched && rows.length > 0 && (
           <div className="border border-gray-200 dark:border-zinc-700 rounded-lg overflow-hidden">
-            <div className="overflow-x-auto overflow-y-auto max-h-[48vh]">
+            <div className="overflow-scroll max-h-[45vh] scrollbar-visible">
               <table className="w-full text-left">
                 <thead className="sticky top-0 z-10">
                   <tr className="bg-gray-50 dark:bg-zinc-800 border-b border-gray-200 dark:border-zinc-700">
@@ -672,7 +592,7 @@ export function DataInquiryModal({ isOpen, onClose }: DataInquiryModalProps): Re
 
         {/* Pagination */}
         {hasSearched && total > 0 && (
-          <div className="flex items-center justify-between gap-4">
+          <div className="sticky bottom-0 flex items-center justify-between gap-4 pt-3 pb-1 bg-white dark:bg-zinc-900 border-t border-gray-100 dark:border-zinc-800 -mx-6 px-6 -mb-6">
             <div className="flex items-center gap-2">
               <span className="text-xs text-gray-500 dark:text-zinc-400">Per page:</span>
               {PAGE_SIZE_OPTIONS.map((size) => (
@@ -725,10 +645,10 @@ export function DataInquiryModal({ isOpen, onClose }: DataInquiryModalProps): Re
           <div className="text-center py-16">
             <Search className="h-8 w-8 text-gray-300 dark:text-zinc-600 mx-auto mb-3" />
             <p className="text-sm text-gray-500 dark:text-zinc-400">
-              Select a date range and click Search to query policy data.
+              Use the filters above and click Search to query policy data.
             </p>
             <p className="text-xs text-gray-400 dark:text-zinc-500 mt-1">
-              Add filters to narrow results by office, policy, section, and more.
+              Leave filters empty to search all records. Text fields support wildcard matching.
             </p>
           </div>
         )}
@@ -740,7 +660,7 @@ export function DataInquiryModal({ isOpen, onClose }: DataInquiryModalProps): Re
               No policies found matching the current criteria.
             </p>
             <p className="text-xs text-gray-400 dark:text-zinc-500 mt-1">
-              Try adjusting the date range or removing some filters.
+              Try clearing some filters to broaden the search.
             </p>
           </div>
         )}

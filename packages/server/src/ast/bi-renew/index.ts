@@ -254,9 +254,8 @@ export async function runBiRenewAST(
   let dbRecords: DbRecord[] = []
 
   try {
-    const { getBiRenewPendingRecords } = await import(
-      '../../integrations/ibmdb/bi-renew-queries.js'
-    )
+    const { getBiRenewPendingRecords } =
+      await import('../../integrations/ibmdb/bi-renew-queries.js')
     const db2Config = getDb2Config()
     dbRecords = await getBiRenewPendingRecords(db2Config, prevBusinessDate)
     reporter.reportProgress(0, 1, `Retrieved ${dbRecords.length} BI_RENEW records`)

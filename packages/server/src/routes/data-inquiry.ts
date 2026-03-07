@@ -24,11 +24,9 @@ export async function dataInquiryRoutes(app: FastifyInstance) {
         tags: ['Data Inquiry'],
         body: z.object({
           astName: z.string().default('rout_extractor'),
-          dateFrom: z.string(),
-          dateTo: z.string(),
           filters: z.array(filterSchema).default([]),
           sort: z.array(sortSchema).default([]),
-          limit: z.coerce.number().min(1).max(2000).default(500),
+          limit: z.coerce.number().min(1).max(5000).default(1000),
           offset: z.coerce.number().min(0).default(0),
         }),
         response: {

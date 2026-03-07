@@ -65,11 +65,11 @@ export function Modal({
           relative bg-white dark:bg-zinc-900 rounded-lg shadow-xl
           border border-gray-200 dark:border-zinc-700
           w-full mx-4 ${sizeStyles[size]}
-          max-h-[90vh] overflow-hidden
+          max-h-[90vh] flex flex-col
         `}
       >
         {/* Header */}
-        <div className="flex items-center justify-between p-6 border-b border-gray-200 dark:border-zinc-700">
+        <div className="flex-none flex items-center justify-between p-6 border-b border-gray-200 dark:border-zinc-700">
           <div className="text-lg font-semibold text-gray-900 dark:text-zinc-100">{title}</div>
           <Button
             variant="ghost"
@@ -83,11 +83,11 @@ export function Modal({
         </div>
 
         {/* Content */}
-        <div className="p-6 overflow-y-auto max-h-[calc(90vh-8rem)]">{children}</div>
+        <div className="flex-1 min-h-0 p-6 overflow-y-auto">{children}</div>
 
         {/* Footer */}
         {footer && (
-          <div className="flex items-center justify-end gap-3 p-6 border-t border-gray-200 dark:border-zinc-700">
+          <div className="flex-none flex items-center justify-end gap-3 p-6 border-t border-gray-200 dark:border-zinc-700">
             {footer}
           </div>
         )}

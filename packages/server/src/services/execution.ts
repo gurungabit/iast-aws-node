@@ -1,4 +1,4 @@
-import { eq, and, or, desc, asc, gte, lte, sql } from 'drizzle-orm'
+import { eq, and, or, desc, asc, sql } from 'drizzle-orm'
 import { db } from '../db/index.js'
 import { executions, policyResults } from '../db/schema/index.js'
 import type { ASTItemResult, ASTStatus } from '@iast/shared'
@@ -131,8 +131,6 @@ export const executionService = {
     userId: string,
     params: {
       astName: string
-      dateFrom: string
-      dateTo: string
       filters: Array<{ field: string; op: string; value: string }>
       sort: Array<{ column: string; direction: 'asc' | 'desc' }>
       limit: number
@@ -188,13 +186,8 @@ export const executionService = {
       'errorCode8',
     ]
 
-    // Base conditions: user + AST + date range
-    const conditions = [
-      eq(executions.userId, userId),
-      eq(executions.astName, params.astName),
-      gte(executions.executionDate, params.dateFrom),
-      lte(executions.executionDate, params.dateTo),
-    ]
+    // Base conditions: user + AST
+    const conditions = [eq(executions.userId, userId), eq(executions.astName, params.astName)]
 
     // JSONB filter conditions
     for (const filter of params.filters) {
@@ -204,17 +197,13 @@ export const executionService = {
       // Special: search across all 8 error code fields
       if (filter.field === '_anyError') {
         if (filter.op === 'eq') {
-          const parts = ERROR_FIELDS.map(
-            (f) => sql`${policyResults.data}->>${f} = ${val}`,
-          )
+          const parts = ERROR_FIELDS.map((f) => sql`${policyResults.data}->>${f} = ${val}`)
           const combined = or(...parts)
           if (combined) conditions.push(combined)
         } else if (filter.op === 'contains') {
           const escaped = val.replace(/[%_\\]/g, '\\$&')
           const pattern = '%' + escaped + '%'
-          const parts = ERROR_FIELDS.map(
-            (f) => sql`${policyResults.data}->>${f} ILIKE ${pattern}`,
-          )
+          const parts = ERROR_FIELDS.map((f) => sql`${policyResults.data}->>${f} ILIKE ${pattern}`)
           const combined = or(...parts)
           if (combined) conditions.push(combined)
         }
@@ -232,16 +221,12 @@ export const executionService = {
           break
         case 'contains': {
           const escaped = val.replace(/[%_\\]/g, '\\$&')
-          conditions.push(
-            sql`${policyResults.data}->>${filter.field} ILIKE ${'%' + escaped + '%'}`,
-          )
+          conditions.push(sql`${policyResults.data}->>${filter.field} ILIKE ${'%' + escaped + '%'}`)
           break
         }
         case 'starts_with': {
           const escaped = val.replace(/[%_\\]/g, '\\$&')
-          conditions.push(
-            sql`${policyResults.data}->>${filter.field} ILIKE ${escaped + '%'}`,
-          )
+          conditions.push(sql`${policyResults.data}->>${filter.field} ILIKE ${escaped + '%'}`)
           break
         }
       }

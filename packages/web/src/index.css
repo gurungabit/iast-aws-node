@@ -113,6 +113,16 @@ body {
   background: var(--text-muted);
 }
 
+/* Always-visible scrollbar for data tables */
+.scrollbar-visible {
+  scrollbar-gutter: stable both-edges;
+}
+
+.scrollbar-visible::-webkit-scrollbar-track {
+  background: rgba(128, 128, 128, 0.08);
+  border-radius: 4px;
+}
+
 /* Smooth transitions for theme switching */
 * {
   transition-property: background-color, border-color;
