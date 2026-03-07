@@ -5,6 +5,8 @@ import { executeAST } from './executor.js'
 import type { ASTName } from '../types.js'
 
 let currentReporter: ProgressReporter | null = null
+let currentASTName: string | null = null
+let currentExecutionId: string | null = null
 let paused = false
 let cancelled = false
 
@@ -19,6 +21,8 @@ export async function runAST(
   const normalizedName = astName.replace(/_/g, '-') as ASTName
   paused = false
   cancelled = false
+  currentASTName = normalizedName
+  currentExecutionId = executionId
 
   const reporter = new ProgressReporter(executionId, port)
   currentReporter = reporter
@@ -45,6 +49,25 @@ export async function runAST(
     }
   } finally {
     currentReporter = null
+    currentASTName = null
+    currentExecutionId = null
+  }
+}
+
+export function getASTStatus(): {
+  active: boolean
+  status: 'running' | 'paused' | 'idle'
+  astName: string | null
+  executionId: string | null
+} {
+  if (!currentReporter || !currentASTName) {
+    return { active: false, status: 'idle', astName: null, executionId: null }
+  }
+  return {
+    active: true,
+    status: paused ? 'paused' : 'running',
+    astName: currentASTName,
+    executionId: currentExecutionId,
   }
 }
 

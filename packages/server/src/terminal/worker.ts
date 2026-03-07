@@ -187,6 +187,20 @@ port.on('message', async (msg: MainToWorkerMessage) => {
         astRunner.controlAST(msg.action)
         break
       }
+
+      case 'ast.getStatus': {
+        if (!astRunner) return
+        const status = astRunner.getASTStatus()
+        if (status.active && status.astName && status.executionId) {
+          send({
+            type: 'ast.status',
+            status: status.status as 'running' | 'paused',
+            astName: status.astName as 'login' | 'bi-renew' | 'rout-extractor',
+            executionId: status.executionId,
+          })
+        }
+        break
+      }
     }
   } catch (err) {
     send({ type: 'error', message: String(err) })

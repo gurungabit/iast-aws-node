@@ -200,9 +200,12 @@ describe('terminalWsRoutes', () => {
 
     await publicHandler(socket, req)
 
+    // attachLocal sends ast.getStatus on setup — record call count before
+    const callsBefore = mockWorker.postMessage.mock.calls.length
     const messageHandler = socket._handlers['message']
     messageHandler(Buffer.from('not valid json'))
-    expect(mockWorker.postMessage).not.toHaveBeenCalled()
+    // No additional postMessage calls for malformed input
+    expect(mockWorker.postMessage.mock.calls.length).toBe(callsBefore)
   })
 
   it('forwards worker messages to browser socket', async () => {

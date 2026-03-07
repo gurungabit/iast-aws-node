@@ -19,6 +19,7 @@ export type MainToWorkerMessage =
   | { type: 'cursor'; row: number; col: number }
   | { type: 'ast.run'; astName: ASTName; params: Record<string, unknown>; executionId: string }
   | { type: 'ast.control'; action: 'pause' | 'resume' | 'cancel' }
+  | { type: 'ast.getStatus' }
 
 // Worker thread → Main thread messages
 export type WorkerToMainMessage =
