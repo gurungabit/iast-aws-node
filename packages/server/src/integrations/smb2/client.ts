@@ -6,7 +6,7 @@
  */
 
 import { Socket } from 'net'
-import { randomBytes } from 'crypto'
+import { createHmac, randomBytes } from 'crypto'
 import {
   createType1,
   createType3,
@@ -27,6 +27,9 @@ const SMB2_TREE_CONNECT = 0x0003
 const SMB2_CREATE = 0x0005
 const SMB2_CLOSE = 0x0006
 const SMB2_READ = 0x0008
+
+// Flags
+const SMB2_FLAGS_SIGNED = 0x00000008
 
 // Status codes
 const STATUS_SUCCESS = 0x00000000
@@ -81,6 +84,33 @@ function framePacket(hdr: Buffer, body: Buffer): Buffer {
   const nb = Buffer.alloc(4)
   nb.writeUInt32BE(pkt.length, 0)
   return Buffer.concat([nb, pkt])
+}
+
+/** Sign an SMB2 packet (after NetBIOS header). Modifies the buffer in-place. */
+function signPacket(framed: Buffer, signingKey: Buffer): void {
+  // The SMB2 packet starts at offset 4 (after NetBIOS 4-byte header)
+  const pkt = framed.subarray(4)
+  // Set SMB2_FLAGS_SIGNED in Flags field (offset 16, 4 bytes LE)
+  const flags = pkt.readUInt32LE(16)
+  pkt.writeUInt32LE(flags | SMB2_FLAGS_SIGNED, 16)
+  // Zero the signature field (offset 48, 16 bytes)
+  pkt.fill(0, 48, 64)
+  // HMAC-SHA256(signingKey, entire SMB2 packet)
+  const sig = createHmac('sha256', signingKey).update(pkt).digest()
+  // Copy first 16 bytes into signature field
+  sig.copy(pkt, 48, 0, 16)
+}
+
+/** Build, frame, sign, send, and parse a signed request. */
+async function signedSend(
+  transport: Smb2Transport,
+  hdr: Buffer,
+  body: Buffer,
+  signingKey: Buffer,
+): Promise<SmB2Response> {
+  const framed = framePacket(hdr, body)
+  signPacket(framed, signingKey)
+  return parseResponse(await transport.send(framed))
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -252,7 +282,7 @@ export async function readFile(config: Smb2ClientConfig, filePath: string): Prom
     console.log(`[SMB2] Server NetBIOS domain: "${serverDomain}", using for NTOWFv2`)
 
     // ── Step 3: Session Setup (NTLM Type 3 with MIC) ──
-    const { type3 } = createType3(
+    const { type3, sessionBaseKey } = createType3(
       type1Raw,
       type2Info,
       config.username,
@@ -267,11 +297,14 @@ export async function readFile(config: Smb2ClientConfig, filePath: string): Prom
 
     console.log(`[SMB2] Authentication successful, sessionId=${sessionId}`)
 
+    // Signing key for all subsequent requests (SMB 2.0.2 uses SessionBaseKey)
+    const signingKey = sessionBaseKey
+
     // ── Step 4: Tree Connect ──
     const sharePath = `\\\\${config.host}\\${config.share}`
     const treeBody = buildTreeConnectBody(sharePath)
     const treeHdr = buildSmb2Header(SMB2_TREE_CONNECT, treeBody.length, { sessionId })
-    const treeResp = parseResponse(await transport.send(framePacket(treeHdr, treeBody)))
+    const treeResp = await signedSend(transport, treeHdr, treeBody, signingKey)
     assertStatus(treeResp, 'TreeConnect', [STATUS_SUCCESS])
 
     const treeId = treeResp.treeId
@@ -282,7 +315,7 @@ export async function readFile(config: Smb2ClientConfig, filePath: string): Prom
     const normalizedPath = filePath.replace(/\//g, '\\').replace(/^\\+/, '')
     const createBody = buildCreateBody(normalizedPath)
     const createHdr = buildSmb2Header(SMB2_CREATE, createBody.length, { sessionId, treeId })
-    const createResp = parseResponse(await transport.send(framePacket(createHdr, createBody)))
+    const createResp = await signedSend(transport, createHdr, createBody, signingKey)
     assertStatus(createResp, `Create(${normalizedPath})`, [STATUS_SUCCESS])
 
     // Parse Create response to get FileId (16 bytes at offset 64 of body)
@@ -303,7 +336,7 @@ export async function readFile(config: Smb2ClientConfig, filePath: string): Prom
       const readLen = Math.min(maxReadSize, fileSize - readOffset)
       const readBody = buildReadBody(fileId, readOffset, readLen)
       const readHdr = buildSmb2Header(SMB2_READ, readBody.length, { sessionId, treeId })
-      const readResp = parseResponse(await transport.send(framePacket(readHdr, readBody)))
+      const readResp = await signedSend(transport, readHdr, readBody, signingKey)
       assertStatus(readResp, `Read(offset=${readOffset})`, [STATUS_SUCCESS])
 
       // Parse Read response: StructureSize(2) + DataOffset(1) + Reserved(1) + DataLength(4)
@@ -316,7 +349,7 @@ export async function readFile(config: Smb2ClientConfig, filePath: string): Prom
     // ── Step 7: Close ──
     const closeBody = buildCloseBody(fileId)
     const closeHdr = buildSmb2Header(SMB2_CLOSE, closeBody.length, { sessionId, treeId })
-    await transport.send(framePacket(closeHdr, closeBody))
+    await signedSend(transport, closeHdr, closeBody, signingKey)
     // Don't check status — best effort close
 
     transport.close()
