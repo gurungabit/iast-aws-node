@@ -54,6 +54,7 @@ function attachLocal(
           userId,
           astName: String(msg.astName),
           configName: typeof params.configName === 'string' ? params.configName : undefined,
+          hostUser: typeof params.username === 'string' ? params.username : undefined,
           executionDate: today,
         })
       } catch (err) {
