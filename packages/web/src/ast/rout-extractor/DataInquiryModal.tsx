@@ -548,7 +548,7 @@ export function DataInquiryModal({ isOpen, onClose }: DataInquiryModalProps): Re
           </p>
         )}
 
-        {/* Results table + pagination */}
+        {/* Results table + pagination as one block */}
         {hasSearched && rows.length > 0 && (
           <div className="border border-gray-200 dark:border-zinc-700 rounded-lg overflow-hidden">
             <div className="overflow-scroll max-h-[45vh] scrollbar-visible">
@@ -600,56 +600,56 @@ export function DataInquiryModal({ isOpen, onClose }: DataInquiryModalProps): Re
                 </tbody>
               </table>
             </div>
-          </div>
-        )}
 
-        {/* Pagination — directly under table, no gap */}
-        {hasSearched && total > 0 && (
-          <div className="sticky bottom-0 flex items-center justify-between gap-4 pt-2 pb-3 bg-white dark:bg-zinc-900 -mx-4 px-4 -mb-3 -mt-4">
-            <div className="flex items-center gap-2">
-              <span className="text-xs text-gray-500 dark:text-zinc-400">Per page:</span>
-              {PAGE_SIZE_OPTIONS.map((size) => (
-                <button
-                  key={size}
-                  type="button"
-                  onClick={() => handlePageSizeChange(size)}
-                  className={cn(
-                    'px-2 py-0.5 text-xs rounded cursor-pointer transition-colors',
-                    pageSize === size
-                      ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 font-medium'
-                      : 'text-gray-500 dark:text-zinc-400 hover:bg-gray-100 dark:hover:bg-zinc-800',
-                  )}
-                >
-                  {String(size)}
-                </button>
-              ))}
-            </div>
+            {/* Pagination — inside table container, no gap possible */}
+            {total > 0 && (
+              <div className="flex items-center justify-between gap-4 px-3 py-2 border-t border-gray-200 dark:border-zinc-700 bg-gray-50 dark:bg-zinc-800">
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-gray-500 dark:text-zinc-400">Per page:</span>
+                  {PAGE_SIZE_OPTIONS.map((size) => (
+                    <button
+                      key={size}
+                      type="button"
+                      onClick={() => handlePageSizeChange(size)}
+                      className={cn(
+                        'px-2 py-0.5 text-xs rounded cursor-pointer transition-colors',
+                        pageSize === size
+                          ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 font-medium'
+                          : 'text-gray-500 dark:text-zinc-400 hover:bg-gray-100 dark:hover:bg-zinc-800',
+                      )}
+                    >
+                      {String(size)}
+                    </button>
+                  ))}
+                </div>
 
-            <div className="flex items-center gap-2">
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                onClick={() => handlePageChange(page - 1)}
-                disabled={page === 0 || loading}
-                className="px-2"
-              >
-                <ChevronLeft className="h-4 w-4" />
-              </Button>
-              <span className="text-xs text-gray-600 dark:text-zinc-400 tabular-nums">
-                Page {String(page + 1)} of {String(totalPages)}
-              </span>
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                onClick={() => handlePageChange(page + 1)}
-                disabled={page >= totalPages - 1 || loading}
-                className="px-2"
-              >
-                <ChevronRight className="h-4 w-4" />
-              </Button>
-            </div>
+                <div className="flex items-center gap-2">
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => handlePageChange(page - 1)}
+                    disabled={page === 0 || loading}
+                    className="px-2"
+                  >
+                    <ChevronLeft className="h-4 w-4" />
+                  </Button>
+                  <span className="text-xs text-gray-600 dark:text-zinc-400 tabular-nums">
+                    Page {String(page + 1)} of {String(totalPages)}
+                  </span>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => handlePageChange(page + 1)}
+                    disabled={page >= totalPages - 1 || loading}
+                    className="px-2"
+                  >
+                    <ChevronRight className="h-4 w-4" />
+                  </Button>
+                </div>
+              </div>
+            )}
           </div>
         )}
 
