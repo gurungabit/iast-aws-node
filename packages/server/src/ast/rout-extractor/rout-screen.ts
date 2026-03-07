@@ -340,7 +340,7 @@ export class RoutScreen {
     while (maxAttempts-- > 0) {
       if (this.isFss()) return
       await this.session.pf(15)
-      if (await this.session.waitForText(FSS_TITLE, 2)) return
+      if (await this.session.waitForText(FSS_TITLE, 1)) return
     }
   }
 
