@@ -245,8 +245,12 @@ function ExecutionListItem({
   compact?: boolean
   stepIndex?: number
 }) {
+  const liveStatus = useASTStore((s) => s.tabs[execution.sessionId]?.status ?? null)
+  const displayStatus =
+    liveStatus === 'running' || liveStatus === 'paused' ? liveStatus : execution.status
+
   const progress = useASTStore((s) =>
-    execution.status === 'running'
+    displayStatus === 'running' || displayStatus === 'paused'
       ? (s.tabs[execution.sessionId]?.progress ?? null)
       : null,
   )
@@ -286,11 +290,11 @@ function ExecutionListItem({
         <span
           className={cn(
             'px-2 py-0.5 text-xs font-medium rounded-full flex items-center gap-1',
-            STATUS_COLORS[execution.status] ?? STATUS_COLORS.cancelled,
+            STATUS_COLORS[displayStatus] ?? STATUS_COLORS.cancelled,
           )}
         >
-          <StatusIcon status={execution.status} />
-          {execution.status}
+          <StatusIcon status={displayStatus} />
+          {displayStatus}
         </span>
       </div>
       <div className="flex items-center gap-3 text-xs text-gray-500 dark:text-zinc-500">
@@ -747,9 +751,16 @@ function HistoryPage() {
     queryFn: () => apiGet<ExecutionDto[]>(`/history?date=${date}`),
   })
 
-  const isSelectedRunning = selectedExecution
-    ? executions.find((e) => e.id === selectedExecution.id)?.status === 'running'
-    : false
+  const selectedLiveStatus = useASTStore((s) =>
+    selectedExecution ? (s.tabs[selectedExecution.sessionId]?.status ?? null) : null,
+  )
+  const selectedDbStatus = selectedExecution
+    ? (executions.find((e) => e.id === selectedExecution.id)?.status ?? null)
+    : null
+  const isSelectedRunning =
+    selectedLiveStatus === 'running' ||
+    selectedLiveStatus === 'paused' ||
+    selectedDbStatus === 'running'
 
   // Live WS stream for the selected execution
   const stream = useExecutionStream(
@@ -783,15 +794,19 @@ function HistoryPage() {
     [policyPages],
   )
 
-  // When stream completes, refetch from DB to get authoritative data
+  // When stream completes OR live status reaches terminal state, refetch from DB
   const streamCompleted = stream?.completed ?? false
   const selectedExecutionId = selectedExecution?.id ?? null
+  const isTerminal =
+    selectedLiveStatus === 'completed' ||
+    selectedLiveStatus === 'failed' ||
+    selectedLiveStatus === 'cancelled'
   useEffect(() => {
-    if (streamCompleted) {
+    if (streamCompleted || isTerminal) {
       void queryClient.invalidateQueries({ queryKey: ['policies', selectedExecutionId] })
       void queryClient.invalidateQueries({ queryKey: ['history', date] })
     }
-  }, [streamCompleted, selectedExecutionId, date, queryClient])
+  }, [streamCompleted, isTerminal, selectedExecutionId, date, queryClient])
 
   // Merge DB policies with live WS items (dedup by id, WS items take precedence)
   const streamPolicies = stream?.livePolicies
@@ -861,11 +876,15 @@ function HistoryPage() {
     return orderedItems
   }, [filteredExecutions])
 
-  // Keep selectedExecution in sync with refreshed data
+  // Keep selectedExecution in sync with refreshed data + live AST status
   const liveSelectedExecution = useMemo(() => {
     if (!selectedExecution) return null
-    return executions.find((e) => e.id === selectedExecution.id) ?? selectedExecution
-  }, [executions, selectedExecution])
+    const dbExec = executions.find((e) => e.id === selectedExecution.id) ?? selectedExecution
+    if (selectedLiveStatus === 'running' || selectedLiveStatus === 'paused') {
+      return { ...dbExec, status: selectedLiveStatus }
+    }
+    return dbExec
+  }, [executions, selectedExecution, selectedLiveStatus])
 
   const handleSelectExecution = (execution: ExecutionDto) => {
     setSelectedExecution(execution)
