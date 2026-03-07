@@ -622,11 +622,6 @@ function HistoryPage() {
   const { data: executions = [], isLoading: isLoadingExecs } = useQuery({
     queryKey: ['history', date],
     queryFn: () => apiGet<ExecutionDto[]>(`/history?date=${date}`),
-    refetchInterval: (query) => {
-      const data = query.state.data
-      if (data?.some((e) => e.status === 'running')) return 3000
-      return false
-    },
   })
 
   const isSelectedRunning = selectedExecution
@@ -639,14 +634,11 @@ function HistoryPage() {
     selectedExecution?.sessionId ?? null,
     isSelectedRunning,
   )
-  const hasLiveStream = stream !== null
-
-  // Fetch from DB: initial load + refetch on completion (no polling when WS is active)
+  // Fetch from DB: initial load only (live data comes via WS)
   const { data: dbPolicies = [], isLoading: isLoadingPolicies } = useQuery({
     queryKey: ['policies', selectedExecution?.id],
     queryFn: () => apiGet<PolicyDto[]>(`/history/${selectedExecution?.id}/policies?limit=10000`),
     enabled: !!selectedExecution,
-    refetchInterval: isSelectedRunning && !hasLiveStream ? 2000 : false,
   })
 
   // When stream completes, refetch from DB to get authoritative data
