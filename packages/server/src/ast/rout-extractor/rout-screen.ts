@@ -291,7 +291,7 @@ export class RoutScreen {
       await this.session.fillFieldAtPosition(40, 36, 'PDQ')
       await this.session.enter()
 
-      if (!(await this.session.waitForText(PDQ_CONTROL_TITLE, 5))) {
+      if (!(await this.session.waitForText(PDQ_CONTROL_TITLE,1))) {
         await this.backOutToFss()
         return null
       }
