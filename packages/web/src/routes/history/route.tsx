@@ -245,12 +245,16 @@ function ExecutionListItem({
   compact?: boolean
   stepIndex?: number
 }) {
-  const liveStatus = useASTStore((s) => s.tabs[execution.sessionId]?.status ?? null)
+  // Only overlay live status on executions the DB also thinks are active
+  const dbIsActive = execution.status === 'running' || execution.status === 'paused'
+  const liveStatus = useASTStore((s) =>
+    dbIsActive ? (s.tabs[execution.sessionId]?.status ?? null) : null,
+  )
   const displayStatus =
     liveStatus === 'running' || liveStatus === 'paused' ? liveStatus : execution.status
 
   const progress = useASTStore((s) =>
-    displayStatus === 'running' || displayStatus === 'paused'
+    dbIsActive && (displayStatus === 'running' || displayStatus === 'paused')
       ? (s.tabs[execution.sessionId]?.progress ?? null)
       : null,
   )
