@@ -645,11 +645,6 @@ function HistoryPage() {
   const { data: executions = [], isLoading: isLoadingExecs } = useQuery({
     queryKey: ['history', date],
     queryFn: () => apiGet<ExecutionDto[]>(`/history?date=${date}`),
-    refetchInterval: (query) => {
-      const data = query.state.data
-      if (data?.some((e) => e.status === 'running')) return 3000
-      return false
-    },
   })
 
   const isSelectedRunning = selectedExecution
