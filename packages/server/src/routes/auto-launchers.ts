@@ -2,6 +2,8 @@ import type { FastifyInstance } from 'fastify'
 import type { ZodTypeProvider } from 'fastify-type-provider-zod'
 import { z } from 'zod'
 import { autoLauncherService } from '../services/auto-launcher.js'
+import { astConfigService } from '../services/ast-config.js'
+import { terminalManager } from '../terminal/manager.js'
 
 const errorSchema = z.object({ error: z.string() })
 
@@ -135,25 +137,65 @@ export async function autoLauncherRoutes(app: FastifyInstance) {
       const launcher = await autoLauncherService.findById(request.params.id)
       if (!launcher) return reply.status(404).send({ error: 'Launcher not found' })
 
+      const { sessionId, username, password, userLocalDate } = request.body
       const steps = (launcher.steps as Array<{ astName: string; configId: string; order: number }>) ?? []
       const runId = crypto.randomUUID()
+
+      // Load configs for each step to build params and get display names
+      const resolvedSteps = await Promise.all(
+        steps.map(async (s, idx) => {
+          const config = await astConfigService.findById(s.configId)
+          const params: Record<string, unknown> = {
+            ...(config?.params ?? {}),
+            username,
+            password,
+            userLocalDate: userLocalDate ?? new Date().toISOString().slice(0, 10),
+          }
+          return {
+            astName: s.astName,
+            configId: s.configId,
+            configName: config?.name,
+            order: s.order ?? idx,
+            stepLabel: `Step ${idx + 1}`,
+            params,
+          }
+        }),
+      )
 
       await autoLauncherService.createRun({
         id: runId,
         launcherId: launcher.id,
         userId: request.user.id,
-        sessionId: request.body.sessionId,
-        steps: steps.map((s) => ({ ...s, status: 'pending' })),
+        sessionId,
+        steps: resolvedSteps.map((s) => ({ ...s, status: 'pending' })),
       })
 
-      const responseSteps = steps.map((s, idx) => ({
+      // Get the worker for this session and kick off execution in background
+      const worker = terminalManager.getWorker(sessionId)
+      if (worker) {
+        const execSteps = resolvedSteps.map((s) => ({
+          astName: s.astName,
+          configName: s.configName,
+          params: s.params,
+        }))
+        autoLauncherService
+          .executeRun(runId, worker, execSteps, sessionId, request.user.id)
+          .catch((err) => {
+            app.log.error({ runId, err }, 'AutoLauncher run failed')
+          })
+      } else {
+        app.log.warn({ sessionId, runId }, 'No worker found for session — run created but not started')
+      }
+
+      const responseSteps = resolvedSteps.map((s) => ({
         astName: s.astName,
         configId: s.configId,
-        order: s.order ?? idx,
-        stepLabel: `Step ${idx + 1}`,
+        order: s.order,
+        stepLabel: s.stepLabel,
+        configName: s.configName,
       }))
 
-      return { runId, sessionId: request.body.sessionId, steps: responseSteps }
+      return { runId, sessionId, steps: responseSteps }
     },
   )
 

@@ -21,6 +21,16 @@ vi.mock('@src/auth/entra.js', () => ({ verifyEntraToken: vi.fn() }))
 vi.mock('@src/services/user.js', () => ({ userService: { findOrCreate: vi.fn() } }))
 vi.mock('@src/services/auto-launcher.js', () => ({ autoLauncherService: mockAutoLauncherService }))
 
+const mockAstConfigService = vi.hoisted(() => ({
+  findById: vi.fn().mockResolvedValue({ id: 'c1', name: 'Config 1', params: { oc: 'NY' } }),
+}))
+vi.mock('@src/services/ast-config.js', () => ({ astConfigService: mockAstConfigService }))
+
+const mockTerminalManager = vi.hoisted(() => ({
+  getWorker: vi.fn().mockReturnValue(null),
+}))
+vi.mock('@src/terminal/manager.js', () => ({ terminalManager: mockTerminalManager }))
+
 import Fastify from 'fastify'
 import { serializerCompiler, validatorCompiler } from 'fastify-type-provider-zod'
 import { autoLauncherRoutes } from '@src/routes/auto-launchers.js'
@@ -199,6 +209,7 @@ describe('auto-launcher routes', () => {
       }
       mockAutoLauncherService.findById.mockResolvedValueOnce(launcher)
       mockAutoLauncherService.createRun.mockResolvedValueOnce({ id: 'run-1' })
+      mockAstConfigService.findById.mockResolvedValue({ id: 'c1', name: 'Config 1', params: { oc: 'NY' } })
 
       const response = await app.inject({
         method: 'POST',
@@ -249,7 +260,7 @@ describe('auto-launcher routes', () => {
       expect(response.json()).toEqual({ error: 'Launcher not found' })
     })
 
-    it('includes stepLabel in response steps', async () => {
+    it('includes stepLabel and configName in response steps', async () => {
       const launcher = {
         id: 'al1',
         ownerId: 'user-1',
@@ -261,6 +272,7 @@ describe('auto-launcher routes', () => {
       }
       mockAutoLauncherService.findById.mockResolvedValueOnce(launcher)
       mockAutoLauncherService.createRun.mockResolvedValueOnce({ id: 'run-1' })
+      mockAstConfigService.findById.mockResolvedValueOnce({ id: 'c1', name: 'My Config', params: {} })
 
       const response = await app.inject({
         method: 'POST',
@@ -268,7 +280,43 @@ describe('auto-launcher routes', () => {
         payload: { sessionId: 's1', username: 'U', password: 'P' },
       })
 
-      expect(response.json().steps[0].stepLabel).toBe('Step 1')
+      const step = response.json().steps[0]
+      expect(step.stepLabel).toBe('Step 1')
+      expect(step.configName).toBe('My Config')
+    })
+
+    it('kicks off execution when worker exists for the session', async () => {
+      const launcher = {
+        id: 'al1',
+        ownerId: 'user-1',
+        name: 'L',
+        visibility: 'private',
+        steps: [{ astName: 'login', configId: 'c1', order: 0 }],
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      }
+      mockAutoLauncherService.findById.mockResolvedValueOnce(launcher)
+      mockAutoLauncherService.createRun.mockResolvedValueOnce({ id: 'run-1' })
+      mockAstConfigService.findById.mockResolvedValueOnce({ id: 'c1', name: 'Cfg', params: {} })
+
+      const fakeWorker = { postMessage: vi.fn(), on: vi.fn(), off: vi.fn() }
+      mockTerminalManager.getWorker.mockReturnValueOnce(fakeWorker)
+      mockAutoLauncherService.executeRun.mockResolvedValueOnce(undefined)
+
+      const response = await app.inject({
+        method: 'POST',
+        url: '/auto-launchers/al1/run',
+        payload: { sessionId: 's1', username: 'U', password: 'P' },
+      })
+
+      expect(response.statusCode).toBe(200)
+      expect(mockAutoLauncherService.executeRun).toHaveBeenCalledWith(
+        expect.any(String),
+        fakeWorker,
+        expect.arrayContaining([expect.objectContaining({ astName: 'login' })]),
+        's1',
+        'user-1',
+      )
     })
   })
 

@@ -1,6 +1,7 @@
 import { eq, and, or } from 'drizzle-orm'
 import { db } from '../db/index.js'
 import { autoLaunchers, autoLauncherRuns } from '../db/schema/index.js'
+import { executionService } from './execution.js'
 import type { Worker } from 'worker_threads'
 
 interface AutoLauncherStep {
@@ -103,12 +104,14 @@ export const autoLauncherService = {
   /**
    * Execute an AutoLauncher run: iterate steps sequentially,
    * sending each AST to the worker thread and waiting for completion.
+   * Creates execution records per step for history tracking.
    */
   async executeRun(
     runId: string,
     worker: Worker,
     steps: AutoLauncherStep[],
-    _sessionId: string,
+    sessionId: string,
+    userId?: string,
   ): Promise<void> {
     const runSteps: RunStep[] = steps.map((s) => ({
       ...s,
@@ -120,6 +123,7 @@ export const autoLauncherService = {
     for (let i = 0; i < runSteps.length; i++) {
       const step = runSteps[i]
       const executionId = `${runId}-step-${i}`
+      const today = new Date().toISOString().slice(0, 10)
 
       step.status = 'running'
       step.executionId = executionId
@@ -129,6 +133,23 @@ export const autoLauncherService = {
         currentStepIndex: String(i),
         steps: runSteps,
       })
+
+      // Create execution record for history tracking
+      try {
+        await executionService.create({
+          id: executionId,
+          sessionId,
+          userId: userId ?? 'unknown',
+          astName: step.astName,
+          executionDate: (step.params.userLocalDate as string) ?? today,
+          runId,
+        })
+      } catch (err) {
+        console.error(
+          `Failed to create execution record for step ${i}:`,
+          err instanceof Error ? err.message : String(err),
+        )
+      }
 
       try {
         // Send AST run command to worker

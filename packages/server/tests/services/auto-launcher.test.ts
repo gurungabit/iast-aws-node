@@ -14,11 +14,16 @@ const mockDb = vi.hoisted(() => ({
   returning: vi.fn(),
 }))
 
+const mockExecutionService = vi.hoisted(() => ({
+  create: vi.fn().mockResolvedValue({ id: 'exec-1' }),
+}))
+
 vi.mock('@src/db/index.js', () => ({ db: mockDb }))
 vi.mock('@src/db/schema/index.js', () => ({
   autoLaunchers: { id: 'id', ownerId: 'ownerId', visibility: 'visibility' },
   autoLauncherRuns: { id: 'id', userId: 'userId' },
 }))
+vi.mock('@src/services/execution.js', () => ({ executionService: mockExecutionService }))
 vi.mock('drizzle-orm', () => ({
   eq: vi.fn((_col, val) => val),
   and: vi.fn((...args: unknown[]) => args),
