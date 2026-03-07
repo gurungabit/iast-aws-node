@@ -346,6 +346,14 @@ function AutoLauncherRunsPage() {
                   const activeIdx = getActiveStepIndex(r)
                   const active = r.steps[activeIdx]
                   const isSelected = r.id === selectedRunId
+                  const completedCount = r.steps.filter(
+                    (s) => s.status === 'completed',
+                  ).length
+                  const subtitle =
+                    r.status === 'running' && active
+                      ? `Step ${String(activeIdx + 1)}/${String(r.steps.length)}: ${active.configName ?? active.astName}`
+                      : `${String(completedCount)}/${String(r.steps.length)} steps completed`
+
                   return (
                     <button
                       key={r.id}
@@ -369,7 +377,7 @@ function AutoLauncherRunsPage() {
                         </div>
                       </div>
                       <div className="mt-1 text-xs text-gray-600 dark:text-zinc-400 truncate">
-                        {active ? `Step ${String(activeIdx + 1)}: ${active.astName}` : 'No steps'}
+                        {subtitle}
                       </div>
                       <div className="mt-0.5 text-[11px] text-gray-400 dark:text-zinc-500">
                         {new Date(r.createdAt).toLocaleString()}
