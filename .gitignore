@@ -3,6 +3,7 @@ dist
 .env
 *.local
 **/coverage/**
+.cache/
 
 # opensrc - source code for packages
 opensrc/
