@@ -97,13 +97,31 @@ export async function runRoutExtractorAST(
     )
   }
 
+  // Report bulk storage complete
+  if (bulkItems.length > 0) {
+    reporter.reportProgress(
+      bulkItems.length,
+      workItems.length,
+      `Stored ${bulkItems.length} records`,
+    )
+  }
+
   // If no items need host interaction, we're done
   if (hostItems.length === 0) {
-    reporter.reportProgress(workItems.length, workItems.length, 'Route Extractor complete')
+    reporter.reportProgress(
+      workItems.length,
+      workItems.length,
+      `Processed ${workItems.length} items (${workItems.length} success, 0 failed, 0 skipped)`,
+    )
     return
   }
 
   // Authenticate for items needing host interaction
+  reporter.reportProgress(
+    bulkItems.length,
+    workItems.length,
+    `PDQ enrichment: processing ${hostItems.length} items with blank PolicyType...`,
+  )
   reporter.reportProgress(bulkItems.length, workItems.length, 'Logging in...')
 
   const auth = await session.authenticate({
@@ -120,6 +138,8 @@ export async function runRoutExtractorAST(
   const routScreen = new RoutScreen(session)
 
   // Process items needing host interaction
+  let hostSuccessCount = 0
+  let hostFailCount = 0
   for (let i = 0; i < hostItems.length; i++) {
     await ctx.checkpoint()
 
@@ -157,6 +177,12 @@ export async function runRoutExtractorAST(
         durationMs,
         data,
       })
+      hostSuccessCount++
+      reporter.reportProgress(
+        itemIndex,
+        workItems.length,
+        `Item ${i + 1}/${hostItems.length}: Completed`,
+      )
     } catch (err) {
       const durationMs = Date.now() - startTime
       reporter.addItem({
@@ -166,12 +192,45 @@ export async function runRoutExtractorAST(
         durationMs,
         error: String(err),
       })
+      hostFailCount++
+      reporter.reportProgress(
+        itemIndex,
+        workItems.length,
+        `Item ${i + 1}/${hostItems.length}: Failed`,
+      )
     }
   }
 
   // Logoff
   reporter.reportProgress(workItems.length, workItems.length, 'Logging off...')
   await session.logoff({ usePa3: true })
+
+  // Final summary
+  const totalSuccess = bulkItems.length + hostSuccessCount
+  const totalFailed = hostFailCount
+  const totalItems = workItems.length
+
+  // PDQ enrichment summary (check which items got resolved after processing)
+  let pdqResolved = 0
+  let pdqNotFound = 0
+  for (const item of hostItems) {
+    if (item.routeItem && !item.routeItem.needsPdqEnrichment) {
+      pdqResolved++
+    } else if (item.routeItem) {
+      pdqNotFound++
+    }
+  }
+
+  const pdqSummary =
+    hostItems.length > 0
+      ? ` [${bulkItems.length} bulk + ${hostItems.length} PDQ: ${pdqResolved} resolved, ${pdqNotFound} not found]`
+      : ''
+
+  reporter.reportProgress(
+    totalItems,
+    totalItems,
+    `Processed ${totalItems} items (${totalSuccess} success, ${totalFailed} failed, 0 skipped)${pdqSummary}`,
+  )
 }
 
 async function prepareFrom412(
@@ -212,7 +271,11 @@ async function prepareFrom412(
       }
 
       try {
-        reporter.reportProgress(0, 1, `Downloading 412 file via SMB...`)
+        reporter.reportProgress(
+          0,
+          1,
+          `Downloading 412 file from ${serverConfig.smbShare}${filePath}...`,
+        )
         const data = await readSmbFile(
           {
             share: serverConfig.smbShare,
