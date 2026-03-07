@@ -1,229 +1,220 @@
 /**
- * Minimal NTLM authentication for SMB2.
- * Implements NTLMv2 with raw NTLM tokens (no SPNEGO wrapping).
- * Modeled after github.com/awo00/smb2 reference implementation.
+ * NTLM authentication for SMB2.
+ * NTLMv1 implementation matching github.com/awo00/smb2 reference.
+ * Uses DES-based LM/NT hashes with minimal flags.
  */
 
-import { createHmac, randomBytes } from 'crypto'
 import md4 from 'js-md4'
+import desjs from 'des.js'
 
 const NTLMSSP_SIGNATURE = Buffer.from('NTLMSSP\0')
 
-// Minimal NTLM flags — match reference (no KEY_EXCH, no VERSION, no 128-bit)
+// Minimal flags — exactly matching reference library
 const FLAGS =
   0x00000001 | // NEGOTIATE_UNICODE
   0x00000200 | // NEGOTIATE_NTLM
-  0x00008000 | // NEGOTIATE_ALWAYS_SIGN
-  0x00080000   // NEGOTIATE_EXTENDED_SESSIONSECURITY (needed for NTLMv2 TargetInfo)
+  0x00008000   // NEGOTIATE_ALWAYS_SIGN
 
-/** Create NTLM Type 1 (Negotiate) message — 32 bytes, no VERSION */
+/** Create NTLM Type 1 (Negotiate) message — 32 bytes */
 export function createType1(): Buffer {
   const buf = Buffer.alloc(32)
   NTLMSSP_SIGNATURE.copy(buf, 0)
-  buf.writeUInt32LE(1, 8) // Type 1
+  buf.writeUInt32LE(1, 8)
   buf.writeUInt32LE(FLAGS, 12)
   // Domain and workstation fields left empty (offset 16-31)
   return buf
 }
 
-interface Type2Fields {
-  serverChallenge: Buffer
-  targetInfo: Buffer
-  /** NetBIOS domain name extracted from AvPairs (MsvAvNbDomainName) */
-  serverDomain: string
-}
-
-// AvPair IDs from MS-NLMP
-const MsvAvNbDomainName = 2
-const MsvAvDnsDomainName = 4
-
-/** Parse AvPairs from Type 2 target info to extract domain names */
-function parseAvPairs(targetInfo: Buffer): { nbDomain: string; dnsDomain: string } {
-  let nbDomain = ''
-  let dnsDomain = ''
-  let offset = 0
-
-  while (offset + 4 <= targetInfo.length) {
-    const avId = targetInfo.readUInt16LE(offset)
-    const avLen = targetInfo.readUInt16LE(offset + 2)
-    if (avId === 0) break // MsvAvEOL
-
-    const value = targetInfo.subarray(offset + 4, offset + 4 + avLen)
-    if (avId === MsvAvNbDomainName) {
-      nbDomain = value.toString('utf16le').replace(/\0/g, '')
-    } else if (avId === MsvAvDnsDomainName) {
-      dnsDomain = value.toString('utf16le').replace(/\0/g, '')
-    }
-    offset += 4 + avLen
+/** Parse NTLM Type 2 — extract 8-byte server challenge */
+export function parseType2(buf: Buffer): Buffer {
+  if (!buf.subarray(0, 8).equals(NTLMSSP_SIGNATURE)) {
+    throw new Error('Invalid NTLMSSP signature in Type 2')
   }
-
-  return { nbDomain, dnsDomain }
+  if (buf.readUInt32LE(8) !== 2) throw new Error('Not a Type 2 message')
+  return Buffer.from(buf.subarray(24, 32))
 }
 
-/** Parse NTLM Type 2 (Challenge) message */
-export function parseType2(buf: Buffer): Type2Fields {
-  const sig = buf.subarray(0, 8)
-  if (!sig.equals(NTLMSSP_SIGNATURE)) {
-    throw new Error('Invalid NTLMSSP signature in Type 2 message')
-  }
-  const type = buf.readUInt32LE(8)
-  if (type !== 2) throw new Error(`Expected Type 2, got Type ${type}`)
-
-  const serverChallenge = Buffer.from(buf.subarray(24, 32))
-
-  // Target info: length at offset 40, offset at 44
-  const targetInfoLen = buf.readUInt16LE(40)
-  const targetInfoOffset = buf.readUInt32LE(44)
-  const targetInfo = Buffer.from(buf.subarray(targetInfoOffset, targetInfoOffset + targetInfoLen))
-
-  // Extract domain from AvPairs
-  const avPairs = parseAvPairs(targetInfo)
-  const serverDomain = avPairs.nbDomain || avPairs.dnsDomain
-
-  return { serverChallenge, targetInfo, serverDomain }
-}
-
-function ntowfv2(password: string, username: string, domain: string): Buffer {
-  // MD4(UTF-16LE(password))
-  const passUtf16 = Buffer.from(password, 'utf16le')
-  const ntHash = Buffer.from(md4.arrayBuffer(passUtf16))
-
-  // HMAC-MD5(ntHash, UTF-16LE(UPPER(username) + domain))
-  const identityStr = username.toUpperCase() + domain
-  const identity = Buffer.from(identityStr, 'utf16le')
-
-  console.log(`[NTLM] identity="${identityStr}", pwdLen=${password.length}, ntHash=${ntHash.subarray(0, 4).toString('hex')}...`)
-
-  return createHmac('md5', ntHash).update(identity).digest()
-}
-
-function computeNtlmV2Response(
-  responseKeyNT: Buffer,
-  serverChallenge: Buffer,
-  clientChallenge: Buffer,
-  targetInfo: Buffer,
-): { ntProofStr: Buffer; ntChallengeResponse: Buffer } {
-  // Timestamp: Windows FILETIME (100ns intervals since 1601-01-01)
-  const now = BigInt(Date.now()) * 10000n + 116444736000000000n
-  const timestamp = Buffer.alloc(8)
-  timestamp.writeBigUInt64LE(now)
-
-  // Build temp (client blob)
-  const blob = Buffer.concat([
-    Buffer.from([0x01, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]), // Version + reserved
-    timestamp,
-    clientChallenge,
-    Buffer.alloc(4), // Reserved
-    targetInfo,
-    Buffer.alloc(4), // Reserved
-  ])
-
-  const ntProofStr = createHmac('md5', responseKeyNT)
-    .update(Buffer.concat([serverChallenge, blob]))
-    .digest()
-
-  const ntChallengeResponse = Buffer.concat([ntProofStr, blob])
-  return { ntProofStr, ntChallengeResponse }
-}
-
-/** Create NTLM Type 3 (Authenticate) message — 64-byte header, NTLMv2 */
+/** Create NTLM Type 3 (Authenticate) — NTLMv1, 64-byte header */
 export function createType3(
   _type1: Buffer,
   type2: Buffer,
   username: string,
   password: string,
   domain: string,
+  hostname: string,
 ): Buffer {
-  const { serverChallenge, targetInfo, serverDomain } = parseType2(type2)
-  const clientChallenge = randomBytes(8)
+  const serverChallenge = parseType2(type2)
 
-  // Use server-provided NetBIOS domain for NTLMv2 hash
-  const hashDomain = serverDomain || domain
-  console.log(`[NTLM] domain="${hashDomain}", user="${username}", challenge=${serverChallenge.toString('hex')}`)
+  hostname = hostname.toUpperCase()
+  domain = domain.toUpperCase()
 
-  const responseKeyNT = ntowfv2(password, username, hashDomain)
-  const { ntChallengeResponse } = computeNtlmV2Response(
-    responseKeyNT, serverChallenge, clientChallenge, targetInfo,
-  )
+  // NTLMv1 hashes (16 bytes each, padded to 21 with zeros)
+  const lmHash = Buffer.alloc(21)
+  createLmHash(password).copy(lmHash)
 
-  // LM response for NTLMv2
-  const lmResponse = Buffer.concat([
-    createHmac('md5', responseKeyNT)
-      .update(Buffer.concat([serverChallenge, clientChallenge]))
-      .digest(),
-    clientChallenge,
-  ])
+  const ntHash = Buffer.alloc(21)
+  createNtHash(password).copy(ntHash)
 
-  const domainBuf = Buffer.from(hashDomain, 'utf16le')
-  const userBuf = Buffer.from(username, 'utf16le')
-  const workstationBuf = Buffer.alloc(0)
+  // 24-byte DES responses
+  const lmResponse = createResponse(lmHash, serverChallenge)
+  const ntResponse = createResponse(ntHash, serverChallenge)
 
-  // 64-byte fixed header (no VERSION, no MIC) + payloads
-  const HEADER_SIZE = 64
-  let offset = HEADER_SIZE
-  const domainOffset = offset; offset += domainBuf.length
-  const userOffset = offset; offset += userBuf.length
-  const wsOffset = offset; offset += workstationBuf.length
-  const lmOffset = offset; offset += lmResponse.length
-  const ntOffset = offset; offset += ntChallengeResponse.length
+  const domainBuf = Buffer.from(domain, 'ucs2')
+  const userBuf = Buffer.from(username, 'ucs2')
+  const hostBuf = Buffer.from(hostname, 'ucs2')
 
-  const buf = Buffer.alloc(offset)
+  const lmLen = lmResponse.length   // 24
+  const ntLen = ntResponse.length   // 24
+
+  // Payload offsets (after 64-byte header)
+  const domainOffset = 0x40
+  const userOffset = domainOffset + domainBuf.length
+  const hostOffset = userOffset + userBuf.length
+  const lmOffset = hostOffset + hostBuf.length
+  const ntOffset = lmOffset + lmLen
+
+  const messageLength = ntOffset + ntLen
+  const buf = Buffer.alloc(messageLength)
+
+  // Signature + Type
   NTLMSSP_SIGNATURE.copy(buf, 0)
-  buf.writeUInt32LE(3, 8) // Type 3
+  buf.writeUInt8(0x03, 8) // Type 3
+
+  let offset = 12
 
   // LM response fields
-  buf.writeUInt16LE(lmResponse.length, 12)
-  buf.writeUInt16LE(lmResponse.length, 14)
-  buf.writeUInt32LE(lmOffset, 16)
+  buf.writeUInt16LE(lmLen, offset); offset += 2
+  buf.writeUInt16LE(lmLen, offset); offset += 2
+  buf.writeUInt16LE(lmOffset, offset); offset += 2
+  buf.fill(0x00, offset, offset + 2); offset += 2
 
   // NT response fields
-  buf.writeUInt16LE(ntChallengeResponse.length, 20)
-  buf.writeUInt16LE(ntChallengeResponse.length, 22)
-  buf.writeUInt32LE(ntOffset, 24)
+  buf.writeUInt16LE(ntLen, offset); offset += 2
+  buf.writeUInt16LE(ntLen, offset); offset += 2
+  buf.writeUInt16LE(ntOffset, offset); offset += 2
+  buf.fill(0x00, offset, offset + 2); offset += 2
 
   // Domain fields
-  buf.writeUInt16LE(domainBuf.length, 28)
-  buf.writeUInt16LE(domainBuf.length, 30)
-  buf.writeUInt32LE(domainOffset, 32)
+  buf.writeUInt16LE(domainBuf.length, offset); offset += 2
+  buf.writeUInt16LE(domainBuf.length, offset); offset += 2
+  buf.writeUInt16LE(domainOffset, offset); offset += 2
+  buf.fill(0x00, offset, offset + 2); offset += 2
 
   // Username fields
-  buf.writeUInt16LE(userBuf.length, 36)
-  buf.writeUInt16LE(userBuf.length, 38)
-  buf.writeUInt32LE(userOffset, 40)
+  buf.writeUInt16LE(userBuf.length, offset); offset += 2
+  buf.writeUInt16LE(userBuf.length, offset); offset += 2
+  buf.writeUInt16LE(userOffset, offset); offset += 2
+  buf.fill(0x00, offset, offset + 2); offset += 2
 
   // Workstation fields
-  buf.writeUInt16LE(workstationBuf.length, 44)
-  buf.writeUInt16LE(workstationBuf.length, 46)
-  buf.writeUInt32LE(wsOffset, 48)
+  buf.writeUInt16LE(hostBuf.length, offset); offset += 2
+  buf.writeUInt16LE(hostBuf.length, offset); offset += 2
+  buf.writeUInt16LE(hostOffset, offset); offset += 2
+  buf.fill(0x00, offset, offset + 6); offset += 6
 
-  // Encrypted session key fields (no KEY_EXCH — all zeros)
-  // offset 52-59: Len=0, MaxLen=0, Offset=0
+  // Message length (at encrypted session key offset, matching reference)
+  buf.writeUInt16LE(messageLength, offset); offset += 2
+  buf.fill(0x00, offset, offset + 2); offset += 2
 
   // Negotiate flags
-  buf.writeUInt32LE(FLAGS, 60)
+  buf.writeUInt32LE(FLAGS, offset); offset += 4
 
   // Copy payloads
   domainBuf.copy(buf, domainOffset)
   userBuf.copy(buf, userOffset)
-  workstationBuf.copy(buf, wsOffset)
+  hostBuf.copy(buf, hostOffset)
   lmResponse.copy(buf, lmOffset)
-  ntChallengeResponse.copy(buf, ntOffset)
+  ntResponse.copy(buf, ntOffset)
 
-  console.log(`[NTLM] Type3: ${buf.length}b, flags=0x${FLAGS.toString(16)}, lm=${lmResponse.length}b, nt=${ntChallengeResponse.length}b`)
+  console.log(`[NTLM] Type3: ${buf.length}b, flags=0x${FLAGS.toString(16)}, domain="${domain}", host="${hostname}", lm=${lmLen}b, nt=${ntLen}b`)
   return buf
 }
 
 /** Extract NTLM token from a buffer that may be raw NTLM or SPNEGO-wrapped */
 export function extractNtlmToken(buf: Buffer): Buffer {
-  const sig = Buffer.from('NTLMSSP\0')
-  // Raw NTLM — starts with NTLMSSP signature
-  if (buf.length >= 8 && buf.subarray(0, 8).equals(sig)) {
+  if (buf.length >= 8 && buf.subarray(0, 8).equals(NTLMSSP_SIGNATURE)) {
     return buf
   }
-  // SPNEGO-wrapped — search for NTLMSSP signature inside
-  const idx = buf.indexOf(sig)
+  const idx = buf.indexOf(NTLMSSP_SIGNATURE)
   if (idx === -1) {
     throw new Error('NTLMSSP token not found in response')
   }
   return Buffer.from(buf.subarray(idx))
+}
+
+// --- NTLMv1 DES-based hash functions (matching reference) ---
+
+/** Expand 7-byte key to 8-byte DES key by inserting zeros every 7 bits */
+function expandDESKey(key7: Buffer): Buffer {
+  const hex2binary: Record<string, number[]> = {
+    '0': [0,0,0,0], '1': [0,0,0,1], '2': [0,0,1,0], '3': [0,0,1,1],
+    '4': [0,1,0,0], '5': [0,1,0,1], '6': [0,1,1,0], '7': [0,1,1,1],
+    '8': [1,0,0,0], '9': [1,0,0,1], 'A': [1,0,1,0], 'B': [1,0,1,1],
+    'C': [1,1,0,0], 'D': [1,1,0,1], 'E': [1,1,1,0], 'F': [1,1,1,1],
+  }
+  const binary2hex: Record<string, string> = {
+    '0000': '0', '0001': '1', '0010': '2', '0011': '3',
+    '0100': '4', '0101': '5', '0110': '6', '0111': '7',
+    '1000': '8', '1001': '9', '1010': 'A', '1011': 'B',
+    '1100': 'C', '1101': 'D', '1110': 'E', '1111': 'F',
+  }
+
+  // Convert to binary array
+  const hexStr = key7.toString('hex').toUpperCase()
+  let bits: number[] = []
+  for (let i = 0; i < hexStr.length; i++) {
+    bits = bits.concat(hex2binary[hexStr[i]])
+  }
+
+  // Insert 0 after every 7 bits
+  const newBits: number[] = []
+  for (let i = 0; i < bits.length; i++) {
+    newBits.push(bits[i])
+    if ((i + 1) % 7 === 0) newBits.push(0)
+  }
+
+  // Convert back to bytes
+  const bufs: Buffer[] = []
+  for (let i = 0; i < newBits.length; i += 8) {
+    if (i + 7 > newBits.length) break
+    const b1 = '' + newBits[i] + newBits[i+1] + newBits[i+2] + newBits[i+3]
+    const b2 = '' + newBits[i+4] + newBits[i+5] + newBits[i+6] + newBits[i+7]
+    bufs.push(Buffer.from(binary2hex[b1] + binary2hex[b2], 'hex'))
+  }
+  return Buffer.concat(bufs)
+}
+
+/** DES-ECB encrypt using des.js */
+function desEncrypt(key7: Buffer, data: Buffer): Buffer {
+  const key8 = expandDESKey(key7)
+  const cipher = desjs.DES.create({ type: 'encrypt', key: key8 })
+  return Buffer.from(cipher.update(data))
+}
+
+/** LM hash: DES-encrypt magic string with password-derived keys */
+function createLmHash(password: string): Buffer {
+  const pwd = password.toUpperCase()
+  const pwdBuf = Buffer.alloc(14)
+  const src = Buffer.from(pwd, 'ascii')
+  src.copy(pwdBuf, 0, 0, Math.min(src.length, 14))
+
+  const magic = Buffer.from('KGS!@#$%', 'ascii')
+  return Buffer.concat([
+    desEncrypt(pwdBuf.subarray(0, 7), magic),
+    desEncrypt(pwdBuf.subarray(7, 14), magic),
+  ])
+}
+
+/** NT hash: MD4 of UTF-16LE password */
+function createNtHash(password: string): Buffer {
+  return Buffer.from(md4.arrayBuffer(Buffer.from(password, 'utf16le')))
+}
+
+/** Create 24-byte DES response from 21-byte hash and 8-byte challenge */
+function createResponse(hash21: Buffer, challenge: Buffer): Buffer {
+  return Buffer.concat([
+    desEncrypt(hash21.subarray(0, 7), challenge),
+    desEncrypt(hash21.subarray(7, 14), challenge),
+    desEncrypt(hash21.subarray(14, 21), challenge),
+  ])
 }

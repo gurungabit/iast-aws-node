@@ -92,7 +92,7 @@ export class SMB2Client {
     await this.negotiate()
 
     // Session Setup (NTLM)
-    await this.sessionSetup(opts.username, opts.password, opts.domain ?? '')
+    await this.sessionSetup(opts.username, opts.password, opts.domain ?? '', opts.host)
 
     // Tree Connect
     await this.treeConnect(opts.host, opts.share)
@@ -310,7 +310,7 @@ export class SMB2Client {
     this.checkStatus(response, [STATUS_SUCCESS], 'negotiate')
   }
 
-  private async sessionSetup(username: string, password: string, domain: string): Promise<void> {
+  private async sessionSetup(username: string, password: string, domain: string, hostname: string): Promise<void> {
     // Round 1: Send raw NTLM Type 1 (no SPNEGO wrapping, matching reference)
     const type1 = createType1()
     const setup1 = this.buildSessionSetup(type1)
@@ -328,7 +328,7 @@ export class SMB2Client {
     console.log(`[SMB2] Type2: ${type2.length}b, flags=0x${type2.readUInt32LE(20).toString(16)}`)
 
     // Round 2: Send raw NTLM Type 3 (no SPNEGO wrapping)
-    const type3 = createType3(type1, type2, username, password, domain)
+    const type3 = createType3(type1, type2, username, password, domain, hostname)
     const setup2 = this.buildSessionSetup(type3)
     const response2 = await this.sendRequest(SMB2_SESSION_SETUP, setup2)
     this.checkStatus(response2, [STATUS_SUCCESS], 'session setup (NTLM authenticate)')
