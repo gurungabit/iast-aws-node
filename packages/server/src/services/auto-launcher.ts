@@ -93,12 +93,27 @@ export const autoLauncherService = {
   },
 
   async findRunsByUser(userId: string, limit = 50, offset = 0) {
-    return db
-      .select()
+    const rows = await db
+      .select({
+        id: autoLauncherRuns.id,
+        launcherId: autoLauncherRuns.launcherId,
+        launcherName: autoLaunchers.name,
+        status: autoLauncherRuns.status,
+        steps: autoLauncherRuns.steps,
+        currentStepIndex: autoLauncherRuns.currentStepIndex,
+        createdAt: autoLauncherRuns.createdAt,
+        completedAt: autoLauncherRuns.completedAt,
+      })
       .from(autoLauncherRuns)
+      .leftJoin(autoLaunchers, eq(autoLauncherRuns.launcherId, autoLaunchers.id))
       .where(eq(autoLauncherRuns.userId, userId))
       .limit(limit)
       .offset(offset)
+
+    return rows.map((r) => ({
+      ...r,
+      launcherName: r.launcherName ?? null,
+    }))
   },
 
   /**

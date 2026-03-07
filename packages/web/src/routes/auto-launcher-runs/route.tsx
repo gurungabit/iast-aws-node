@@ -200,7 +200,7 @@ function CollapsibleStepGroup({
               <RunStepCard
                 key={`${String(globalIdx)}-${step.astName}`}
                 label={step.taskLabel ?? `Task ${String(globalIdx + 1)}`}
-                sublabel={step.executionId ? `executionId=${step.executionId}` : 'executionId=—'}
+                sublabel={step.astName}
                 status={step.status}
                 isActive={isActive}
                 compact
@@ -372,7 +372,7 @@ function AutoLauncherRunsPage() {
                                 key={`${String(idx)}-${s.astName}`}
                                 label={`Step ${String(idx + 1)} — ${s.configName ?? s.astName}`}
                                 sublabel={
-                                  s.executionId ? `executionId=${s.executionId}` : 'executionId=—'
+                                  s.astName
                                 }
                                 status={s.status}
                                 isActive={isActive}

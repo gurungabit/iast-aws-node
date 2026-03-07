@@ -6,6 +6,7 @@ const mockDb = vi.hoisted(() => ({
   update: vi.fn().mockReturnThis(),
   delete: vi.fn().mockReturnThis(),
   from: vi.fn().mockReturnThis(),
+  leftJoin: vi.fn().mockReturnThis(),
   where: vi.fn().mockReturnThis(),
   limit: vi.fn().mockReturnThis(),
   offset: vi.fn().mockReturnThis(),
@@ -20,8 +21,8 @@ const mockExecutionService = vi.hoisted(() => ({
 
 vi.mock('@src/db/index.js', () => ({ db: mockDb }))
 vi.mock('@src/db/schema/index.js', () => ({
-  autoLaunchers: { id: 'id', ownerId: 'ownerId', visibility: 'visibility' },
-  autoLauncherRuns: { id: 'id', userId: 'userId' },
+  autoLaunchers: { id: 'id', ownerId: 'ownerId', visibility: 'visibility', name: 'name' },
+  autoLauncherRuns: { id: 'id', launcherId: 'launcherId', userId: 'userId', status: 'status', steps: 'steps', currentStepIndex: 'currentStepIndex', createdAt: 'createdAt', completedAt: 'completedAt' },
 }))
 vi.mock('@src/services/execution.js', () => ({ executionService: mockExecutionService }))
 vi.mock('drizzle-orm', () => ({
@@ -48,6 +49,7 @@ describe('autoLauncherService', () => {
     mockDb.update.mockReturnThis()
     mockDb.delete.mockReturnThis()
     mockDb.from.mockReturnThis()
+    mockDb.leftJoin.mockReturnThis()
     mockDb.where.mockReturnThis()
     mockDb.limit.mockReturnThis()
     mockDb.offset.mockReturnThis()
@@ -203,12 +205,13 @@ describe('autoLauncherService', () => {
 
   describe('findRunsByUser', () => {
     it('returns runs for the user with default limit and offset', async () => {
-      const runs = [{ id: 'run1' }]
-      mockDb.offset.mockResolvedValueOnce(runs)
+      const rows = [{ id: 'run1', launcherName: 'My Launcher' }]
+      mockDb.offset.mockResolvedValueOnce(rows)
 
       const result = await autoLauncherService.findRunsByUser('u1')
 
-      expect(result).toEqual(runs)
+      expect(result).toEqual([{ id: 'run1', launcherName: 'My Launcher' }])
+      expect(mockDb.leftJoin).toHaveBeenCalled()
       expect(mockDb.limit).toHaveBeenCalledWith(50)
       expect(mockDb.offset).toHaveBeenCalledWith(0)
     })
