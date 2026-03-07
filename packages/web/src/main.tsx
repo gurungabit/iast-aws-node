@@ -35,8 +35,12 @@ export function App() {
   )
 }
 
-createRoot(document.getElementById('root')!).render(
-  <StrictMode>
-    <App />
-  </StrictMode>,
-)
+// MSAL must be initialized before rendering — ensures cached accounts
+// are loaded so direct navigation to any route works.
+msalInstance.initialize().then(() => {
+  createRoot(document.getElementById('root')!).render(
+    <StrictMode>
+      <App />
+    </StrictMode>,
+  )
+})
