@@ -605,7 +605,7 @@ export function DataInquiryModal({ isOpen, onClose }: DataInquiryModalProps): Re
 
         {/* Pagination — directly under table, no gap */}
         {hasSearched && total > 0 && (
-          <div className="sticky bottom-0 flex items-center justify-between gap-4 pt-2 pb-3 bg-white dark:bg-zinc-900 -mx-4 px-4 -mb-3 -mt-2">
+          <div className="sticky bottom-0 flex items-center justify-between gap-4 pt-2 pb-3 bg-white dark:bg-zinc-900 -mx-4 px-4 -mb-3 -mt-4">
             <div className="flex items-center gap-2">
               <span className="text-xs text-gray-500 dark:text-zinc-400">Per page:</span>
               {PAGE_SIZE_OPTIONS.map((size) => (
