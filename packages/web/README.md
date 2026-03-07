@@ -1,73 +1,64 @@
-# React + TypeScript + Vite
+# @iast-aws-node/web
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+React frontend for the IAST terminal automation platform.
 
-Currently, two official plugins are available:
+## Stack
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) (or [oxc](https://oxc.rs) when used in [rolldown-vite](https://vite.dev/guide/rolldown)) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+- React 19 + TypeScript
+- Vite (dev server + build)
+- TanStack Router (file-based routing)
+- TanStack Query (server state)
+- Zustand (client state)
+- Tailwind CSS v4
+- xterm.js (terminal emulator)
+- MSAL (Azure Entra ID auth)
+- lucide-react (icons)
 
-## React Compiler
+## Pages
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+| Route | Description |
+|-------|-------------|
+| `/` | Terminal - multi-tab TN3270 sessions with AST controls |
+| `/history` | Execution history - browse executions, policies, and details |
+| `/auto-launcher-runs` | AutoLauncher monitoring - live step progress |
+| `/schedules` | Scheduled executions management |
 
-## Expanding the ESLint configuration
+## State Architecture
 
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
+```mermaid
+graph LR
+    subgraph Stores["Zustand Stores"]
+        SS[session-store<br/>WS connections + screens]
+        AS[ast-store<br/>Per-tab AST state]
+        ALD[auto-launcher-draft-store<br/>Draft configs]
+    end
 
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
+    subgraph Providers
+        AEB[ASTEventBridge<br/>WS events -> ast-store]
+    end
 
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
+    subgraph Services
+        WSS[websocket.ts<br/>TerminalWebSocket class]
+        API[api.ts<br/>Authenticated fetch]
+    end
 
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+    WSS -->|messages| AEB
+    AEB -->|dispatches| AS
+    WSS --> SS
+    API --> TQ[TanStack Query]
 ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+### Key data flow
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
+1. **Terminal sessions**: `session-store` manages WS connections per tab. Each tab has a `TerminalWebSocket` instance.
+2. **AST execution**: `ASTEventBridge` subscribes to WS messages and dispatches to `ast-store`. Status, progress, and item results update in real-time.
+3. **History/AutoLauncher pages**: Use TanStack Query for DB data, overlay live AST store status for running executions.
 
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+## Development
+
+```bash
+npm run dev:web    # Start Vite dev server
+npm run build:web  # Production build
+npm run test:web   # Run tests
+npm run lint       # Lint all packages
 ```
