@@ -81,7 +81,17 @@ export const executionService = {
         data: item.data ?? null,
       }))
 
-      await db.insert(policyResults).values(values)
+      // Chunk to stay under PostgreSQL's 65,535 param limit (6 params/row → max ~10k rows)
+      const CHUNK_SIZE = 5000
+      if (values.length <= CHUNK_SIZE) {
+        await db.insert(policyResults).values(values)
+      } else {
+        await db.transaction(async (tx) => {
+          for (let i = 0; i < values.length; i += CHUNK_SIZE) {
+            await tx.insert(policyResults).values(values.slice(i, i + CHUNK_SIZE))
+          }
+        })
+      }
     }
 
     // Update counts based on ALL items (including PDQ ones)

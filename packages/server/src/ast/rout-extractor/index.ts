@@ -81,15 +81,13 @@ export async function runRoutExtractorAST(
   // Report bulk items immediately (no host session needed)
   if (bulkItems.length > 0) {
     reporter.reportProgress(0, workItems.length, `Storing ${bulkItems.length} pre-computed records...`)
-    for (const item of bulkItems) {
-      reporter.addItem({
-        id: randomUUID(),
-        policyNumber: item.id,
-        status: 'success',
-        durationMs: 0,
-        data: item.bulkResult,
-      })
-    }
+    reporter.addItems(bulkItems.map((item) => ({
+      id: randomUUID(),
+      policyNumber: item.id,
+      status: 'success' as const,
+      durationMs: 0,
+      data: item.bulkResult,
+    })))
   }
 
   // If no items need host interaction, we're done

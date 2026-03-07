@@ -1,8 +1,8 @@
 import type { ASTItemResult, WorkerToMainMessage } from '../terminal/worker-messages.js'
 import type { MessagePort } from 'worker_threads'
 
-const BATCH_SIZE = 50
-const FLUSH_INTERVAL_MS = 200
+const BATCH_SIZE = 500
+const FLUSH_INTERVAL_MS = 300
 
 export class ProgressReporter {
   private buffer: ASTItemResult[] = []
@@ -18,6 +18,14 @@ export class ProgressReporter {
 
   addItem(item: ASTItemResult) {
     this.buffer.push(item)
+    if (this.buffer.length >= BATCH_SIZE) {
+      this.flush()
+    }
+  }
+
+  /** Add multiple items at once (avoids per-item flush checks). */
+  addItems(items: ASTItemResult[]) {
+    this.buffer.push(...items)
     if (this.buffer.length >= BATCH_SIZE) {
       this.flush()
     }

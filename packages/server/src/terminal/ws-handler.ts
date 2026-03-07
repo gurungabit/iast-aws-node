@@ -21,7 +21,7 @@ import {
   discoverPods,
 } from './registry.js'
 import { config } from '../config.js'
-import type { WorkerToMainMessage } from './worker-messages.js'
+import type { ASTItemResult, WorkerToMainMessage } from './worker-messages.js'
 
 const MY_POD_IP = config.podIp
 
@@ -72,25 +72,63 @@ function attachLocal(
     }
   })
 
+  // ── DB write buffer (decoupled from WS forwarding) ──
+  // Accumulate items and flush to DB in large batches for throughput.
+  const DB_FLUSH_SIZE = 5000
+  const DB_FLUSH_INTERVAL_MS = 1000
+  let dbBuffer: { executionId: string; items: ASTItemResult[] }[] = []
+  let dbFlushTimer: ReturnType<typeof setInterval> | null = null
+
+  const flushDbBuffer = () => {
+    if (dbBuffer.length === 0) return
+    const batches = dbBuffer
+    dbBuffer = []
+
+    // Group by executionId and merge
+    const grouped = new Map<string, ASTItemResult[]>()
+    for (const batch of batches) {
+      const existing = grouped.get(batch.executionId)
+      if (existing) {
+        existing.push(...batch.items)
+      } else {
+        grouped.set(batch.executionId, [...batch.items])
+      }
+    }
+
+    for (const [execId, items] of grouped) {
+      executionService
+        .batchInsertPolicies(execId, items)
+        .catch((err) => {
+          const cause = err instanceof Error && 'cause' in err && err.cause instanceof Error
+            ? err.cause.message
+            : ''
+          console.error(`Failed to persist policies: ${cause || (err instanceof Error ? err.constructor.name : 'unknown error')}`)
+        })
+    }
+  }
+
+  dbFlushTimer = setInterval(flushDbBuffer, DB_FLUSH_INTERVAL_MS)
+
   // Worker → Browser
   const onWorkerMessage = (msg: WorkerToMainMessage) => {
     try {
       if (msg.type === 'ast.item_result_batch') {
-        executionService
-          .batchInsertPolicies(msg.executionId, msg.items)
-          .catch((err) => {
-            // Log only the root cause — DrizzleQueryError.message includes full query + params (PII)
-            const cause = err instanceof Error && 'cause' in err && err.cause instanceof Error
-              ? err.cause.message
-              : ''
-            console.error(`Failed to persist policies: ${cause || (err instanceof Error ? err.constructor.name : 'unknown error')}`)
-          })
+        // Buffer for DB (large batch writes)
+        dbBuffer.push({ executionId: msg.executionId, items: msg.items })
+        const totalBuffered = dbBuffer.reduce((n, b) => n + b.items.length, 0)
+        if (totalBuffered >= DB_FLUSH_SIZE) {
+          flushDbBuffer()
+        }
+      }
+      if (msg.type === 'ast.complete') {
+        // Flush remaining items before completion
+        flushDbBuffer()
+        if (msg.status === 'failed') {
+          console.error(`[worker:${sessionId}] AST failed: ${msg.error}`)
+        }
       }
       if (msg.type === 'error') {
         console.error(`[worker:${sessionId}] ${msg.message}`)
-      }
-      if (msg.type === 'ast.complete' && msg.status === 'failed') {
-        console.error(`[worker:${sessionId}] AST failed: ${msg.error}`)
       }
       if (socket.readyState === WebSocket.OPEN) {
         socket.send(JSON.stringify(msg))
@@ -102,15 +140,15 @@ function attachLocal(
 
   worker.on('message', onWorkerMessage)
 
-  socket.on('close', () => {
+  const cleanup = () => {
+    flushDbBuffer()
+    if (dbFlushTimer) { clearInterval(dbFlushTimer); dbFlushTimer = null }
     worker.off('message', onWorkerMessage)
     terminalManager.detachWebSocket(sessionId)
-  })
+  }
 
-  socket.on('error', () => {
-    worker.off('message', onWorkerMessage)
-    terminalManager.detachWebSocket(sessionId)
-  })
+  socket.on('close', cleanup)
+  socket.on('error', cleanup)
 
   // Replay any messages that arrived during async setup
   if (pendingMessages?.length) {
