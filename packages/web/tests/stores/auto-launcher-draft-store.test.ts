@@ -30,8 +30,6 @@ describe('useAutoLauncherDraftStore', () => {
       expect(draft.selectedLauncher).toBeNull()
       expect(draft.newStepAstName).toBeNull()
       expect(draft.newStepConfigId).toBeNull()
-      expect(draft.hostUsername).toBe('')
-      expect(draft.hostPassword).toBe('')
     })
 
     it('resets an existing draft back to defaults', () => {
@@ -82,14 +80,13 @@ describe('useAutoLauncherDraftStore', () => {
       expect(draft.visibility).toBe('public')
       // Other fields should be defaults
       expect(draft.steps).toEqual([])
-      expect(draft.hostUsername).toBe('')
     })
 
     it('merges partial updates into existing draft', () => {
       act(() => {
         useAutoLauncherDraftStore.getState().upsertDraft('tab-1', {
           name: 'Original',
-          hostUsername: 'USER1',
+          visibility: 'public',
         })
       })
 
@@ -101,7 +98,7 @@ describe('useAutoLauncherDraftStore', () => {
 
       const draft = useAutoLauncherDraftStore.getState().drafts['tab-1']
       expect(draft.name).toBe('Updated')
-      expect(draft.hostUsername).toBe('USER1') // preserved
+      expect(draft.visibility).toBe('public') // preserved
     })
 
     it('stores steps correctly', () => {
@@ -149,18 +146,6 @@ describe('useAutoLauncherDraftStore', () => {
       expect(draft.newStepConfigId).toBe('cfg-123')
     })
 
-    it('stores credentials', () => {
-      act(() => {
-        useAutoLauncherDraftStore.getState().upsertDraft('tab-1', {
-          hostUsername: 'HERC01',
-          hostPassword: 'secret',
-        })
-      })
-
-      const draft = useAutoLauncherDraftStore.getState().drafts['tab-1']
-      expect(draft.hostUsername).toBe('HERC01')
-      expect(draft.hostPassword).toBe('secret')
-    })
   })
 
   describe('per-tab isolation', () => {

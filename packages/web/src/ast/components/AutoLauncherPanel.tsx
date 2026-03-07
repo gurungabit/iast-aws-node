@@ -29,8 +29,11 @@ import { ItemResultList } from '../../components/ui/ItemResultList'
 
 import { useASTStore, type AutoLauncherStepState } from '../../stores/ast-store'
 import { useAutoLauncherDraftStore, type DraftStep } from '../../stores/auto-launcher-draft-store'
+import { useAuth } from '../../auth/useAuth'
+import { CredentialsInput } from '../shared/CredentialsInput'
 import { getVisibleASTs, getAST } from '../registry'
 import type { SavedAstConfigWithAccess } from '../types'
+import { extractAlias, getLocalDateString } from '../types'
 import { listAstConfigs } from '../../services/ast-configs'
 import {
   getAutoLaunchers,
@@ -40,7 +43,6 @@ import {
   runAutoLauncher,
   type AutoLauncherDto,
 } from '../../services/auto-launchers'
-import { getLocalDateString } from '../types'
 
 // ---------------------------------------------------------------------------
 // SortableStepRow
@@ -103,6 +105,22 @@ export const AutoLauncherPanel = memo(function AutoLauncherPanel() {
     if (!tabId) return 'idle'
     return s.tabs[tabId]?.status ?? 'idle'
   })
+  const credentials = useASTStore((s) => {
+    const tabId = s.activeTabId
+    if (!tabId) return { username: '', password: '' }
+    return s.tabs[tabId]?.credentials ?? { username: '', password: '' }
+  })
+  const setCredentials = useASTStore((s) => s.setCredentials)
+
+  const { user } = useAuth()
+
+  // Auto-populate username from email alias (same as AST forms)
+  useEffect(() => {
+    if (activeTabId && !credentials.username && user?.email) {
+      const alias = extractAlias(user.email).toUpperCase()
+      if (alias) setCredentials(activeTabId, { username: alias })
+    }
+  }, [activeTabId, credentials.username, user?.email, setCredentials])
 
   const upsertDraft = useAutoLauncherDraftStore((s) => s.upsertDraft)
   const resetDraft = useAutoLauncherDraftStore((s) => s.resetDraft)
@@ -122,9 +140,6 @@ export const AutoLauncherPanel = memo(function AutoLauncherPanel() {
   const [availableConfigs, setAvailableConfigs] = useState<SavedAstConfigWithAccess[]>([])
   const [loadingConfigs, setLoadingConfigs] = useState(false)
 
-  const [hostUsername, setHostUsername] = useState('')
-  const [hostPassword, setHostPassword] = useState('')
-
   const [saveError, setSaveError] = useState<string | null>(null)
   const [saveSuccess, setSaveSuccess] = useState<string | null>(null)
   const [runError, setRunError] = useState<string | null>(null)
@@ -133,7 +148,7 @@ export const AutoLauncherPanel = memo(function AutoLauncherPanel() {
   const [isDraftHydrated, setIsDraftHydrated] = useState(false)
 
   const isAstBusy = astStatus === 'running' || astStatus === 'paused'
-  const isCredsValid = hostUsername.trim().length > 0 && hostPassword.trim().length > 0
+  const isCredsValid = credentials.username.trim().length > 0 && credentials.password.trim().length > 0
   const isLauncherValid = name.trim().length > 0 && steps.length > 0
   const showCancel = selectedLauncher !== null || name.trim().length > 0 || steps.length > 0
 
@@ -201,8 +216,6 @@ export const AutoLauncherPanel = memo(function AutoLauncherPanel() {
     setSteps(existing.steps)
     setNewStepAstName(existing.newStepAstName)
     setNewStepConfigId(existing.newStepConfigId)
-    setHostUsername(existing.hostUsername)
-    setHostPassword(existing.hostPassword)
     setIsDraftHydrated(true)
   }, [activeTabId, resetDraft])
 
@@ -216,8 +229,6 @@ export const AutoLauncherPanel = memo(function AutoLauncherPanel() {
       steps,
       newStepAstName,
       newStepConfigId,
-      hostUsername,
-      hostPassword,
     })
   }, [
     activeTabId,
@@ -228,8 +239,6 @@ export const AutoLauncherPanel = memo(function AutoLauncherPanel() {
     steps,
     newStepAstName,
     newStepConfigId,
-    hostUsername,
-    hostPassword,
     upsertDraft,
   ])
 
@@ -394,7 +403,7 @@ export const AutoLauncherPanel = memo(function AutoLauncherPanel() {
     try {
       if (!activeTabId) throw new Error('No active session')
       if (!selectedLauncher) throw new Error('Save the launcher before running')
-      if (!hostUsername || !hostPassword) throw new Error('Username and password are required')
+      if (!credentials.username || !credentials.password) throw new Error('Username and password are required')
       if (steps.length === 0) throw new Error('Add at least one step')
 
       setIsRunning(true)
@@ -403,8 +412,8 @@ export const AutoLauncherPanel = memo(function AutoLauncherPanel() {
 
       const result = await runAutoLauncher(selectedLauncher.id, {
         sessionId: activeTabId,
-        username: hostUsername,
-        password: hostPassword,
+        username: credentials.username,
+        password: credentials.password,
         userLocalDate: getLocalDateString(),
       })
 
@@ -426,7 +435,7 @@ export const AutoLauncherPanel = memo(function AutoLauncherPanel() {
     } finally {
       setIsRunning(false)
     }
-  }, [activeTabId, hostPassword, hostUsername, selectedLauncher, steps])
+  }, [activeTabId, credentials, selectedLauncher, steps])
 
   const astLabels = useMemo(() => {
     const map = new Map<string, string>()
@@ -474,23 +483,15 @@ export const AutoLauncherPanel = memo(function AutoLauncherPanel() {
         </div>
       )}
 
-      {/* Runtime Credentials */}
-      <Card title="Runtime Credentials" description="Used only for this run (never saved)">
-        <div className="grid grid-cols-2 gap-3">
-          <Input
-            label="HOST Username"
-            value={hostUsername}
-            onChange={(e) => setHostUsername(e.target.value)}
-            placeholder="HERC01"
-          />
-          <Input
-            label="HOST Password"
-            type="password"
-            value={hostPassword}
-            onChange={(e) => setHostPassword(e.target.value)}
-            placeholder="Password"
-          />
-        </div>
+      {/* Runtime Credentials (shared with AST forms) */}
+      <Card title="Runtime Credentials" description="Shared across AST tabs (never saved)">
+        <CredentialsInput
+          username={credentials.username}
+          password={credentials.password}
+          onUsernameChange={(v) => { if (activeTabId) setCredentials(activeTabId, { username: v }) }}
+          onPasswordChange={(v) => { if (activeTabId) setCredentials(activeTabId, { password: v }) }}
+          disabled={isRunning || isAstBusy}
+        />
       </Card>
 
       {/* Launcher Browser */}
@@ -540,7 +541,7 @@ export const AutoLauncherPanel = memo(function AutoLauncherPanel() {
             {showCancel && (
               <Button
                 variant="secondary"
-                size="sm"
+                size="md"
                 className="flex-1"
                 disabled={isRunning || isAstBusy}
                 onClick={resetEditor}
@@ -550,7 +551,7 @@ export const AutoLauncherPanel = memo(function AutoLauncherPanel() {
             )}
             <Button
               variant="secondary"
-              size="sm"
+              size="md"
               className="flex-1"
               disabled={!isLauncherValid || isRunning || isAstBusy}
               onClick={() => void handleSave()}
@@ -559,7 +560,7 @@ export const AutoLauncherPanel = memo(function AutoLauncherPanel() {
             </Button>
             <Button
               variant="primary"
-              size="sm"
+              size="md"
               className="flex-1"
               isLoading={isRunning}
               disabled={!isLauncherValid || !isCredsValid || isRunning || isAstBusy}
@@ -601,6 +602,7 @@ export const AutoLauncherPanel = memo(function AutoLauncherPanel() {
               value={name}
               onChange={(e) => setName(e.target.value)}
               placeholder="My launcher"
+              required
             />
             <div>
               <label className="block text-sm font-medium text-gray-700 dark:text-zinc-300 mb-1.5">
@@ -654,7 +656,7 @@ export const AutoLauncherPanel = memo(function AutoLauncherPanel() {
               </div>
               <Button
                 variant="primary"
-                size="sm"
+                size="md"
                 onClick={addStep}
                 disabled={!newStepConfigId || !newStepAstName}
               >

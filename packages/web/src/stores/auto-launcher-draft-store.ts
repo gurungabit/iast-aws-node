@@ -16,8 +16,6 @@ export interface TabDraft {
   steps: DraftStep[]
   newStepAstName: string | null
   newStepConfigId: string | null
-  hostUsername: string
-  hostPassword: string
 }
 
 function createDefaultDraft(): TabDraft {
@@ -28,8 +26,6 @@ function createDefaultDraft(): TabDraft {
     steps: [],
     newStepAstName: null,
     newStepConfigId: null,
-    hostUsername: '',
-    hostPassword: '',
   }
 }
 

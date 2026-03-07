@@ -69,4 +69,15 @@ describe('Input', () => {
     render(<Input className="my-input" />)
     expect(screen.getByRole('textbox').className).toContain('my-input')
   })
+
+  it('shows red asterisk when required', () => {
+    render(<Input label="Email" required />)
+    expect(screen.getByText('*')).toBeInTheDocument()
+    expect(screen.getByText('*')).toHaveClass('text-red-500')
+  })
+
+  it('does not show asterisk when not required', () => {
+    render(<Input label="Email" />)
+    expect(screen.queryByText('*')).not.toBeInTheDocument()
+  })
 })

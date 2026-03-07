@@ -616,7 +616,7 @@ export function ASTFormWrapper({
               />
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-zinc-300 mb-1">
-                  OC
+                  OC<span className="text-red-500 ml-0.5">*</span>
                 </label>
                 <OcSelector
                   value={oc}

@@ -21,9 +21,9 @@ export function CredentialsInput({
         label="User ID"
         value={username}
         onChange={(e) => onUsernameChange(e.target.value)}
-        placeholder="HERC01"
         disabled={disabled}
         autoComplete="username"
+        required
       />
       <Input
         label="Password"
@@ -33,6 +33,7 @@ export function CredentialsInput({
         placeholder="Password"
         disabled={disabled}
         autoComplete="current-password"
+        required
       />
     </div>
   )

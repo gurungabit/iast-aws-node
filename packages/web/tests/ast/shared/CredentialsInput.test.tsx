@@ -13,8 +13,8 @@ describe('CredentialsInput', () => {
   it('renders User ID and Password inputs', () => {
     render(<CredentialsInput {...defaultProps} />)
 
-    expect(screen.getByLabelText('User ID')).toBeInTheDocument()
-    expect(screen.getByLabelText('Password')).toBeInTheDocument()
+    expect(screen.getByLabelText(/User ID/)).toBeInTheDocument()
+    expect(screen.getByLabelText(/Password/)).toBeInTheDocument()
   })
 
   it('displays current username and password values', () => {
@@ -22,15 +22,15 @@ describe('CredentialsInput', () => {
       <CredentialsInput {...defaultProps} username="HERC01" password="secret123" />,
     )
 
-    expect(screen.getByLabelText('User ID')).toHaveValue('HERC01')
-    expect(screen.getByLabelText('Password')).toHaveValue('secret123')
+    expect(screen.getByLabelText(/User ID/)).toHaveValue('HERC01')
+    expect(screen.getByLabelText(/Password/)).toHaveValue('secret123')
   })
 
   it('calls onUsernameChange when typing in User ID input', () => {
     const onUsernameChange = vi.fn()
     render(<CredentialsInput {...defaultProps} onUsernameChange={onUsernameChange} />)
 
-    fireEvent.change(screen.getByLabelText('User ID'), {
+    fireEvent.change(screen.getByLabelText(/User ID/), {
       target: { value: 'NEWUSER' },
     })
 
@@ -43,7 +43,7 @@ describe('CredentialsInput', () => {
       <CredentialsInput {...defaultProps} onPasswordChange={onPasswordChange} />,
     )
 
-    fireEvent.change(screen.getByLabelText('Password'), {
+    fireEvent.change(screen.getByLabelText(/Password/), {
       target: { value: 'newpass' },
     })
 
@@ -53,20 +53,20 @@ describe('CredentialsInput', () => {
   it('disables both inputs when disabled prop is true', () => {
     render(<CredentialsInput {...defaultProps} disabled />)
 
-    expect(screen.getByLabelText('User ID')).toBeDisabled()
-    expect(screen.getByLabelText('Password')).toBeDisabled()
+    expect(screen.getByLabelText(/User ID/)).toBeDisabled()
+    expect(screen.getByLabelText(/Password/)).toBeDisabled()
   })
 
   it('inputs are not disabled by default', () => {
     render(<CredentialsInput {...defaultProps} />)
 
-    expect(screen.getByLabelText('User ID')).not.toBeDisabled()
-    expect(screen.getByLabelText('Password')).not.toBeDisabled()
+    expect(screen.getByLabelText(/User ID/)).not.toBeDisabled()
+    expect(screen.getByLabelText(/Password/)).not.toBeDisabled()
   })
 
   it('renders password input with type="password"', () => {
     render(<CredentialsInput {...defaultProps} />)
 
-    expect(screen.getByLabelText('Password')).toHaveAttribute('type', 'password')
+    expect(screen.getByLabelText(/Password/)).toHaveAttribute('type', 'password')
   })
 })
