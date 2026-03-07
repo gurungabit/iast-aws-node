@@ -183,6 +183,95 @@ describe('auto-launcher routes', () => {
     })
   })
 
+  describe('POST /auto-launchers/:id/run', () => {
+    it('creates a run and returns runId with steps', async () => {
+      const launcher = {
+        id: 'al1',
+        ownerId: 'user-1',
+        name: 'Test Launcher',
+        visibility: 'private',
+        steps: [
+          { astName: 'login', configId: 'c1', order: 0 },
+          { astName: 'bi_renew', configId: 'c2', order: 1 },
+        ],
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      }
+      mockAutoLauncherService.findById.mockResolvedValueOnce(launcher)
+      mockAutoLauncherService.createRun.mockResolvedValueOnce({ id: 'run-1' })
+
+      const response = await app.inject({
+        method: 'POST',
+        url: '/auto-launchers/al1/run',
+        payload: {
+          sessionId: 'session-1',
+          username: 'USER1',
+          password: 'pass123',
+          userLocalDate: '2025-01-01',
+        },
+      })
+
+      expect(response.statusCode).toBe(200)
+      const body = response.json()
+      expect(body.runId).toBeDefined()
+      expect(body.sessionId).toBe('session-1')
+      expect(body.steps).toHaveLength(2)
+      expect(body.steps[0]).toEqual(
+        expect.objectContaining({ astName: 'login', configId: 'c1', order: 0 }),
+      )
+      expect(body.steps[1]).toEqual(
+        expect.objectContaining({ astName: 'bi_renew', configId: 'c2', order: 1 }),
+      )
+      expect(mockAutoLauncherService.findById).toHaveBeenCalledWith('al1')
+      expect(mockAutoLauncherService.createRun).toHaveBeenCalledWith(
+        expect.objectContaining({
+          launcherId: 'al1',
+          userId: 'user-1',
+          sessionId: 'session-1',
+        }),
+      )
+    })
+
+    it('returns 404 when launcher not found', async () => {
+      mockAutoLauncherService.findById.mockResolvedValueOnce(null)
+
+      const response = await app.inject({
+        method: 'POST',
+        url: '/auto-launchers/missing/run',
+        payload: {
+          sessionId: 'session-1',
+          username: 'U',
+          password: 'P',
+        },
+      })
+
+      expect(response.statusCode).toBe(404)
+      expect(response.json()).toEqual({ error: 'Launcher not found' })
+    })
+
+    it('includes stepLabel in response steps', async () => {
+      const launcher = {
+        id: 'al1',
+        ownerId: 'user-1',
+        name: 'L',
+        visibility: 'private',
+        steps: [{ astName: 'login', configId: 'c1', order: 0 }],
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      }
+      mockAutoLauncherService.findById.mockResolvedValueOnce(launcher)
+      mockAutoLauncherService.createRun.mockResolvedValueOnce({ id: 'run-1' })
+
+      const response = await app.inject({
+        method: 'POST',
+        url: '/auto-launchers/al1/run',
+        payload: { sessionId: 's1', username: 'U', password: 'P' },
+      })
+
+      expect(response.json().steps[0].stepLabel).toBe('Step 1')
+    })
+  })
+
   describe('GET /auto-launcher-runs', () => {
     it('returns runs for the user with defaults', async () => {
       const runs = [

@@ -1,67 +1,57 @@
 import { create } from 'zustand'
+import type { AutoLauncherDto } from '../services/auto-launchers'
 
 export interface DraftStep {
-  id: string
+  stepId: string
   astName: string
-  configId?: string
-  params: Record<string, unknown>
+  configId: string
+  configName?: string
   order: number
 }
 
-interface DraftState {
+export interface TabDraft {
+  selectedLauncher: AutoLauncherDto | null
   name: string
   visibility: 'private' | 'public'
   steps: DraftStep[]
-  editingId: string | null
+  newStepAstName: string | null
+  newStepConfigId: string | null
+  hostUsername: string
+  hostPassword: string
+}
 
-  setName: (name: string) => void
-  setVisibility: (visibility: 'private' | 'public') => void
-  addStep: (step: DraftStep) => void
-  updateStep: (id: string, data: Partial<DraftStep>) => void
-  removeStep: (id: string) => void
-  reorderSteps: (fromIndex: number, toIndex: number) => void
-  setEditingId: (id: string | null) => void
-  loadFromExisting: (launcher: { name: string; visibility: string; steps: unknown[] }) => void
-  reset: () => void
+function createDefaultDraft(): TabDraft {
+  return {
+    selectedLauncher: null,
+    name: '',
+    visibility: 'private',
+    steps: [],
+    newStepAstName: null,
+    newStepConfigId: null,
+    hostUsername: '',
+    hostPassword: '',
+  }
+}
+
+interface DraftState {
+  drafts: Record<string, TabDraft>
+  upsertDraft: (tabId: string, data: Partial<TabDraft>) => void
+  resetDraft: (tabId: string) => void
 }
 
 export const useAutoLauncherDraftStore = create<DraftState>((set) => ({
-  name: '',
-  visibility: 'private',
-  steps: [],
-  editingId: null,
+  drafts: {},
 
-  setName: (name) => set({ name }),
-  setVisibility: (visibility) => set({ visibility }),
-
-  addStep: (step) => set((state) => ({ steps: [...state.steps, step] })),
-
-  updateStep: (id, data) =>
+  upsertDraft: (tabId, data) =>
     set((state) => ({
-      steps: state.steps.map((s) => (s.id === id ? { ...s, ...data } : s)),
+      drafts: {
+        ...state.drafts,
+        [tabId]: { ...(state.drafts[tabId] ?? createDefaultDraft()), ...data },
+      },
     })),
 
-  removeStep: (id) =>
+  resetDraft: (tabId) =>
     set((state) => ({
-      steps: state.steps.filter((s) => s.id !== id).map((s, i) => ({ ...s, order: i })),
+      drafts: { ...state.drafts, [tabId]: createDefaultDraft() },
     })),
-
-  reorderSteps: (fromIndex, toIndex) =>
-    set((state) => {
-      const steps = [...state.steps]
-      const [moved] = steps.splice(fromIndex, 1)
-      steps.splice(toIndex, 0, moved)
-      return { steps: steps.map((s, i) => ({ ...s, order: i })) }
-    }),
-
-  setEditingId: (editingId) => set({ editingId }),
-
-  loadFromExisting: (launcher) =>
-    set({
-      name: launcher.name,
-      visibility: launcher.visibility as 'private' | 'public',
-      steps: (launcher.steps as DraftStep[]) || [],
-    }),
-
-  reset: () => set({ name: '', visibility: 'private', steps: [], editingId: null }),
 }))

@@ -1,4 +1,5 @@
 import { ASTSelector } from './ASTSelector'
+import { AutoLauncherPanel } from './AutoLauncherPanel'
 import { useASTRegistry } from '../registry'
 import { Card } from '../../components/ui/Card'
 import { useFormField } from '../../hooks/useFormField'
@@ -53,11 +54,7 @@ export function ASTPanel(): React.ReactNode {
         </button>
       </div>
 
-      {panelMode === 'autolauncher' && (
-        <div className="text-sm text-gray-500 dark:text-zinc-400">
-          AutoLauncher panel coming soon.
-        </div>
-      )}
+      {panelMode === 'autolauncher' && <AutoLauncherPanel />}
 
       {panelMode === 'ast' && (
         <>

@@ -19,6 +19,7 @@ import {
   createAutoLauncher,
   updateAutoLauncher,
   deleteAutoLauncher,
+  runAutoLauncher,
   getAutoLauncherRuns,
 } from '@src/services/auto-launchers'
 
@@ -109,6 +110,41 @@ describe('auto-launchers service', () => {
       await deleteAutoLauncher('xyz-789')
 
       expect(mockApiDelete).toHaveBeenCalledWith('/auto-launchers/xyz-789')
+    })
+  })
+
+  describe('runAutoLauncher', () => {
+    it('calls apiPost with /auto-launchers/:id/run and data', async () => {
+      const runResult = {
+        runId: 'run-1',
+        sessionId: 'session-1',
+        steps: [{ astName: 'login', configId: 'c1', order: 0 }],
+      }
+      mockApiPost.mockResolvedValue(runResult)
+
+      const data = {
+        sessionId: 'session-1',
+        username: 'USER1',
+        password: 'pass',
+        userLocalDate: '2025-01-01',
+      }
+
+      const result = await runAutoLauncher('launcher-1', data)
+
+      expect(mockApiPost).toHaveBeenCalledWith('/auto-launchers/launcher-1/run', data)
+      expect(result).toEqual(runResult)
+    })
+
+    it('passes the correct launcher id in the path', async () => {
+      mockApiPost.mockResolvedValue({ runId: 'r1', sessionId: 's1', steps: [] })
+
+      await runAutoLauncher('abc-123', {
+        sessionId: 's1',
+        username: 'U',
+        password: 'P',
+      })
+
+      expect(mockApiPost).toHaveBeenCalledWith('/auto-launchers/abc-123/run', expect.any(Object))
     })
   })
 

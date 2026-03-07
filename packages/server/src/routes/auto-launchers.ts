@@ -101,6 +101,62 @@ export async function autoLauncherRoutes(app: FastifyInstance) {
     },
   )
 
+  typed.post(
+    '/auto-launchers/:id/run',
+    {
+      schema: {
+        tags: ['Auto Launchers'],
+        params: z.object({ id: z.string() }),
+        body: z.object({
+          sessionId: z.string(),
+          username: z.string(),
+          password: z.string(),
+          userLocalDate: z.string().optional(),
+        }),
+        response: {
+          200: z.object({
+            runId: z.string(),
+            sessionId: z.string(),
+            steps: z.array(
+              z.object({
+                astName: z.string(),
+                configId: z.string(),
+                order: z.number(),
+                stepLabel: z.string().optional(),
+                configName: z.string().optional(),
+              }),
+            ),
+          }),
+          404: errorSchema,
+        },
+      },
+    },
+    async (request, reply) => {
+      const launcher = await autoLauncherService.findById(request.params.id)
+      if (!launcher) return reply.status(404).send({ error: 'Launcher not found' })
+
+      const steps = (launcher.steps as Array<{ astName: string; configId: string; order: number }>) ?? []
+      const runId = crypto.randomUUID()
+
+      await autoLauncherService.createRun({
+        id: runId,
+        launcherId: launcher.id,
+        userId: request.user.id,
+        sessionId: request.body.sessionId,
+        steps: steps.map((s) => ({ ...s, status: 'pending' })),
+      })
+
+      const responseSteps = steps.map((s, idx) => ({
+        astName: s.astName,
+        configId: s.configId,
+        order: s.order ?? idx,
+        stepLabel: `Step ${idx + 1}`,
+      }))
+
+      return { runId, sessionId: request.body.sessionId, steps: responseSteps }
+    },
+  )
+
   typed.get(
     '/auto-launcher-runs',
     {

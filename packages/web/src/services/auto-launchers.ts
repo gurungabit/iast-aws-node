@@ -39,6 +39,29 @@ export function deleteAutoLauncher(id: string) {
   return apiDelete(`/auto-launchers/${id}`)
 }
 
+export interface RunAutoLauncherRequest {
+  sessionId: string
+  username: string
+  password: string
+  userLocalDate?: string
+}
+
+export interface RunAutoLauncherResponse {
+  runId: string
+  sessionId: string
+  steps: Array<{
+    astName: string
+    configId: string
+    order: number
+    stepLabel?: string
+    configName?: string
+  }>
+}
+
+export function runAutoLauncher(launcherId: string, data: RunAutoLauncherRequest) {
+  return apiPost<RunAutoLauncherResponse>(`/auto-launchers/${launcherId}/run`, data)
+}
+
 export function getAutoLauncherRuns(limit = 50, offset = 0) {
   return apiGet<AutoLauncherRunDto[]>(`/auto-launcher-runs?limit=${limit}&offset=${offset}`)
 }

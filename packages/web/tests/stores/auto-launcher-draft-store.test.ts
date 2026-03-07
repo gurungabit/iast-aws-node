@@ -1,232 +1,213 @@
 import { describe, it, expect, beforeEach } from 'vitest'
 import { act } from '@testing-library/react'
-import { useAutoLauncherDraftStore, type DraftStep } from '@src/stores/auto-launcher-draft-store'
-
-function makeStep(overrides: Partial<DraftStep> = {}): DraftStep {
-  return {
-    id: 'step-1',
-    astName: 'AST_A',
-    params: {},
-    order: 0,
-    ...overrides,
-  }
-}
+import { useAutoLauncherDraftStore } from '@src/stores/auto-launcher-draft-store'
 
 describe('useAutoLauncherDraftStore', () => {
   beforeEach(() => {
     act(() => {
-      useAutoLauncherDraftStore.getState().reset()
-    })
-  })
-
-  describe('setName', () => {
-    it('updates the name', () => {
-      act(() => {
-        useAutoLauncherDraftStore.getState().setName('My Launcher')
-      })
-      expect(useAutoLauncherDraftStore.getState().name).toBe('My Launcher')
-    })
-  })
-
-  describe('setVisibility', () => {
-    it('updates visibility to public', () => {
-      act(() => {
-        useAutoLauncherDraftStore.getState().setVisibility('public')
-      })
-      expect(useAutoLauncherDraftStore.getState().visibility).toBe('public')
-    })
-
-    it('updates visibility to private', () => {
-      act(() => {
-        useAutoLauncherDraftStore.getState().setVisibility('public')
-        useAutoLauncherDraftStore.getState().setVisibility('private')
-      })
-      expect(useAutoLauncherDraftStore.getState().visibility).toBe('private')
-    })
-  })
-
-  describe('addStep', () => {
-    it('adds a step to empty steps array', () => {
-      const step = makeStep()
-      act(() => {
-        useAutoLauncherDraftStore.getState().addStep(step)
-      })
-      const { steps } = useAutoLauncherDraftStore.getState()
-      expect(steps).toHaveLength(1)
-      expect(steps[0]).toEqual(step)
-    })
-
-    it('appends multiple steps', () => {
-      act(() => {
-        useAutoLauncherDraftStore.getState().addStep(makeStep({ id: 's1', order: 0 }))
-        useAutoLauncherDraftStore.getState().addStep(makeStep({ id: 's2', order: 1 }))
-      })
-      expect(useAutoLauncherDraftStore.getState().steps).toHaveLength(2)
-    })
-  })
-
-  describe('updateStep', () => {
-    it('updates a specific step by id', () => {
-      act(() => {
-        useAutoLauncherDraftStore.getState().addStep(makeStep({ id: 's1', astName: 'AST_A' }))
-        useAutoLauncherDraftStore.getState().addStep(makeStep({ id: 's2', astName: 'AST_B', order: 1 }))
-      })
-      act(() => {
-        useAutoLauncherDraftStore.getState().updateStep('s1', { astName: 'AST_C' })
-      })
-      const { steps } = useAutoLauncherDraftStore.getState()
-      expect(steps[0].astName).toBe('AST_C')
-      expect(steps[1].astName).toBe('AST_B')
-    })
-
-    it('does not modify other steps', () => {
-      act(() => {
-        useAutoLauncherDraftStore.getState().addStep(makeStep({ id: 's1', order: 0 }))
-        useAutoLauncherDraftStore.getState().addStep(makeStep({ id: 's2', order: 1, astName: 'Original' }))
-      })
-      act(() => {
-        useAutoLauncherDraftStore.getState().updateStep('s1', { params: { key: 'val' } })
-      })
-      expect(useAutoLauncherDraftStore.getState().steps[1].astName).toBe('Original')
-    })
-  })
-
-  describe('removeStep', () => {
-    it('removes a step by id', () => {
-      act(() => {
-        useAutoLauncherDraftStore.getState().addStep(makeStep({ id: 's1', order: 0 }))
-        useAutoLauncherDraftStore.getState().addStep(makeStep({ id: 's2', order: 1 }))
-      })
-      act(() => {
-        useAutoLauncherDraftStore.getState().removeStep('s1')
-      })
-      const { steps } = useAutoLauncherDraftStore.getState()
-      expect(steps).toHaveLength(1)
-      expect(steps[0].id).toBe('s2')
-    })
-
-    it('reorders remaining steps after removal', () => {
-      act(() => {
-        useAutoLauncherDraftStore.getState().addStep(makeStep({ id: 's1', order: 0 }))
-        useAutoLauncherDraftStore.getState().addStep(makeStep({ id: 's2', order: 1 }))
-        useAutoLauncherDraftStore.getState().addStep(makeStep({ id: 's3', order: 2 }))
-      })
-      act(() => {
-        useAutoLauncherDraftStore.getState().removeStep('s1')
-      })
-      const { steps } = useAutoLauncherDraftStore.getState()
-      expect(steps[0].order).toBe(0)
-      expect(steps[1].order).toBe(1)
-    })
-  })
-
-  describe('reorderSteps', () => {
-    it('moves a step from one index to another', () => {
-      act(() => {
-        useAutoLauncherDraftStore.getState().addStep(makeStep({ id: 's1', astName: 'A', order: 0 }))
-        useAutoLauncherDraftStore.getState().addStep(makeStep({ id: 's2', astName: 'B', order: 1 }))
-        useAutoLauncherDraftStore.getState().addStep(makeStep({ id: 's3', astName: 'C', order: 2 }))
-      })
-      act(() => {
-        useAutoLauncherDraftStore.getState().reorderSteps(0, 2)
-      })
-      const { steps } = useAutoLauncherDraftStore.getState()
-      expect(steps[0].id).toBe('s2')
-      expect(steps[1].id).toBe('s3')
-      expect(steps[2].id).toBe('s1')
-    })
-
-    it('reassigns order values after reorder', () => {
-      act(() => {
-        useAutoLauncherDraftStore.getState().addStep(makeStep({ id: 's1', order: 0 }))
-        useAutoLauncherDraftStore.getState().addStep(makeStep({ id: 's2', order: 1 }))
-        useAutoLauncherDraftStore.getState().addStep(makeStep({ id: 's3', order: 2 }))
-      })
-      act(() => {
-        useAutoLauncherDraftStore.getState().reorderSteps(2, 0)
-      })
-      const { steps } = useAutoLauncherDraftStore.getState()
-      expect(steps[0].order).toBe(0)
-      expect(steps[1].order).toBe(1)
-      expect(steps[2].order).toBe(2)
-    })
-  })
-
-  describe('setEditingId', () => {
-    it('sets editingId', () => {
-      act(() => {
-        useAutoLauncherDraftStore.getState().setEditingId('edit-1')
-      })
-      expect(useAutoLauncherDraftStore.getState().editingId).toBe('edit-1')
-    })
-
-    it('clears editingId with null', () => {
-      act(() => {
-        useAutoLauncherDraftStore.getState().setEditingId('edit-1')
-        useAutoLauncherDraftStore.getState().setEditingId(null)
-      })
-      expect(useAutoLauncherDraftStore.getState().editingId).toBeNull()
-    })
-  })
-
-  describe('loadFromExisting', () => {
-    it('loads data from a launcher object', () => {
-      const launcher = {
-        name: 'Existing Launcher',
-        visibility: 'public',
-        steps: [
-          makeStep({ id: 'x1', astName: 'AST_X', order: 0 }),
-          makeStep({ id: 'x2', astName: 'AST_Y', order: 1 }),
-        ],
-      }
-      act(() => {
-        useAutoLauncherDraftStore.getState().loadFromExisting(launcher)
-      })
-      const state = useAutoLauncherDraftStore.getState()
-      expect(state.name).toBe('Existing Launcher')
-      expect(state.visibility).toBe('public')
-      expect(state.steps).toHaveLength(2)
-      expect(state.steps[0].astName).toBe('AST_X')
-    })
-
-    it('handles empty steps array', () => {
-      act(() => {
-        useAutoLauncherDraftStore.getState().loadFromExisting({
-          name: 'Empty',
-          visibility: 'private',
-          steps: [],
-        })
-      })
-      expect(useAutoLauncherDraftStore.getState().steps).toHaveLength(0)
-    })
-  })
-
-  describe('reset', () => {
-    it('clears all state back to defaults', () => {
-      act(() => {
-        useAutoLauncherDraftStore.getState().setName('Test')
-        useAutoLauncherDraftStore.getState().setVisibility('public')
-        useAutoLauncherDraftStore.getState().addStep(makeStep())
-        useAutoLauncherDraftStore.getState().setEditingId('e1')
-      })
-      act(() => {
-        useAutoLauncherDraftStore.getState().reset()
-      })
-      const state = useAutoLauncherDraftStore.getState()
-      expect(state.name).toBe('')
-      expect(state.visibility).toBe('private')
-      expect(state.steps).toHaveLength(0)
-      expect(state.editingId).toBeNull()
+      // Reset all drafts by setting empty object
+      useAutoLauncherDraftStore.setState({ drafts: {} })
     })
   })
 
   describe('initial state', () => {
-    it('starts with correct defaults', () => {
-      const state = useAutoLauncherDraftStore.getState()
-      expect(state.name).toBe('')
-      expect(state.visibility).toBe('private')
-      expect(state.steps).toEqual([])
-      expect(state.editingId).toBeNull()
+    it('starts with empty drafts object', () => {
+      expect(useAutoLauncherDraftStore.getState().drafts).toEqual({})
+    })
+  })
+
+  describe('resetDraft', () => {
+    it('creates a default draft for the given tab', () => {
+      act(() => {
+        useAutoLauncherDraftStore.getState().resetDraft('tab-1')
+      })
+
+      const draft = useAutoLauncherDraftStore.getState().drafts['tab-1']
+      expect(draft).toBeDefined()
+      expect(draft.name).toBe('')
+      expect(draft.visibility).toBe('private')
+      expect(draft.steps).toEqual([])
+      expect(draft.selectedLauncher).toBeNull()
+      expect(draft.newStepAstName).toBeNull()
+      expect(draft.newStepConfigId).toBeNull()
+      expect(draft.hostUsername).toBe('')
+      expect(draft.hostPassword).toBe('')
+    })
+
+    it('resets an existing draft back to defaults', () => {
+      act(() => {
+        useAutoLauncherDraftStore.getState().upsertDraft('tab-1', {
+          name: 'My Launcher',
+          visibility: 'public',
+          steps: [{ stepId: 's1', astName: 'login', configId: 'c1', order: 0 }],
+        })
+      })
+
+      act(() => {
+        useAutoLauncherDraftStore.getState().resetDraft('tab-1')
+      })
+
+      const draft = useAutoLauncherDraftStore.getState().drafts['tab-1']
+      expect(draft.name).toBe('')
+      expect(draft.visibility).toBe('private')
+      expect(draft.steps).toEqual([])
+    })
+
+    it('does not affect other tabs', () => {
+      act(() => {
+        useAutoLauncherDraftStore.getState().upsertDraft('tab-1', { name: 'Tab 1' })
+        useAutoLauncherDraftStore.getState().upsertDraft('tab-2', { name: 'Tab 2' })
+      })
+
+      act(() => {
+        useAutoLauncherDraftStore.getState().resetDraft('tab-1')
+      })
+
+      expect(useAutoLauncherDraftStore.getState().drafts['tab-1'].name).toBe('')
+      expect(useAutoLauncherDraftStore.getState().drafts['tab-2'].name).toBe('Tab 2')
+    })
+  })
+
+  describe('upsertDraft', () => {
+    it('creates a new draft with provided fields', () => {
+      act(() => {
+        useAutoLauncherDraftStore.getState().upsertDraft('tab-1', {
+          name: 'Test Launcher',
+          visibility: 'public',
+        })
+      })
+
+      const draft = useAutoLauncherDraftStore.getState().drafts['tab-1']
+      expect(draft.name).toBe('Test Launcher')
+      expect(draft.visibility).toBe('public')
+      // Other fields should be defaults
+      expect(draft.steps).toEqual([])
+      expect(draft.hostUsername).toBe('')
+    })
+
+    it('merges partial updates into existing draft', () => {
+      act(() => {
+        useAutoLauncherDraftStore.getState().upsertDraft('tab-1', {
+          name: 'Original',
+          hostUsername: 'USER1',
+        })
+      })
+
+      act(() => {
+        useAutoLauncherDraftStore.getState().upsertDraft('tab-1', {
+          name: 'Updated',
+        })
+      })
+
+      const draft = useAutoLauncherDraftStore.getState().drafts['tab-1']
+      expect(draft.name).toBe('Updated')
+      expect(draft.hostUsername).toBe('USER1') // preserved
+    })
+
+    it('stores steps correctly', () => {
+      const steps = [
+        { stepId: 's1', astName: 'login', configId: 'c1', order: 0 },
+        { stepId: 's2', astName: 'bi_renew', configId: 'c2', order: 1 },
+      ]
+
+      act(() => {
+        useAutoLauncherDraftStore.getState().upsertDraft('tab-1', { steps })
+      })
+
+      expect(useAutoLauncherDraftStore.getState().drafts['tab-1'].steps).toEqual(steps)
+      expect(useAutoLauncherDraftStore.getState().drafts['tab-1'].steps).toHaveLength(2)
+    })
+
+    it('stores selectedLauncher', () => {
+      const launcher = {
+        id: 'l1',
+        ownerId: 'u1',
+        name: 'Saved Launcher',
+        visibility: 'private',
+        steps: [],
+        createdAt: '2025-01-01',
+        updatedAt: '2025-01-01',
+      }
+
+      act(() => {
+        useAutoLauncherDraftStore.getState().upsertDraft('tab-1', { selectedLauncher: launcher })
+      })
+
+      expect(useAutoLauncherDraftStore.getState().drafts['tab-1'].selectedLauncher).toEqual(launcher)
+    })
+
+    it('stores newStepAstName and newStepConfigId', () => {
+      act(() => {
+        useAutoLauncherDraftStore.getState().upsertDraft('tab-1', {
+          newStepAstName: 'login',
+          newStepConfigId: 'cfg-123',
+        })
+      })
+
+      const draft = useAutoLauncherDraftStore.getState().drafts['tab-1']
+      expect(draft.newStepAstName).toBe('login')
+      expect(draft.newStepConfigId).toBe('cfg-123')
+    })
+
+    it('stores credentials', () => {
+      act(() => {
+        useAutoLauncherDraftStore.getState().upsertDraft('tab-1', {
+          hostUsername: 'HERC01',
+          hostPassword: 'secret',
+        })
+      })
+
+      const draft = useAutoLauncherDraftStore.getState().drafts['tab-1']
+      expect(draft.hostUsername).toBe('HERC01')
+      expect(draft.hostPassword).toBe('secret')
+    })
+  })
+
+  describe('per-tab isolation', () => {
+    it('maintains independent drafts per tab', () => {
+      act(() => {
+        useAutoLauncherDraftStore.getState().upsertDraft('tab-1', {
+          name: 'Launcher A',
+          visibility: 'private',
+        })
+        useAutoLauncherDraftStore.getState().upsertDraft('tab-2', {
+          name: 'Launcher B',
+          visibility: 'public',
+        })
+      })
+
+      const drafts = useAutoLauncherDraftStore.getState().drafts
+      expect(drafts['tab-1'].name).toBe('Launcher A')
+      expect(drafts['tab-1'].visibility).toBe('private')
+      expect(drafts['tab-2'].name).toBe('Launcher B')
+      expect(drafts['tab-2'].visibility).toBe('public')
+    })
+
+    it('updating one tab does not affect another', () => {
+      act(() => {
+        useAutoLauncherDraftStore.getState().upsertDraft('tab-1', { name: 'A' })
+        useAutoLauncherDraftStore.getState().upsertDraft('tab-2', { name: 'B' })
+      })
+
+      act(() => {
+        useAutoLauncherDraftStore.getState().upsertDraft('tab-1', { name: 'A Updated' })
+      })
+
+      expect(useAutoLauncherDraftStore.getState().drafts['tab-2'].name).toBe('B')
+    })
+
+    it('resetting one tab does not affect another', () => {
+      act(() => {
+        useAutoLauncherDraftStore.getState().upsertDraft('tab-1', { name: 'Keep me' })
+        useAutoLauncherDraftStore.getState().upsertDraft('tab-2', { name: 'Reset me' })
+      })
+
+      act(() => {
+        useAutoLauncherDraftStore.getState().resetDraft('tab-2')
+      })
+
+      expect(useAutoLauncherDraftStore.getState().drafts['tab-1'].name).toBe('Keep me')
+      expect(useAutoLauncherDraftStore.getState().drafts['tab-2'].name).toBe('')
     })
   })
 })
