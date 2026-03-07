@@ -690,7 +690,10 @@ describe('runRoutExtractorAST', () => {
         0, 1, 'Storing 1 pre-computed records...',
       )
       expect(mockReporter.reportProgress).toHaveBeenCalledWith(
-        1, 1, 'Route Extractor complete',
+        1, 1, 'Stored 1 records',
+      )
+      expect(mockReporter.reportProgress).toHaveBeenCalledWith(
+        1, 1, 'Processed 1 items (1 success, 0 failed, 0 skipped)',
       )
       // No logoff since no host session was opened
       expect(mockSession.logoff).not.toHaveBeenCalled()

@@ -108,7 +108,7 @@ erDiagram
     }
 
     session_assignments {
-        text session_id PK_FK
+        text session_id PK
         text pod_ip
         uuid user_id FK
         text status
@@ -129,6 +129,42 @@ erDiagram
         timestamptz updated_at
     }
 ```
+
+## Table Relations
+
+```mermaid
+graph LR
+    users -->|"1:N"| sessions
+    users -->|"1:N"| executions
+    users -->|"1:N"| ast_configs
+    users -->|"1:N"| auto_launchers
+    users -->|"1:N"| auto_launcher_runs
+    users -->|"1:N"| schedules
+    users -->|"1:N"| session_assignments
+
+    sessions -->|"1:N"| executions
+    sessions -->|"1:N"| auto_launcher_runs
+    sessions -->|"1:1"| session_assignments
+
+    executions -->|"1:N"| policy_results
+
+    auto_launchers -->|"1:N"| auto_launcher_runs
+```
+
+| FK Column | From Table | To Table | On Delete |
+|-----------|-----------|----------|-----------|
+| `user_id` | sessions | users | — |
+| `session_id` | session_assignments | sessions | CASCADE |
+| `user_id` | session_assignments | users | — |
+| `session_id` | executions | sessions | CASCADE |
+| `user_id` | executions | users | — |
+| `execution_id` | policy_results | executions | CASCADE |
+| `owner_id` | ast_configs | users | — |
+| `owner_id` | auto_launchers | users | — |
+| `launcher_id` | auto_launcher_runs | auto_launchers | — |
+| `user_id` | auto_launcher_runs | users | — |
+| `session_id` | auto_launcher_runs | sessions | CASCADE |
+| `user_id` | schedules | users | — |
 
 ## Tables
 

@@ -1,4 +1,4 @@
-import { eq, and, desc, sql } from 'drizzle-orm'
+import { eq, and, or, desc, asc, gte, lte, sql } from 'drizzle-orm'
 import { db } from '../db/index.js'
 import { executions, policyResults } from '../db/schema/index.js'
 import type { ASTItemResult, ASTStatus } from '@iast/shared'
@@ -125,5 +125,167 @@ export const executionService = {
       )
       .limit(limit)
       .offset(offset)
+  },
+
+  async queryDataInquiry(
+    userId: string,
+    params: {
+      astName: string
+      dateFrom: string
+      dateTo: string
+      filters: Array<{ field: string; op: string; value: string }>
+      sort: Array<{ column: string; direction: 'asc' | 'desc' }>
+      limit: number
+      offset: number
+    },
+  ) {
+    const ALLOWED_FIELDS = new Set([
+      'officeNum',
+      'policyNumber',
+      'policyNumberFmt',
+      'policyItem',
+      'sectionOfRout',
+      'policyType',
+      'status',
+      'gfuDate',
+      'gfuCode',
+      'agentNafo',
+      'description',
+      'errorCode1',
+      'errorCode2',
+      'errorCode3',
+      'errorCode4',
+      'errorCode5',
+      'errorCode6',
+      'errorCode7',
+      'errorCode8',
+      'flmpCode',
+      'queueName',
+      'queueDetail',
+      'servOrUndr',
+      'systemPolicyType',
+      'systemFormLine',
+      'noOfErrors',
+      'pui',
+      'companyCode',
+      'team',
+      'agent',
+      'afo',
+      'stateCode',
+      'annivDate',
+      'statusCode',
+      'dateOfRun',
+    ])
+
+    const ERROR_FIELDS = [
+      'errorCode1',
+      'errorCode2',
+      'errorCode3',
+      'errorCode4',
+      'errorCode5',
+      'errorCode6',
+      'errorCode7',
+      'errorCode8',
+    ]
+
+    // Base conditions: user + AST + date range
+    const conditions = [
+      eq(executions.userId, userId),
+      eq(executions.astName, params.astName),
+      gte(executions.executionDate, params.dateFrom),
+      lte(executions.executionDate, params.dateTo),
+    ]
+
+    // JSONB filter conditions
+    for (const filter of params.filters) {
+      const val = filter.value
+      if (!val) continue
+
+      // Special: search across all 8 error code fields
+      if (filter.field === '_anyError') {
+        if (filter.op === 'eq') {
+          const parts = ERROR_FIELDS.map(
+            (f) => sql`${policyResults.data}->>${f} = ${val}`,
+          )
+          const combined = or(...parts)
+          if (combined) conditions.push(combined)
+        } else if (filter.op === 'contains') {
+          const escaped = val.replace(/[%_\\]/g, '\\$&')
+          const pattern = '%' + escaped + '%'
+          const parts = ERROR_FIELDS.map(
+            (f) => sql`${policyResults.data}->>${f} ILIKE ${pattern}`,
+          )
+          const combined = or(...parts)
+          if (combined) conditions.push(combined)
+        }
+        continue
+      }
+
+      if (!ALLOWED_FIELDS.has(filter.field)) continue
+
+      switch (filter.op) {
+        case 'eq':
+          conditions.push(sql`${policyResults.data}->>${filter.field} = ${val}`)
+          break
+        case 'neq':
+          conditions.push(sql`${policyResults.data}->>${filter.field} != ${val}`)
+          break
+        case 'contains': {
+          const escaped = val.replace(/[%_\\]/g, '\\$&')
+          conditions.push(
+            sql`${policyResults.data}->>${filter.field} ILIKE ${'%' + escaped + '%'}`,
+          )
+          break
+        }
+        case 'starts_with': {
+          const escaped = val.replace(/[%_\\]/g, '\\$&')
+          conditions.push(
+            sql`${policyResults.data}->>${filter.field} ILIKE ${escaped + '%'}`,
+          )
+          break
+        }
+      }
+    }
+
+    const whereClause = and(...conditions)!
+
+    // Sort: validate columns, default to policyNumber ASC
+    const orderClauses = params.sort
+      .filter((s) => ALLOWED_FIELDS.has(s.column))
+      .map((s) => {
+        const col = sql`${policyResults.data}->>${s.column}`
+        return s.direction === 'asc' ? asc(col) : desc(col)
+      })
+
+    if (orderClauses.length === 0) {
+      orderClauses.push(asc(policyResults.policyNumber))
+    }
+
+    // Data query
+    const rows = await db
+      .select({
+        id: policyResults.id,
+        policyNumber: policyResults.policyNumber,
+        executionDate: executions.executionDate,
+        data: policyResults.data,
+      })
+      .from(policyResults)
+      .innerJoin(executions, eq(policyResults.executionId, executions.id))
+      .where(whereClause)
+      .orderBy(...orderClauses)
+      .limit(params.limit)
+      .offset(params.offset)
+
+    // Count query
+    const [countRow] = await db
+      .select({ count: sql<number>`count(*)::int` })
+      .from(policyResults)
+      .innerJoin(executions, eq(policyResults.executionId, executions.id))
+      .where(whereClause)
+
+    return {
+      rows,
+      total: countRow?.count ?? 0,
+    }
   },
 }

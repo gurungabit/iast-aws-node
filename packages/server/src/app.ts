@@ -16,6 +16,7 @@ import { historyRoutes } from './routes/history.js'
 import { astConfigRoutes } from './routes/ast-configs.js'
 import { autoLauncherRoutes } from './routes/auto-launchers.js'
 import { scheduleRoutes } from './routes/schedules.js'
+import { dataInquiryRoutes } from './routes/data-inquiry.js'
 import { terminalWsRoutes } from './terminal/ws-handler.js'
 import { terminalManager } from './terminal/manager.js'
 import { terminatePodSessions } from './terminal/registry.js'
@@ -58,6 +59,7 @@ export async function buildApp() {
   await app.register(astConfigRoutes)
   await app.register(autoLauncherRoutes)
   await app.register(scheduleRoutes)
+  await app.register(dataInquiryRoutes)
 
   // WebSocket terminal routes
   await app.register(terminalWsRoutes)

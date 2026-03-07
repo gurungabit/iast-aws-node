@@ -1,14 +1,11 @@
 import { defineConfig } from 'vitest/config'
-import { resolve } from 'path'
 
 export default defineConfig({
-  resolve: {
-    alias: {
-      '@src': resolve(__dirname, 'src'),
-    },
-  },
   test: {
-    root: resolve(__dirname),
+    alias: {
+      '@src': new URL('./src/', import.meta.url).pathname,
+    },
+    root: new URL('./', import.meta.url).pathname,
     globals: true,
     environment: 'node',
     include: ['tests/**/*.test.ts'],

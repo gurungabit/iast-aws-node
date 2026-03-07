@@ -1,22 +1,12 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 
-const mocks = vi.hoisted(() => {
-  return {
-    smbConnect: vi.fn(),
-    smbReadFile: vi.fn(),
-    smbDisconnect: vi.fn(),
-  }
-})
+const mocks = vi.hoisted(() => ({
+  readFile: vi.fn(),
+}))
 
-vi.mock('@src/integrations/smb2/index.js', () => {
-  return {
-    SMB2Client: class {
-      connect = mocks.smbConnect
-      readFile = mocks.smbReadFile
-      disconnect = mocks.smbDisconnect
-    },
-  }
-})
+vi.mock('@src/integrations/smb2/client.js', () => ({
+  readFile: mocks.readFile,
+}))
 
 import { readSmbFile, type SmbConfig } from '@src/integrations/smb.js'
 
@@ -30,24 +20,19 @@ describe('readSmbFile', () => {
 
   beforeEach(() => {
     vi.clearAllMocks()
-    mocks.smbConnect.mockResolvedValue(undefined)
-    mocks.smbReadFile.mockResolvedValue(Buffer.from('file content'))
-    mocks.smbDisconnect.mockResolvedValue(undefined)
+    mocks.readFile.mockResolvedValue(Buffer.from('file content'))
   })
 
-  it('should connect with correct host and share parsed from config', async () => {
+  it('should call readFile with correct host and share parsed from config', async () => {
     await readSmbFile(testConfig, 'remote/file.txt')
 
-    expect(mocks.smbConnect).toHaveBeenCalledWith({
-      host: 'server',
-      share: 'share',
-      domain: 'CORP',
-      username: 'user1',
-      password: 'pass1',
-    })
+    expect(mocks.readFile).toHaveBeenCalledWith(
+      { host: 'server', share: 'share', domain: 'CORP', username: 'user1', password: 'pass1' },
+      'remote/file.txt',
+    )
   })
 
-  it('should pass undefined domain when domain is empty', async () => {
+  it('should pass empty domain when config domain is empty', async () => {
     const noDomainConfig: SmbConfig = {
       share: '//server/share',
       domain: '',
@@ -57,38 +42,22 @@ describe('readSmbFile', () => {
 
     await readSmbFile(noDomainConfig, 'remote/file.txt')
 
-    expect(mocks.smbConnect).toHaveBeenCalledWith({
-      host: 'server',
-      share: 'share',
-      domain: undefined,
-      username: 'user1',
-      password: 'pass1',
-    })
+    expect(mocks.readFile).toHaveBeenCalledWith(
+      expect.objectContaining({ domain: '', username: 'user1' }),
+      'remote/file.txt',
+    )
   })
 
-  it('should read the file via SMB2 client and return its content', async () => {
+  it('should return the buffer from readFile', async () => {
     const content = Buffer.from('hello world')
-    mocks.smbReadFile.mockResolvedValue(content)
+    mocks.readFile.mockResolvedValue(content)
 
     const result = await readSmbFile(testConfig, 'file.txt')
     expect(result).toEqual(content)
-    expect(mocks.smbReadFile).toHaveBeenCalledWith('file.txt')
   })
 
-  it('should disconnect after successful read', async () => {
-    await readSmbFile(testConfig, 'file.txt')
-    expect(mocks.smbDisconnect).toHaveBeenCalled()
-  })
-
-  it('should disconnect even when connect fails', async () => {
-    mocks.smbConnect.mockRejectedValue(new Error('connection refused'))
-
-    await expect(readSmbFile(testConfig, 'file.txt')).rejects.toThrow('Failed to read SMB file')
-    expect(mocks.smbDisconnect).toHaveBeenCalled()
-  })
-
-  it('should throw descriptive error when read fails', async () => {
-    mocks.smbReadFile.mockRejectedValue(new Error('access denied'))
+  it('should wrap errors with descriptive message', async () => {
+    mocks.readFile.mockRejectedValue(new Error('access denied'))
 
     await expect(readSmbFile(testConfig, 'remote/path.txt')).rejects.toThrow(
       'Failed to read SMB file remote/path.txt',
@@ -110,15 +79,19 @@ describe('readSmbFile', () => {
 
     await readSmbFile(bsConfig, 'file.txt')
 
-    expect(mocks.smbConnect).toHaveBeenCalledWith(
+    expect(mocks.readFile).toHaveBeenCalledWith(
       expect.objectContaining({ host: 'server', share: 'share' }),
+      'file.txt',
     )
   })
 
   it('should strip UNC prefix from path when it matches the share', async () => {
     await readSmbFile(testConfig, '\\\\server\\share\\CORP\\00\\file.txt')
 
-    expect(mocks.smbReadFile).toHaveBeenCalledWith('CORP/00/file.txt')
+    expect(mocks.readFile).toHaveBeenCalledWith(
+      expect.anything(),
+      'CORP/00/file.txt',
+    )
   })
 
   it('should strip UNC prefix case-insensitively', async () => {
@@ -131,13 +104,19 @@ describe('readSmbFile', () => {
 
     await readSmbFile(config, '\\\\Opr.statefarm.org\\dfs\\CORP\\00\\WORKGROUP\\FTP\\file.txt')
 
-    expect(mocks.smbReadFile).toHaveBeenCalledWith('CORP/00/WORKGROUP/FTP/file.txt')
+    expect(mocks.readFile).toHaveBeenCalledWith(
+      expect.anything(),
+      'CORP/00/WORKGROUP/FTP/file.txt',
+    )
   })
 
   it('should use path as-is when it does not match share prefix', async () => {
     await readSmbFile(testConfig, 'relative/path/file.txt')
 
-    expect(mocks.smbReadFile).toHaveBeenCalledWith('relative/path/file.txt')
+    expect(mocks.readFile).toHaveBeenCalledWith(
+      expect.anything(),
+      'relative/path/file.txt',
+    )
   })
 
   it('should split DOMAIN\\username and pass domain as-is', async () => {
@@ -150,13 +129,16 @@ describe('readSmbFile', () => {
 
     await readSmbFile(config, 'file.txt')
 
-    expect(mocks.smbConnect).toHaveBeenCalledWith({
-      host: 'server.example.com',
-      share: 'share',
-      domain: 'LONG.EXAMPLE.COM',
-      username: 'jdoe',
-      password: 'pass1',
-    })
+    expect(mocks.readFile).toHaveBeenCalledWith(
+      {
+        host: 'server.example.com',
+        share: 'share',
+        domain: 'LONG.EXAMPLE.COM',
+        username: 'jdoe',
+        password: 'pass1',
+      },
+      'file.txt',
+    )
   })
 
   it('should use domain from username prefix when config domain is empty', async () => {
@@ -169,12 +151,15 @@ describe('readSmbFile', () => {
 
     await readSmbFile(config, 'file.txt')
 
-    expect(mocks.smbConnect).toHaveBeenCalledWith({
-      host: 'server',
-      share: 'share',
-      domain: 'MYDOMAIN',
-      username: 'user1',
-      password: 'pass1',
-    })
+    expect(mocks.readFile).toHaveBeenCalledWith(
+      {
+        host: 'server',
+        share: 'share',
+        domain: 'MYDOMAIN',
+        username: 'user1',
+        password: 'pass1',
+      },
+      'file.txt',
+    )
   })
 })

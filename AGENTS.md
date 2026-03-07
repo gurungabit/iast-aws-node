@@ -10,22 +10,6 @@ Node.js monorepo (`packages/web`, `packages/server`, `packages/shared`) for a TN
 - **Web**: React 19, Vite, TanStack Router + Query, Zustand, Tailwind CSS v4, xterm.js, MSAL (Azure Entra ID)
 - **Tooling**: TypeScript (strict), ESLint, Prettier, Vitest, Playwright
 
-## Commands
-
-| Task | Command |
-|------|---------|
-| Lint | `npm run lint` |
-| Format | `npm run format` |
-| Format check | `npm run format:check` |
-| All tests | `npm test` |
-| Server tests | `npm run test:server` |
-| Web tests | `npm run test:web` |
-| Coverage | `npm run test:coverage` |
-| E2E tests | `npm run test:e2e` |
-| Dev (all) | `npm run dev` |
-| Dev (web only) | `npm run dev:web` |
-| Dev (server only) | `npm run dev:server` |
-
 ## Mandatory Workflow
 
 Every change MUST follow this sequence:
@@ -49,6 +33,7 @@ Never submit code that breaks tests, introduces lint errors, or drops coverage b
 
 ## Testing Rules
 
+- **Fix all failing tests** — if tests are failing (even "pre-existing" failures), fix them before moving on. Never skip or ignore broken tests.
 - **Framework**: Vitest for unit/integration, Playwright for E2E
 - **Server tests**: `node` environment, files in `src/**/*.test.ts`
 - **Web tests**: `jsdom` environment, files in `src/**/*.test.{ts,tsx}`
@@ -104,32 +89,47 @@ Never submit code that breaks tests, introduces lint errors, or drops coverage b
 - Prefer editing existing files over creating new ones
 - Use `cn()` utility for conditional Tailwind classes
 
-## File Structure
+## Host Navigation (TN3270 Mainframe)
 
-```
-packages/
-  server/src/
-    ast/           # AST execution (runs in worker threads)
-    auth/          # Entra ID auth hooks
-    db/schema/     # Drizzle schema definitions
-    routes/        # Fastify route handlers
-    services/      # Business logic
-    terminal/      # Worker thread management, WS handler, renderer
-    integrations/  # External services (DB2, SMB, EventBridge)
-  web/src/
-    ast/           # AST forms, registry, components
-    auth/          # MSAL auth guard and hooks
-    components/    # Shared components (Navbar, ui/)
-    config/        # API URLs, MSAL config
-    hooks/         # Custom React hooks
-    providers/     # Context providers
-    routes/        # TanStack Router pages
-    services/      # API client functions
-    stores/        # Zustand stores
-    terminal/      # Terminal component, session selector
-    utils/         # Helpers
-  shared/src/      # Shared types and utilities
-```
+Key concepts for AST host interaction via `Session` (from `tnz3270-node`):
+
+### PF Keys
+
+- **PF15**: Go back / exit current screen
+- **PF23**: Cycle OCC (occurrence) in ROUT
+- **PF14**: Page forward in listings
+- **PA3**: Emergency exit back to FSS (Fire System Selection)
+- **Enter**: Submit / confirm
+
+### Screen Detection
+
+Identify screens by checking for known text markers:
+
+- `"ROUT CONTROL"` — ROUT Control screen
+- `"DETAIL LISTING"` — Detail item listing
+- `"QUEUE LISTING"` — Queue listing (section view)
+- `"Fire System Selection"` — FSS main menu
+- `"PDQ CONTROL"` — PDQ Control screen
+- `"PDQ NAME AND ADDRESS"` — PDQ detail screen
+
+### Navigation Flows
+
+**ROUT flow**: Login → FSS → ROUT Control → Cycle OCC (PF23) → Find Section (PF14 to page) → Enter Queue → Read Detail Items
+
+**PDQ lookup flow**: FSS → PDQ Control (fill policy number + company code) → Enter → PDQ Name and Address → Read type field at row 6, col 59
+
+### Session API (commonly used methods)
+
+- `screenContains(text)` — check if text exists on screen
+- `getTextAt(row, col, length)` — read text at position
+- `fillFieldAtPosition(row, col, value)` — type into field
+- `enter()`, `pf(n)`, `pa(n)` — send keys
+- `waitForText(text, timeout)` — wait for screen with text
+- `waitForKeyboard(timeout)` — wait for keyboard unlock
+
+### Back-out Strategy
+
+When navigating fails, repeatedly press PF15 to walk back. If stuck, PA3 returns to FSS as a last resort.
 
 <!-- opensrc:start -->
 
