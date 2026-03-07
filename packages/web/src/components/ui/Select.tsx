@@ -138,12 +138,7 @@ export function Select({
           open && 'ring-2 ring-blue-500/40 border-blue-500',
         )}
       >
-        <span
-          className={cn(
-            'truncate text-left',
-            !selected && 'text-gray-400 dark:text-zinc-500',
-          )}
-        >
+        <span className={cn('truncate text-left', !selected && 'text-gray-400 dark:text-zinc-500')}>
           {selected ? selected.label : placeholder}
         </span>
         <span className="flex items-center gap-1 ml-2 flex-shrink-0">
@@ -177,7 +172,10 @@ export function Select({
                 ref={inputRef}
                 type="text"
                 value={search}
-                onChange={(e) => { setSearch(e.target.value); setHighlightIdx(0) }}
+                onChange={(e) => {
+                  setSearch(e.target.value)
+                  setHighlightIdx(0)
+                }}
                 onKeyDown={handleKeyDown}
                 placeholder="Search..."
                 className="w-full bg-transparent text-sm text-gray-900 dark:text-zinc-100 placeholder-gray-400 dark:placeholder-zinc-500 focus:outline-none"
@@ -188,9 +186,7 @@ export function Select({
           {/* Options list */}
           <div ref={listRef} className="max-h-48 overflow-y-auto py-1">
             {filtered.length === 0 ? (
-              <div className="px-3 py-2 text-xs text-gray-400 dark:text-zinc-500">
-                No results
-              </div>
+              <div className="px-3 py-2 text-xs text-gray-400 dark:text-zinc-500">No results</div>
             ) : (
               filtered.map((opt, idx) => (
                 <button
@@ -204,9 +200,7 @@ export function Select({
                     opt.value === value
                       ? 'bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-400 font-medium'
                       : 'text-gray-700 dark:text-zinc-300',
-                    idx === highlightIdx &&
-                      opt.value !== value &&
-                      'bg-gray-50 dark:bg-zinc-700/50',
+                    idx === highlightIdx && opt.value !== value && 'bg-gray-50 dark:bg-zinc-700/50',
                   )}
                 >
                   {opt.label}

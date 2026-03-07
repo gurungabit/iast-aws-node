@@ -300,7 +300,12 @@ export const useASTStore = create<ASTStore>((set) => ({
               keepRunning = true
             }
           } else if (result.status === 'failed' || result.status === 'cancelled') {
-            steps[idx] = { ...steps[idx], status: 'failed', error: result.message, completedAt: now }
+            steps[idx] = {
+              ...steps[idx],
+              status: 'failed',
+              error: result.message,
+              completedAt: now,
+            }
             run.status = 'failed'
             run.completedAt = now
             run.lastError = result.message

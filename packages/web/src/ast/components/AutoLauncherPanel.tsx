@@ -149,15 +149,13 @@ export const AutoLauncherPanel = memo(function AutoLauncherPanel() {
   const [isDraftHydrated, setIsDraftHydrated] = useState(false)
 
   const isAstBusy = astStatus === 'running' || astStatus === 'paused'
-  const isCredsValid = credentials.username.trim().length > 0 && credentials.password.trim().length > 0
+  const isCredsValid =
+    credentials.username.trim().length > 0 && credentials.password.trim().length > 0
   const isLauncherValid = name.trim().length > 0 && steps.length > 0
   const showCancel = selectedLauncher !== null || name.trim().length > 0 || steps.length > 0
 
   const allASTs = useMemo(() => getVisibleASTs(), [])
-  const astOptions = useMemo(
-    () => allASTs.map((a) => ({ value: a.id, label: a.name })),
-    [allASTs],
-  )
+  const astOptions = useMemo(() => allASTs.map((a) => ({ value: a.id, label: a.name })), [allASTs])
 
   const configOptions = useMemo(
     () => availableConfigs.map((c) => ({ value: c.configId, label: c.configurationName })),
@@ -277,7 +275,8 @@ export const AutoLauncherPanel = memo(function AutoLauncherPanel() {
     setName(launcher.name)
     setVisibility(launcher.visibility as 'private' | 'public')
 
-    const launcherSteps = (launcher.steps as Array<{ astName: string; configId: string; order: number }>) ?? []
+    const launcherSteps =
+      (launcher.steps as Array<{ astName: string; configId: string; order: number }>) ?? []
     const sorted = [...launcherSteps].sort((a, b) => (a.order ?? 0) - (b.order ?? 0))
     const baseSteps: DraftStep[] = sorted.map((s, idx) => ({
       stepId: `${s.configId}-${idx}`,
@@ -404,7 +403,8 @@ export const AutoLauncherPanel = memo(function AutoLauncherPanel() {
     try {
       if (!activeTabId) throw new Error('No active session')
       if (!selectedLauncher) throw new Error('Save the launcher before running')
-      if (!credentials.username || !credentials.password) throw new Error('Username and password are required')
+      if (!credentials.username || !credentials.password)
+        throw new Error('Username and password are required')
       if (steps.length === 0) throw new Error('Add at least one step')
 
       setIsRunning(true)
@@ -431,7 +431,9 @@ export const AutoLauncherPanel = memo(function AutoLauncherPanel() {
         displayName: selectedLauncher.name,
       })
 
-      useASTStore.getState().addStatusMessage(activeTabId, `AutoLauncher "${selectedLauncher.name}" started`)
+      useASTStore
+        .getState()
+        .addStatusMessage(activeTabId, `AutoLauncher "${selectedLauncher.name}" started`)
     } catch (err) {
       setRunError(err instanceof Error ? err.message : 'Failed to run')
     } finally {
@@ -490,8 +492,12 @@ export const AutoLauncherPanel = memo(function AutoLauncherPanel() {
         <CredentialsInput
           username={credentials.username}
           password={credentials.password}
-          onUsernameChange={(v) => { if (activeTabId) setCredentials(activeTabId, { username: v }) }}
-          onPasswordChange={(v) => { if (activeTabId) setCredentials(activeTabId, { password: v }) }}
+          onUsernameChange={(v) => {
+            if (activeTabId) setCredentials(activeTabId, { username: v })
+          }}
+          onPasswordChange={(v) => {
+            if (activeTabId) setCredentials(activeTabId, { password: v })
+          }}
           disabled={isRunning || isAstBusy}
         />
       </Card>
@@ -673,8 +679,15 @@ export const AutoLauncherPanel = memo(function AutoLauncherPanel() {
             {steps.length === 0 ? (
               <div className="text-xs text-gray-500 dark:text-zinc-400">No steps yet</div>
             ) : (
-              <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
-                <SortableContext items={steps.map((s) => s.stepId)} strategy={verticalListSortingStrategy}>
+              <DndContext
+                sensors={sensors}
+                collisionDetection={closestCenter}
+                onDragEnd={handleDragEnd}
+              >
+                <SortableContext
+                  items={steps.map((s) => s.stepId)}
+                  strategy={verticalListSortingStrategy}
+                >
                   <div className="space-y-1.5">
                     {steps.map((s, idx) => (
                       <SortableStepRow
@@ -721,9 +734,7 @@ function LauncherRow(props: {
           <div className="text-xs font-medium text-gray-900 dark:text-zinc-100 truncate">
             {launcher.name}
           </div>
-          <div className="text-[11px] text-gray-500 dark:text-zinc-400">
-            {launcher.visibility}
-          </div>
+          <div className="text-[11px] text-gray-500 dark:text-zinc-400">{launcher.visibility}</div>
         </div>
         <button
           type="button"
@@ -767,7 +778,12 @@ const AutoLauncherLiveOutput = memo(function AutoLauncherLiveOutput(props: { tab
     useASTStore.getState().clearAutoLauncherRun(props.tabId)
   }, [props.tabId])
 
-  const hasOutput = hasLogs || isAstBusy || astProgress !== null || Boolean(astLastResult?.error) || autoLauncherRun !== null
+  const hasOutput =
+    hasLogs ||
+    isAstBusy ||
+    astProgress !== null ||
+    Boolean(astLastResult?.error) ||
+    autoLauncherRun !== null
   if (!hasOutput) return null
 
   const activeStepIndex = autoLauncherRun
@@ -783,7 +799,9 @@ const AutoLauncherLiveOutput = memo(function AutoLauncherLiveOutput(props: { tab
         <StatusBadge status={astStatus} />
         <div className="flex items-center gap-2 min-w-0">
           {runningAstName && (
-            <div className="text-xs text-gray-600 dark:text-zinc-400 truncate">{runningAstName}</div>
+            <div className="text-xs text-gray-600 dark:text-zinc-400 truncate">
+              {runningAstName}
+            </div>
           )}
           {!isAstBusy && (hasLogs || autoLauncherRun) && (
             <Button variant="danger" size="sm" onClick={handleClearLogs}>
@@ -811,18 +829,24 @@ const AutoLauncherLiveOutput = memo(function AutoLauncherLiveOutput(props: { tab
                   {formatDuration(autoLauncherRun.completedAt - autoLauncherRun.startedAt)}
                 </div>
               )}
-              <div className={`text-[11px] font-medium ${
-                autoLauncherRun.status === 'completed' ? 'text-green-600 dark:text-green-400'
-                : autoLauncherRun.status === 'failed' ? 'text-red-600 dark:text-red-400'
-                : 'text-blue-600 dark:text-blue-400'
-              }`}>
+              <div
+                className={`text-[11px] font-medium ${
+                  autoLauncherRun.status === 'completed'
+                    ? 'text-green-600 dark:text-green-400'
+                    : autoLauncherRun.status === 'failed'
+                      ? 'text-red-600 dark:text-red-400'
+                      : 'text-blue-600 dark:text-blue-400'
+                }`}
+              >
                 {autoLauncherRun.status}
               </div>
             </div>
           </div>
 
           {autoLauncherRun.lastError && (
-            <div className="text-[11px] text-red-700 dark:text-red-400">{autoLauncherRun.lastError}</div>
+            <div className="text-[11px] text-red-700 dark:text-red-400">
+              {autoLauncherRun.lastError}
+            </div>
           )}
 
           <div className="space-y-1">
@@ -868,7 +892,10 @@ const AutoLauncherLiveOutput = memo(function AutoLauncherLiveOutput(props: { tab
               <ItemResultList
                 items={astItemResults.map((r) => ({
                   itemId: r.policyNumber ?? r.id,
-                  status: r.status === 'failure' ? 'failed' : (r.status as 'success' | 'failed' | 'skipped'),
+                  status:
+                    r.status === 'failure'
+                      ? 'failed'
+                      : (r.status as 'success' | 'failed' | 'skipped'),
                   durationMs: r.durationMs,
                   error: r.error,
                 }))}
@@ -886,25 +913,27 @@ const AutoLauncherLiveOutput = memo(function AutoLauncherLiveOutput(props: { tab
 // StepStatusRow
 // ---------------------------------------------------------------------------
 
-function StepStatusRow(props: {
-  step: AutoLauncherStepState
-  index: number
-  isActive: boolean
-}) {
+function StepStatusRow(props: { step: AutoLauncherStepState; index: number; isActive: boolean }) {
   const { step, index, isActive } = props
   const astDef = getAST(step.astName)
 
   const statusText =
-    step.status === 'pending' ? 'Pending'
-    : step.status === 'running' ? 'Running'
-    : step.status === 'success' ? 'Success'
-    : 'Failed'
+    step.status === 'pending'
+      ? 'Pending'
+      : step.status === 'running'
+        ? 'Running'
+        : step.status === 'success'
+          ? 'Success'
+          : 'Failed'
 
   const statusClass =
-    step.status === 'success' ? 'text-green-700 dark:text-green-400'
-    : step.status === 'failed' ? 'text-red-700 dark:text-red-400'
-    : step.status === 'running' ? 'text-blue-700 dark:text-blue-400'
-    : 'text-gray-500 dark:text-zinc-400'
+    step.status === 'success'
+      ? 'text-green-700 dark:text-green-400'
+      : step.status === 'failed'
+        ? 'text-red-700 dark:text-red-400'
+        : step.status === 'running'
+          ? 'text-blue-700 dark:text-blue-400'
+          : 'text-gray-500 dark:text-zinc-400'
 
   return (
     <div

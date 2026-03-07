@@ -371,9 +371,7 @@ function AutoLauncherRunsPage() {
                               <RunStepCard
                                 key={`${String(idx)}-${s.astName}`}
                                 label={`Step ${String(idx + 1)} — ${s.configName ?? s.astName}`}
-                                sublabel={
-                                  s.astName
-                                }
+                                sublabel={s.astName}
                                 status={s.status}
                                 isActive={isActive}
                               />

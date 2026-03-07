@@ -138,7 +138,8 @@ export async function autoLauncherRoutes(app: FastifyInstance) {
       if (!launcher) return reply.status(404).send({ error: 'Launcher not found' })
 
       const { sessionId, username, password, userLocalDate } = request.body
-      const steps = (launcher.steps as Array<{ astName: string; configId: string; order: number }>) ?? []
+      const steps =
+        (launcher.steps as Array<{ astName: string; configId: string; order: number }>) ?? []
       const runId = crypto.randomUUID()
 
       // Load configs for each step to build params and get display names
@@ -184,7 +185,10 @@ export async function autoLauncherRoutes(app: FastifyInstance) {
             app.log.error({ runId, err }, 'AutoLauncher run failed')
           })
       } else {
-        app.log.warn({ sessionId, runId }, 'No worker found for session — run created but not started')
+        app.log.warn(
+          { sessionId, runId },
+          'No worker found for session — run created but not started',
+        )
       }
 
       const responseSteps = resolvedSteps.map((s) => ({

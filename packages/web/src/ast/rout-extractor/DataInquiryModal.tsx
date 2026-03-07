@@ -457,7 +457,14 @@ export function DataInquiryModal({ isOpen, onClose }: DataInquiryModalProps): Re
   )
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} title="Data Inquiry" size="full" compact footer={footer}>
+    <Modal
+      isOpen={isOpen}
+      onClose={onClose}
+      title="Data Inquiry"
+      size="full"
+      compact
+      footer={footer}
+    >
       <div className="space-y-4">
         {/* Filter grid */}
         <div className="grid grid-cols-4 gap-x-3 gap-y-2">
