@@ -156,7 +156,7 @@ function RunStepCard({
       >
         {sublabel}
       </div>
-      {isActive && progress && progress.total > 0 && (
+      {isActive && progress && progress.total > 0 ? (
         <div className="mt-2">
           <div className="flex items-center justify-between text-[11px] text-gray-600 dark:text-zinc-400 mb-1">
             <span className="flex items-center gap-1">
@@ -174,7 +174,17 @@ function RunStepCard({
             />
           </div>
         </div>
-      )}
+      ) : isActive && !progress ? (
+        <div className="mt-2">
+          <div className="flex items-center text-[11px] text-gray-600 dark:text-zinc-400 mb-1">
+            <Loader2 className="w-3 h-3 animate-spin mr-1" />
+            Processing...
+          </div>
+          <div className="h-1.5 bg-gray-200 dark:bg-zinc-700 rounded-full overflow-hidden">
+            <div className="h-full w-1/3 bg-blue-500 dark:bg-blue-400 rounded-full animate-pulse" />
+          </div>
+        </div>
+      ) : null}
     </div>
   )
 }

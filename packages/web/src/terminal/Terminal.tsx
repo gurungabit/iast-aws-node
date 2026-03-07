@@ -1,8 +1,11 @@
 import { useEffect, useState, useRef, memo } from 'react'
 import { Terminal as XTerm } from '@xterm/xterm'
 import '@xterm/xterm/css/xterm.css'
+import { Pause, Play, Square } from 'lucide-react'
 import { config } from '../config'
 import { useSessionStore } from '../stores/session-store'
+import { useASTStore } from '../stores/ast-store'
+import { useAST } from '../hooks/useAST'
 import type { ServerMessage } from '../services/websocket'
 
 interface TerminalProps {
@@ -60,6 +63,60 @@ const KEYBOARD_SHORTCUTS = [
 
 function getStatusColor(connected: boolean): string {
   return connected ? '#0dbc79' : '#666666'
+}
+
+function ASTControls({ sessionId }: { sessionId: string }) {
+  const astStatus = useASTStore((s) => s.tabs[sessionId]?.status ?? 'idle')
+  const runningAST = useASTStore((s) => s.tabs[sessionId]?.runningAST ?? null)
+  const { controlAST } = useAST()
+
+  const isRunning = astStatus === 'running' || astStatus === 'paused'
+  const isPaused = astStatus === 'paused'
+
+  if (!isRunning || !runningAST) return null
+
+  return (
+    <div className="flex items-center gap-2 pr-2 border-r border-zinc-700">
+      <span
+        className={`text-xs flex items-center gap-1 ${isPaused ? 'text-yellow-400' : 'text-emerald-400'}`}
+      >
+        {isPaused ? <Pause className="w-3 h-3" /> : <Play className="w-3 h-3" />}
+        <span className="font-medium">{runningAST}</span>
+        {isPaused && <span className="text-zinc-500">(paused)</span>}
+      </span>
+
+      {isPaused ? (
+        <button
+          type="button"
+          onClick={() => controlAST('resume')}
+          className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded border cursor-pointer transition-colors
+            bg-emerald-600 text-white border-emerald-600 hover:bg-emerald-700"
+        >
+          <Play className="w-3.5 h-3.5" fill="currentColor" />
+          Resume
+        </button>
+      ) : (
+        <button
+          type="button"
+          onClick={() => controlAST('pause')}
+          className="flex items-center gap-1.5 px-3 py-1.5 text-xs rounded border cursor-pointer transition-colors
+            bg-yellow-600 text-white border-yellow-600 hover:bg-yellow-700"
+        >
+          <Pause className="w-3.5 h-3.5" />
+          Pause
+        </button>
+      )}
+      <button
+        type="button"
+        onClick={() => controlAST('cancel')}
+        className="flex items-center gap-1.5 px-3 py-1.5 text-xs rounded border cursor-pointer transition-colors
+          bg-red-600 text-white border-red-600 hover:bg-red-700"
+      >
+        <Square className="w-3 h-3" fill="currentColor" />
+        Stop
+      </button>
+    </div>
+  )
 }
 
 export const TerminalComponent = memo(function TerminalComponent({ sessionId }: TerminalProps) {
@@ -410,6 +467,9 @@ export const TerminalComponent = memo(function TerminalComponent({ sessionId }: 
         </div>
 
         <div className="flex items-center gap-3">
+          {/* AST Controls */}
+          <ASTControls sessionId={sessionId} />
+
           <span className="text-zinc-300 text-xs">
             Cursor: ({tab?.meta.cursorRow},{tab?.meta.cursorCol}){tab?.meta.locked ? ' LOCKED' : ''}
           </span>
