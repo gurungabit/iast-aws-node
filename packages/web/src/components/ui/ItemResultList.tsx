@@ -23,7 +23,13 @@ const statusStyles = {
   skipped: 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-400',
 }
 
-function StatusIcon({ status, className = 'w-3.5 h-3.5' }: { status: ASTItemStatus; className?: string }) {
+function StatusIcon({
+  status,
+  className = 'w-3.5 h-3.5',
+}: {
+  status: ASTItemStatus
+  className?: string
+}) {
   switch (status) {
     case 'pending':
       return <Circle className={className} />
@@ -38,13 +44,20 @@ function StatusIcon({ status, className = 'w-3.5 h-3.5' }: { status: ASTItemStat
   }
 }
 
-export function ItemResultList({ items, maxHeight = '200px', className = '' }: ItemResultListProps): React.ReactNode {
+export function ItemResultList({
+  items,
+  maxHeight = '200px',
+  className = '',
+}: ItemResultListProps): React.ReactNode {
   if (items.length === 0) return null
 
   return (
     <div className={`space-y-1 overflow-y-auto ${className}`} style={{ maxHeight }}>
       {items.map((item, index) => (
-        <div key={`${item.itemId}-${index}`} className={`px-2 py-1.5 rounded text-xs ${statusStyles[item.status]}`}>
+        <div
+          key={`${item.itemId}-${index}`}
+          className={`px-2 py-1.5 rounded text-xs ${statusStyles[item.status]}`}
+        >
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2 min-w-0">
               <StatusIcon status={item.status} />
@@ -55,7 +68,9 @@ export function ItemResultList({ items, maxHeight = '200px', className = '' }: I
             )}
           </div>
           {item.error && (
-            <p className="mt-1 text-[11px] text-red-600 dark:text-red-400 break-words pl-5">{item.error}</p>
+            <p className="mt-1 text-[11px] text-red-600 dark:text-red-400 break-words pl-5">
+              {item.error}
+            </p>
           )}
         </div>
       ))}

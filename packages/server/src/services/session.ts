@@ -4,10 +4,7 @@ import { sessions } from '../db/schema/index.js'
 
 export const sessionService = {
   async create(sessionId: string, userId: string, name: string = '') {
-    const [session] = await db
-      .insert(sessions)
-      .values({ id: sessionId, userId, name })
-      .returning()
+    const [session] = await db.insert(sessions).values({ id: sessionId, userId, name }).returning()
     return session
   },
 

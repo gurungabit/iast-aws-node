@@ -26,10 +26,15 @@ export const Checkbox = forwardRef<HTMLInputElement, CheckboxProps>(
           {...props}
         />
         <div className="flex flex-col">
-          <label htmlFor={checkboxId} className="text-sm font-medium text-gray-700 dark:text-zinc-300 cursor-pointer select-none">
+          <label
+            htmlFor={checkboxId}
+            className="text-sm font-medium text-gray-700 dark:text-zinc-300 cursor-pointer select-none"
+          >
             {label}
           </label>
-          {description && <span className="text-xs text-gray-500 dark:text-zinc-500">{description}</span>}
+          {description && (
+            <span className="text-xs text-gray-500 dark:text-zinc-500">{description}</span>
+          )}
         </div>
       </div>
     )

@@ -4,7 +4,7 @@ import { useSessionStore } from '../stores/session-store'
 
 export function useAST() {
   const activeTabId = useASTStore((s) => s.activeTabId)
-  const tabState = useASTStore((s) => (activeTabId ? s.tabs[activeTabId] ?? null : null))
+  const tabState = useASTStore((s) => (activeTabId ? (s.tabs[activeTabId] ?? null) : null))
 
   const status = tabState?.status ?? 'idle'
   const isRunning = status === 'running' || status === 'paused'

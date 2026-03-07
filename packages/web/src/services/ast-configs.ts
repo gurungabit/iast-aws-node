@@ -89,9 +89,13 @@ export async function updateAstConfig(
     tasks?: unknown[]
   },
 ): Promise<SavedAstConfigWithAccess> {
-  const params = data.params !== undefined || data.oc !== undefined || data.parallel !== undefined || data.testMode !== undefined
-    ? { ...data.params, oc: data.oc, parallel: data.parallel, testMode: data.testMode }
-    : undefined
+  const params =
+    data.params !== undefined ||
+    data.oc !== undefined ||
+    data.parallel !== undefined ||
+    data.testMode !== undefined
+      ? { ...data.params, oc: data.oc, parallel: data.parallel, testMode: data.testMode }
+      : undefined
   const result = await apiPatch<ServerAstConfig>(`/ast-configs/${configId}`, {
     name: data.configurationName,
     visibility: data.visibility,

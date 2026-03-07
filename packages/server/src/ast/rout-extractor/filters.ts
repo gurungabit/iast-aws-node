@@ -72,7 +72,10 @@ export function filterBySections(items: RouteItem[], config: RoutExtractorConfig
   return result
 }
 
-export function filterByUnitExclusions(items: RouteItem[], config: RoutExtractorConfig): RouteItem[] {
+export function filterByUnitExclusions(
+  items: RouteItem[],
+  config: RoutExtractorConfig,
+): RouteItem[] {
   if (config.unitExclusions.length === 0) return items
 
   const excluded = new Set(config.unitExclusions.map((u) => u.trim().toUpperCase()).filter(Boolean))

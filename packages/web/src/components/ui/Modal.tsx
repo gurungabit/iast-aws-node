@@ -71,7 +71,13 @@ export function Modal({
         {/* Header */}
         <div className="flex items-center justify-between p-6 border-b border-gray-200 dark:border-zinc-700">
           <div className="text-lg font-semibold text-gray-900 dark:text-zinc-100">{title}</div>
-          <Button variant="ghost" size="sm" onClick={onClose} className="p-1 h-auto w-auto" aria-label="Close modal">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={onClose}
+            className="p-1 h-auto w-auto"
+            aria-label="Close modal"
+          >
             <X className="h-5 w-5" />
           </Button>
         </div>

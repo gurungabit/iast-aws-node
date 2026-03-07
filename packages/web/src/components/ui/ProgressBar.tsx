@@ -38,14 +38,20 @@ export function ProgressBar({
     <div className={`w-full ${className}`}>
       {(label || showPercentage) && (
         <div className="flex items-center justify-between mb-1">
-          {label && <span className="text-xs font-medium text-gray-700 dark:text-zinc-300">{label}</span>}
+          {label && (
+            <span className="text-xs font-medium text-gray-700 dark:text-zinc-300">{label}</span>
+          )}
           {showPercentage && (
-            <span className="text-xs text-gray-500 dark:text-zinc-500">{Math.round(clampedValue)}%</span>
+            <span className="text-xs text-gray-500 dark:text-zinc-500">
+              {Math.round(clampedValue)}%
+            </span>
           )}
         </div>
       )}
 
-      <div className={`w-full rounded-full overflow-hidden bg-gray-200 dark:bg-zinc-700 ${sizeStyles[size]}`}>
+      <div
+        className={`w-full rounded-full overflow-hidden bg-gray-200 dark:bg-zinc-700 ${sizeStyles[size]}`}
+      >
         <div
           className={`h-full transition-[width] duration-300 ease-out rounded-full ${variantStyles[variant]}`}
           style={{ width: `${clampedValue}%` }}

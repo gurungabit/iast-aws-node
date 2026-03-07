@@ -118,12 +118,7 @@ export async function terminatePodSessions(podIp: string): Promise<void> {
   await db
     .update(sessionAssignments)
     .set({ status: 'terminated', updatedAt: new Date() })
-    .where(
-      and(
-        eq(sessionAssignments.podIp, podIp),
-        eq(sessionAssignments.status, 'active'),
-      ),
-    )
+    .where(and(eq(sessionAssignments.podIp, podIp), eq(sessionAssignments.status, 'active')))
 }
 
 /**

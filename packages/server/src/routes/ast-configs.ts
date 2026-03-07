@@ -63,7 +63,12 @@ export async function astConfigRoutes(app: FastifyInstance) {
         ownerId: request.user.id,
       })
       reply.status(201)
-      return { id: config.id, astName: config.astName, name: config.name, visibility: config.visibility }
+      return {
+        id: config.id,
+        astName: config.astName,
+        name: config.name,
+        visibility: config.visibility,
+      }
     },
   )
 
@@ -115,10 +120,19 @@ export async function astConfigRoutes(app: FastifyInstance) {
       },
     },
     async (request, reply) => {
-      const config = await astConfigService.clone(request.params.id, request.user.id, request.body.name)
+      const config = await astConfigService.clone(
+        request.params.id,
+        request.user.id,
+        request.body.name,
+      )
       if (!config) return reply.status(404).send({ error: 'Config not found' })
       reply.status(201)
-      return { id: config.id, astName: config.astName, name: config.name, visibility: config.visibility }
+      return {
+        id: config.id,
+        astName: config.astName,
+        name: config.name,
+        visibility: config.visibility,
+      }
     },
   )
 }

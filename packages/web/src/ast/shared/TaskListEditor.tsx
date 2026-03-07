@@ -79,7 +79,11 @@ function SortableTaskRow(props: {
           onClick={props.onToggleExpand}
         >
           <span className="text-gray-500 dark:text-zinc-400 shrink-0">
-            {props.isExpanded ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
+            {props.isExpanded ? (
+              <ChevronDown className="w-4 h-4" />
+            ) : (
+              <ChevronRight className="w-4 h-4" />
+            )}
           </span>
           <span className="text-xs font-medium text-gray-500 dark:text-zinc-400 shrink-0">
             #{props.index + 1}
@@ -228,7 +232,10 @@ export function TaskListEditor({
         </div>
       ) : (
         <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
-          <SortableContext items={tasks.map((t) => t.taskId)} strategy={verticalListSortingStrategy}>
+          <SortableContext
+            items={tasks.map((t) => t.taskId)}
+            strategy={verticalListSortingStrategy}
+          >
             <div className="space-y-2">
               {tasks.map((task, idx) => (
                 <SortableTaskRow

@@ -138,19 +138,27 @@ export function AstConfigSelector({
           className="flex items-center justify-between gap-2 px-3 py-2 bg-red-50 dark:bg-red-900/20 border-y border-red-200 dark:border-red-800/40"
         >
           <p className="text-xs text-gray-700 dark:text-zinc-300 truncate">
-            Delete <strong className="text-gray-900 dark:text-zinc-100">{cfg.configurationName}</strong>?
+            Delete{' '}
+            <strong className="text-gray-900 dark:text-zinc-100">{cfg.configurationName}</strong>?
           </p>
           <div className="flex gap-1.5 flex-shrink-0">
             <button
               type="button"
-              onClick={(e) => { e.stopPropagation(); setConfirmDeleteId(null) }}
+              onClick={(e) => {
+                e.stopPropagation()
+                setConfirmDeleteId(null)
+              }}
               className="px-2 py-0.5 text-xs rounded bg-gray-200 dark:bg-zinc-700 text-gray-700 dark:text-zinc-300 hover:bg-gray-300 dark:hover:bg-zinc-600 cursor-pointer transition-colors"
             >
               Cancel
             </button>
             <button
               type="button"
-              onClick={(e) => { e.stopPropagation(); setConfirmDeleteId(null); onDelete(cfg.configId) }}
+              onClick={(e) => {
+                e.stopPropagation()
+                setConfirmDeleteId(null)
+                onDelete(cfg.configId)
+              }}
               className="px-2 py-0.5 text-xs rounded bg-red-500 text-white hover:bg-red-600 cursor-pointer transition-colors"
             >
               Delete
@@ -207,7 +215,10 @@ export function AstConfigSelector({
           {cfg.isOwner && onDelete && (
             <button
               type="button"
-              onClick={(e) => { e.stopPropagation(); setConfirmDeleteId(cfg.configId) }}
+              onClick={(e) => {
+                e.stopPropagation()
+                setConfirmDeleteId(cfg.configId)
+              }}
               className="p-0.5 text-gray-400 dark:text-zinc-600 hover:text-red-500 dark:hover:text-red-400 transition-colors cursor-pointer"
               title="Delete config"
             >
@@ -249,9 +260,11 @@ export function AstConfigSelector({
         disabled={disabled}
         className={`
           w-full flex items-center gap-2 px-3 py-2 rounded-lg border transition-colors text-left
-          ${disabled
-            ? 'bg-gray-100 dark:bg-zinc-800 border-gray-200 dark:border-zinc-700 cursor-not-allowed opacity-60'
-            : 'bg-white dark:bg-zinc-900 border-gray-300 dark:border-zinc-700 cursor-pointer hover:border-gray-400 dark:hover:border-zinc-600'}
+          ${
+            disabled
+              ? 'bg-gray-100 dark:bg-zinc-800 border-gray-200 dark:border-zinc-700 cursor-not-allowed opacity-60'
+              : 'bg-white dark:bg-zinc-900 border-gray-300 dark:border-zinc-700 cursor-pointer hover:border-gray-400 dark:hover:border-zinc-600'
+          }
           ${isOpen ? 'border-blue-500 dark:border-blue-500 ring-1 ring-blue-500/20' : ''}
         `}
       >
@@ -265,11 +278,13 @@ export function AstConfigSelector({
               <span className="text-xs px-1.5 py-0.5 rounded bg-gray-100 dark:bg-zinc-800 text-gray-500 dark:text-zinc-500 flex-shrink-0">
                 OC {selectedConfig.oc}
               </span>
-              {selectedConfig.multiTask && selectedConfig.tasks && selectedConfig.tasks.length > 0 && (
-                <span className="text-xs px-1.5 py-0.5 rounded bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 flex-shrink-0">
-                  {String(selectedConfig.tasks.length)} tasks
-                </span>
-              )}
+              {selectedConfig.multiTask &&
+                selectedConfig.tasks &&
+                selectedConfig.tasks.length > 0 && (
+                  <span className="text-xs px-1.5 py-0.5 rounded bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 flex-shrink-0">
+                    {String(selectedConfig.tasks.length)} tasks
+                  </span>
+                )}
             </>
           ) : (
             <span className="text-sm text-gray-400 dark:text-zinc-500">{placeholder}</span>

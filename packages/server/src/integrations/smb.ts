@@ -42,14 +42,19 @@ export async function readSmbFile(config: SmbConfig, path: string): Promise<Buff
   }
 
   try {
-    return await readFile({
-      host,
-      share: shareName,
-      domain,
-      username,
-      password: config.password,
-    }, relativePath)
+    return await readFile(
+      {
+        host,
+        share: shareName,
+        domain,
+        username,
+        password: config.password,
+      },
+      relativePath,
+    )
   } catch (err) {
-    throw new Error(`Failed to read SMB file ${path}: ${err instanceof Error ? err.message : String(err)}`)
+    throw new Error(
+      `Failed to read SMB file ${path}: ${err instanceof Error ? err.message : String(err)}`,
+    )
   }
 }

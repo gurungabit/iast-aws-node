@@ -21,7 +21,11 @@ function TerminalPage() {
   const initRef = useRef(false)
 
   const { addTab, removeTab, setWs, setActiveTab, renameTab } = useSessionStore()
-  const { initTab: initASTTab, removeTab: removeASTTab, setActiveTabId: setASTActiveTab } = useASTStore()
+  const {
+    initTab: initASTTab,
+    removeTab: removeASTTab,
+    setActiveTabId: setASTActiveTab,
+  } = useASTStore()
 
   // Auto-load existing sessions or create one on mount
   useEffect(() => {
@@ -125,9 +129,7 @@ function TerminalPage() {
     const name = editName.trim()
     if (name) {
       renameTab(tabId, name)
-      renameSession(tabId, name).catch((err) =>
-        console.error('Failed to rename session:', err),
-      )
+      renameSession(tabId, name).catch((err) => console.error('Failed to rename session:', err))
     }
     setEditingTabId(null)
     setEditName('')
@@ -169,7 +171,10 @@ function TerminalPage() {
                   onChange={(e) => setEditName(e.target.value)}
                   onKeyDown={(e) => {
                     if (e.key === 'Enter') handleSaveEdit(tab.sessionId)
-                    if (e.key === 'Escape') { setEditingTabId(null); setEditName('') }
+                    if (e.key === 'Escape') {
+                      setEditingTabId(null)
+                      setEditName('')
+                    }
                   }}
                   onBlur={() => handleSaveEdit(tab.sessionId)}
                   className="px-1 py-0.5 text-sm border rounded bg-white dark:bg-zinc-800 dark:border-zinc-600 min-w-[80px] max-w-[160px]"
@@ -197,7 +202,13 @@ function TerminalPage() {
                 aria-label="Close tab"
                 title="Close tab"
               >
-                <svg className="w-3 h-3" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5">
+                <svg
+                  className="w-3 h-3"
+                  viewBox="0 0 12 12"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="1.5"
+                >
                   <path d="M3 3l6 6M9 3l-6 6" />
                 </svg>
               </button>
@@ -210,7 +221,13 @@ function TerminalPage() {
           disabled={isCreating}
           aria-label="New session"
         >
-          <svg className="w-4 h-4" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
+          <svg
+            className="w-4 h-4"
+            viewBox="0 0 16 16"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.5"
+          >
             <path d="M8 3v10M3 8h10" />
           </svg>
           <span className="text-sm whitespace-nowrap">

@@ -61,20 +61,63 @@ export interface RouteItem {
 
 export function createEmptyRouteItem(): RouteItem {
   return {
-    policyNumber: '', policyNumberFmt: '', pui: '', companyCode: '',
-    highOrder: '', termDigits: '', checkDigit: '', policyItem: '',
-    policyType: '', gfuCode: '', team: '', agentNafo: '', agent: '',
-    afo: '', gfuDate: '', sectionOfRout: '', description: '',
-    whosQueue: '', specificQueue: '', servOrUndr: '', queueName: '',
-    noOfErrors: 0, errorCode1: '', errorCode2: '', errorCode3: '',
-    errorCode4: '', errorCode5: '', errorCode6: '', errorCode7: '',
-    errorCode8: '', streamed: '', images: '', status: '', queueDetail: '',
-    remarks: '', uniqueRoutId: '', stateCode: '', annivDate: '',
-    flmpCode: '', audit: '', county: '', clntId: '', textMessage1: '',
-    routFromUser1: '', routActionDate1: '', systemPolicyType: '',
-    systemFormLine: '', queueNum: '', occurNum: '', oldPolicyNumber: '',
-    timeQuoted: '', cancelEffDate: '', statusCode: '', officeNum: '',
-    dateOfRun: '', alias: '', needsPdqEnrichment: false,
+    policyNumber: '',
+    policyNumberFmt: '',
+    pui: '',
+    companyCode: '',
+    highOrder: '',
+    termDigits: '',
+    checkDigit: '',
+    policyItem: '',
+    policyType: '',
+    gfuCode: '',
+    team: '',
+    agentNafo: '',
+    agent: '',
+    afo: '',
+    gfuDate: '',
+    sectionOfRout: '',
+    description: '',
+    whosQueue: '',
+    specificQueue: '',
+    servOrUndr: '',
+    queueName: '',
+    noOfErrors: 0,
+    errorCode1: '',
+    errorCode2: '',
+    errorCode3: '',
+    errorCode4: '',
+    errorCode5: '',
+    errorCode6: '',
+    errorCode7: '',
+    errorCode8: '',
+    streamed: '',
+    images: '',
+    status: '',
+    queueDetail: '',
+    remarks: '',
+    uniqueRoutId: '',
+    stateCode: '',
+    annivDate: '',
+    flmpCode: '',
+    audit: '',
+    county: '',
+    clntId: '',
+    textMessage1: '',
+    routFromUser1: '',
+    routActionDate1: '',
+    systemPolicyType: '',
+    systemFormLine: '',
+    queueNum: '',
+    occurNum: '',
+    oldPolicyNumber: '',
+    timeQuoted: '',
+    cancelEffDate: '',
+    statusCode: '',
+    officeNum: '',
+    dateOfRun: '',
+    alias: '',
+    needsPdqEnrichment: false,
   }
 }
 
@@ -131,7 +174,10 @@ export function buildConfig(params: Record<string, unknown>): RoutExtractorConfi
   const unitExclusionsRaw = params.unitExclusions
   let unitExclusions: string[]
   if (typeof unitExclusionsRaw === 'string') {
-    unitExclusions = unitExclusionsRaw.split(';').map((u) => u.trim()).filter(Boolean)
+    unitExclusions = unitExclusionsRaw
+      .split(';')
+      .map((u) => u.trim())
+      .filter(Boolean)
   } else if (Array.isArray(unitExclusionsRaw)) {
     unitExclusions = unitExclusionsRaw as string[]
   } else {
@@ -141,7 +187,10 @@ export function buildConfig(params: Record<string, unknown>): RoutExtractorConfi
   const supvIdsRaw = params.supvIds
   let supvIds: string[]
   if (typeof supvIdsRaw === 'string') {
-    supvIds = supvIdsRaw.split(';').map((s) => s.trim()).filter(Boolean)
+    supvIds = supvIdsRaw
+      .split(';')
+      .map((s) => s.trim())
+      .filter(Boolean)
   } else if (Array.isArray(supvIdsRaw)) {
     supvIds = supvIdsRaw as string[]
   } else {

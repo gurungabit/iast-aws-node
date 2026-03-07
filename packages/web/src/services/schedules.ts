@@ -33,4 +33,3 @@ export async function createSchedule(data: CreateScheduleParams): Promise<Create
 export async function cancelSchedule(id: string): Promise<void> {
   await apiDelete(`/schedules/${id}`)
 }
-

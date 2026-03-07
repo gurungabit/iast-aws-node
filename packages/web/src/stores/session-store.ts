@@ -58,9 +58,7 @@ export const useSessionStore = create<SessionState>((set, get) => ({
       if (tab?.ws) tab.ws.disconnect()
       tabs.delete(sessionId)
       const activeTabId =
-        state.activeTabId === sessionId
-          ? (tabs.keys().next().value ?? null)
-          : state.activeTabId
+        state.activeTabId === sessionId ? (tabs.keys().next().value ?? null) : state.activeTabId
       return { tabs, activeTabId }
     })
   },
@@ -105,6 +103,6 @@ export const useSessionStore = create<SessionState>((set, get) => ({
 
   getActiveTab: () => {
     const { tabs, activeTabId } = get()
-    return activeTabId ? tabs.get(activeTabId) ?? null : null
+    return activeTabId ? (tabs.get(activeTabId) ?? null) : null
   },
 }))

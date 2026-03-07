@@ -94,9 +94,7 @@ export class Session {
       const fieldStart = (faAddr + 1) % bufSize
       const fieldEnd = faPositions[(i + 1) % faPositions.length][0]
 
-      const length = fieldEnd > fieldStart
-        ? fieldEnd - fieldStart
-        : bufSize - fieldStart + fieldEnd
+      const length = fieldEnd > fieldStart ? fieldEnd - fieldStart : bufSize - fieldStart + fieldEnd
 
       fields.push({
         address: fieldStart,
@@ -207,7 +205,11 @@ export class Session {
   }
 
   /** Wait for any of multiple texts to appear. Returns the matched text or null. */
-  async waitForAnyText(texts: string[], timeout?: number, caseSensitive = false): Promise<string | null> {
+  async waitForAnyText(
+    texts: string[],
+    timeout?: number,
+    caseSensitive = false,
+  ): Promise<string | null> {
     const t = timeout ?? this.defaultTimeout
     let matched: string | null = null
     await this.ati.wait(t, () => {

@@ -63,7 +63,12 @@ export async function scheduleRoutes(app: FastifyInstance) {
         params: request.body.params,
       })
       reply.status(201)
-      return { id: schedule.id, astName: schedule.astName, scheduledTime: schedule.scheduledTime, status: schedule.status }
+      return {
+        id: schedule.id,
+        astName: schedule.astName,
+        scheduledTime: schedule.scheduledTime,
+        status: schedule.status,
+      }
     },
   )
 

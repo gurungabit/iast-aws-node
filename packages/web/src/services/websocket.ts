@@ -4,7 +4,11 @@ import { getAccessToken } from '../auth/token'
 export type ServerMessage =
   | { type: 'connected' }
   | { type: 'disconnected'; reason?: string }
-  | { type: 'screen'; ansi: string; meta: { cursorRow: number; cursorCol: number; locked: boolean; rows: number; cols: number } }
+  | {
+      type: 'screen'
+      ansi: string
+      meta: { cursorRow: number; cursorCol: number; locked: boolean; rows: number; cols: number }
+    }
   | { type: 'ast.status'; status: string; astName: string; executionId: string }
   | { type: 'ast.progress'; progress: { current: number; total: number; message: string } }
   | { type: 'ast.item_result_batch'; executionId: string; items: ASTItemResult[] }

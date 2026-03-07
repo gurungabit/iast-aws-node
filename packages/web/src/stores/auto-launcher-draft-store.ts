@@ -34,8 +34,7 @@ export const useAutoLauncherDraftStore = create<DraftState>((set) => ({
   setName: (name) => set({ name }),
   setVisibility: (visibility) => set({ visibility }),
 
-  addStep: (step) =>
-    set((state) => ({ steps: [...state.steps, step] })),
+  addStep: (step) => set((state) => ({ steps: [...state.steps, step] })),
 
   updateStep: (id, data) =>
     set((state) => ({
@@ -44,9 +43,7 @@ export const useAutoLauncherDraftStore = create<DraftState>((set) => ({
 
   removeStep: (id) =>
     set((state) => ({
-      steps: state.steps
-        .filter((s) => s.id !== id)
-        .map((s, i) => ({ ...s, order: i })),
+      steps: state.steps.filter((s) => s.id !== id).map((s, i) => ({ ...s, order: i })),
     })),
 
   reorderSteps: (fromIndex, toIndex) =>

@@ -10,10 +10,30 @@ interface TerminalProps {
 }
 
 const PF_KEYS = [
-  'PF1', 'PF2', 'PF3', 'PF4', 'PF5', 'PF6',
-  'PF7', 'PF8', 'PF9', 'PF10', 'PF11', 'PF12',
-  'PF13', 'PF14', 'PF15', 'PF16', 'PF17', 'PF18',
-  'PF19', 'PF20', 'PF21', 'PF22', 'PF23', 'PF24',
+  'PF1',
+  'PF2',
+  'PF3',
+  'PF4',
+  'PF5',
+  'PF6',
+  'PF7',
+  'PF8',
+  'PF9',
+  'PF10',
+  'PF11',
+  'PF12',
+  'PF13',
+  'PF14',
+  'PF15',
+  'PF16',
+  'PF17',
+  'PF18',
+  'PF19',
+  'PF20',
+  'PF21',
+  'PF22',
+  'PF23',
+  'PF24',
 ]
 
 const PA_KEYS = [
@@ -99,9 +119,12 @@ export const TerminalComponent = memo(function TerminalComponent({ sessionId }: 
       // Handle paste via clipboard API
       if ((ev.ctrlKey || ev.metaKey) && ev.key === 'v') {
         if (ev.type === 'keydown') {
-          navigator.clipboard.readText().then((text) => {
-            if (text) ws.send({ type: 'data', text })
-          }).catch(() => {})
+          navigator.clipboard
+            .readText()
+            .then((text) => {
+              if (text) ws.send({ type: 'data', text })
+            })
+            .catch(() => {})
         }
         return false
       }
@@ -111,17 +134,30 @@ export const TerminalComponent = memo(function TerminalComponent({ sessionId }: 
     // Handle all keyboard input
     term.onKey(({ domEvent: ev }) => {
       // Prevent browser defaults for terminal keys
-      if (ev.key === 'Tab' || ev.key === 'Backspace' || ev.key === 'Enter'
-        || ev.key.startsWith('Arrow') || ev.key.startsWith('F')
-        || ev.key === 'Home' || ev.key === 'End' || ev.key === 'Delete'
-        || ev.key === 'Escape') {
+      if (
+        ev.key === 'Tab' ||
+        ev.key === 'Backspace' ||
+        ev.key === 'Enter' ||
+        ev.key.startsWith('Arrow') ||
+        ev.key.startsWith('F') ||
+        ev.key === 'Home' ||
+        ev.key === 'End' ||
+        ev.key === 'Delete' ||
+        ev.key === 'Escape'
+      ) {
         ev.preventDefault()
       }
 
       // Ctrl shortcuts
       if (ev.ctrlKey) {
-        if (ev.key === 'c') { ws.send({ type: 'key', key: 'pa1' }); return }
-        if (ev.key === 'r') { ws.send({ type: 'key', key: 'reset' }); return }
+        if (ev.key === 'c') {
+          ws.send({ type: 'key', key: 'pa1' })
+          return
+        }
+        if (ev.key === 'r') {
+          ws.send({ type: 'key', key: 'reset' })
+          return
+        }
       }
 
       // F-keys (Shift+F1-F12 → PF13-PF24)
@@ -136,17 +172,39 @@ export const TerminalComponent = memo(function TerminalComponent({ sessionId }: 
 
       // Special keys
       switch (ev.key) {
-        case 'Enter': ws.send({ type: 'key', key: 'enter' }); return
-        case 'Escape': ws.send({ type: 'key', key: 'reset' }); return
-        case 'Tab': ws.send({ type: 'key', key: ev.shiftKey ? 'keyBacktab' : 'keyTab' }); return
-        case 'Backspace': ws.send({ type: 'key', key: 'keyBackspace' }); return
-        case 'Delete': ws.send({ type: 'key', key: 'keyDelete' }); return
-        case 'Home': ws.send({ type: 'key', key: 'keyHome' }); return
-        case 'End': ws.send({ type: 'key', key: 'keyEnd' }); return
-        case 'ArrowUp': ws.send({ type: 'key', key: 'keyCurUp' }); return
-        case 'ArrowDown': ws.send({ type: 'key', key: 'keyCurDown' }); return
-        case 'ArrowLeft': ws.send({ type: 'key', key: 'keyCurLeft' }); return
-        case 'ArrowRight': ws.send({ type: 'key', key: 'keyCurRight' }); return
+        case 'Enter':
+          ws.send({ type: 'key', key: 'enter' })
+          return
+        case 'Escape':
+          ws.send({ type: 'key', key: 'reset' })
+          return
+        case 'Tab':
+          ws.send({ type: 'key', key: ev.shiftKey ? 'keyBacktab' : 'keyTab' })
+          return
+        case 'Backspace':
+          ws.send({ type: 'key', key: 'keyBackspace' })
+          return
+        case 'Delete':
+          ws.send({ type: 'key', key: 'keyDelete' })
+          return
+        case 'Home':
+          ws.send({ type: 'key', key: 'keyHome' })
+          return
+        case 'End':
+          ws.send({ type: 'key', key: 'keyEnd' })
+          return
+        case 'ArrowUp':
+          ws.send({ type: 'key', key: 'keyCurUp' })
+          return
+        case 'ArrowDown':
+          ws.send({ type: 'key', key: 'keyCurDown' })
+          return
+        case 'ArrowLeft':
+          ws.send({ type: 'key', key: 'keyCurLeft' })
+          return
+        case 'ArrowRight':
+          ws.send({ type: 'key', key: 'keyCurRight' })
+          return
       }
 
       // Regular character typing
@@ -266,9 +324,10 @@ export const TerminalComponent = memo(function TerminalComponent({ sessionId }: 
                 type="button"
                 onClick={() => setKeyMenuOpen(!keyMenuOpen)}
                 className={`px-3 py-1.5 text-xs flex items-center gap-1 rounded border cursor-pointer transition-colors
-                  ${keyMenuOpen
-                    ? 'bg-blue-600 text-white border-blue-600'
-                    : 'bg-gray-100 dark:bg-zinc-800 text-gray-800 dark:text-zinc-200 border-gray-300 dark:border-zinc-700 hover:bg-gray-200 dark:hover:bg-zinc-700'
+                  ${
+                    keyMenuOpen
+                      ? 'bg-blue-600 text-white border-blue-600'
+                      : 'bg-gray-100 dark:bg-zinc-800 text-gray-800 dark:text-zinc-200 border-gray-300 dark:border-zinc-700 hover:bg-gray-200 dark:hover:bg-zinc-700'
                   }`}
               >
                 Keys ▾
@@ -311,9 +370,10 @@ export const TerminalComponent = memo(function TerminalComponent({ sessionId }: 
                           key={label}
                           onClick={() => handleKeyClick(key)}
                           className={`px-2.5 py-1.5 text-[11px] rounded border cursor-pointer transition-colors
-                            ${label === 'Enter'
-                              ? 'bg-blue-600 text-white border-blue-600 hover:bg-blue-700 active:bg-blue-800'
-                              : 'bg-gray-100 dark:bg-zinc-800 text-gray-800 dark:text-zinc-200 border-gray-300 dark:border-zinc-700 hover:bg-gray-200 dark:hover:bg-zinc-700 hover:border-gray-400 dark:hover:border-zinc-600 active:bg-gray-300 dark:active:bg-zinc-600'
+                            ${
+                              label === 'Enter'
+                                ? 'bg-blue-600 text-white border-blue-600 hover:bg-blue-700 active:bg-blue-800'
+                                : 'bg-gray-100 dark:bg-zinc-800 text-gray-800 dark:text-zinc-200 border-gray-300 dark:border-zinc-700 hover:bg-gray-200 dark:hover:bg-zinc-700 hover:border-gray-400 dark:hover:border-zinc-600 active:bg-gray-300 dark:active:bg-zinc-600'
                             }`}
                         >
                           {label}
@@ -351,8 +411,7 @@ export const TerminalComponent = memo(function TerminalComponent({ sessionId }: 
 
         <div className="flex items-center gap-3">
           <span className="text-zinc-300 text-xs">
-            Cursor: ({tab?.meta.cursorRow},{tab?.meta.cursorCol})
-            {tab?.meta.locked ? ' LOCKED' : ''}
+            Cursor: ({tab?.meta.cursorRow},{tab?.meta.cursorCol}){tab?.meta.locked ? ' LOCKED' : ''}
           </span>
           {!tab?.connected ? (
             <button
@@ -378,18 +437,12 @@ export const TerminalComponent = memo(function TerminalComponent({ sessionId }: 
 
       {/* Terminal container */}
       <div className="relative overscroll-contain">
-        <div
-          ref={containerRef}
-          className="p-1"
-          style={{ backgroundColor: '#000' }}
-        />
+        <div ref={containerRef} className="p-1" style={{ backgroundColor: '#000' }} />
         {!tab?.connected && (
           <div className="absolute inset-0 bg-zinc-950/95 flex items-center justify-center">
             <div className="text-center px-6">
               <div className="text-zinc-100 text-sm font-medium">Connecting...</div>
-              <div className="text-zinc-400 text-xs mt-1">
-                Establishing TN3270 session
-              </div>
+              <div className="text-zinc-400 text-xs mt-1">Establishing TN3270 session</div>
             </div>
           </div>
         )}

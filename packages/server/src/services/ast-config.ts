@@ -45,7 +45,12 @@ export const astConfigService = {
   async update(
     id: string,
     ownerId: string,
-    data: { name?: string; visibility?: string; params?: Record<string, unknown>; tasks?: unknown[] },
+    data: {
+      name?: string
+      visibility?: string
+      params?: Record<string, unknown>
+      tasks?: unknown[]
+    },
   ) {
     const [config] = await db
       .update(astConfigs)

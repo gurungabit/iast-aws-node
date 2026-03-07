@@ -17,10 +17,33 @@ export interface DatePickerProps {
 
 const DAYS = ['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa']
 const MONTHS = [
-  'January', 'February', 'March', 'April', 'May', 'June',
-  'July', 'August', 'September', 'October', 'November', 'December',
+  'January',
+  'February',
+  'March',
+  'April',
+  'May',
+  'June',
+  'July',
+  'August',
+  'September',
+  'October',
+  'November',
+  'December',
 ]
-const SHORT_MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+const SHORT_MONTHS = [
+  'Jan',
+  'Feb',
+  'Mar',
+  'Apr',
+  'May',
+  'Jun',
+  'Jul',
+  'Aug',
+  'Sep',
+  'Oct',
+  'Nov',
+  'Dec',
+]
 
 function toDateStr(d: Date): string {
   const y = d.getFullYear()
@@ -78,9 +101,14 @@ export function DatePicker({
   const [viewMonth, setViewMonth] = useState(() => parseDate(selectedDate).getMonth())
 
   const { minDate, maxDate } = useMemo(() => {
-    const min = maxDaysBack != null
-      ? (() => { const d = new Date(today); d.setDate(d.getDate() - maxDaysBack); return d })()
-      : null
+    const min =
+      maxDaysBack != null
+        ? (() => {
+            const d = new Date(today)
+            d.setDate(d.getDate() - maxDaysBack)
+            return d
+          })()
+        : null
     const max = allowFuture ? null : new Date(today)
     return { minDate: min, maxDate: max }
   }, [today, maxDaysBack, allowFuture])
@@ -107,11 +135,14 @@ export function DatePicker({
     return () => document.removeEventListener('keydown', handleKey)
   }, [open])
 
-  const isDateDisabled = useCallback((date: Date): boolean => {
-    if (minDate && date < minDate) return true
-    if (maxDate && date > maxDate) return true
-    return false
-  }, [minDate, maxDate])
+  const isDateDisabled = useCallback(
+    (date: Date): boolean => {
+      if (minDate && date < minDate) return true
+      if (maxDate && date > maxDate) return true
+      return false
+    },
+    [minDate, maxDate],
+  )
 
   const canGoPrev = useMemo(() => {
     if (!minDate) return true
@@ -122,7 +153,10 @@ export function DatePicker({
   const canGoNext = useMemo(() => {
     if (allowFuture) return true
     const lastOfView = new Date(viewYear, viewMonth + 1, 0)
-    return maxDate ? lastOfView < maxDate || (viewYear === maxDate.getFullYear() && viewMonth < maxDate.getMonth()) : true
+    return maxDate
+      ? lastOfView < maxDate ||
+          (viewYear === maxDate.getFullYear() && viewMonth < maxDate.getMonth())
+      : true
   }, [viewYear, viewMonth, maxDate, allowFuture])
 
   const goPrev = () => {
@@ -209,19 +243,19 @@ export function DatePicker({
         aria-label={label || 'Select date'}
       >
         <Calendar className="h-4 w-4 text-gray-400 dark:text-zinc-500 shrink-0" />
-        <span className="flex-1 text-left">
-          {formatDisplay(selectedDate)}
-        </span>
+        <span className="flex-1 text-left">{formatDisplay(selectedDate)}</span>
       </button>
 
       {error && <p className="mt-1.5 text-xs text-red-500 dark:text-red-400">{error}</p>}
       {hint && !error && <p className="mt-1.5 text-xs text-gray-500 dark:text-zinc-500">{hint}</p>}
 
       {open && (
-        <div className={cn(
-          'absolute top-full z-50 mt-1.5 w-72 rounded-xl border border-gray-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 shadow-xl p-3',
-          align === 'right' ? 'right-0' : 'left-0',
-        )}>
+        <div
+          className={cn(
+            'absolute top-full z-50 mt-1.5 w-72 rounded-xl border border-gray-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 shadow-xl p-3',
+            align === 'right' ? 'right-0' : 'left-0',
+          )}
+        >
           {view === 'days' && (
             <>
               {/* Month navigation */}
@@ -257,7 +291,10 @@ export function DatePicker({
               {/* Day headers */}
               <div className="grid grid-cols-7 mb-1">
                 {DAYS.map((day) => (
-                  <div key={day} className="text-center text-[10px] font-medium text-gray-400 dark:text-zinc-500 py-1">
+                  <div
+                    key={day}
+                    className="text-center text-[10px] font-medium text-gray-400 dark:text-zinc-500 py-1"
+                  >
                     {day}
                   </div>
                 ))}
@@ -289,7 +326,8 @@ export function DatePicker({
                           : isToday
                             ? 'bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 hover:bg-blue-100 dark:hover:bg-blue-900/30'
                             : 'text-gray-700 dark:text-zinc-300 hover:bg-gray-100 dark:hover:bg-zinc-800',
-                        isDisabled && 'opacity-30 cursor-not-allowed hover:bg-transparent dark:hover:bg-transparent',
+                        isDisabled &&
+                          'opacity-30 cursor-not-allowed hover:bg-transparent dark:hover:bg-transparent',
                       )}
                     >
                       {day}

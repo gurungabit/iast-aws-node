@@ -18,12 +18,7 @@ interface RunStep extends AutoLauncherStep {
 }
 
 export const autoLauncherService = {
-  async create(data: {
-    ownerId: string
-    name: string
-    visibility?: string
-    steps?: unknown[]
-  }) {
+  async create(data: { ownerId: string; name: string; visibility?: string; steps?: unknown[] }) {
     const [launcher] = await db
       .insert(autoLaunchers)
       .values({
@@ -181,10 +176,13 @@ export const autoLauncherService = {
 /** Wait for ast.complete message from a worker for a specific executionId */
 function waitForAstComplete(worker: Worker, executionId: string): Promise<void> {
   return new Promise((resolve, reject) => {
-    const timeout = setTimeout(() => {
-      worker.off('message', handler)
-      reject(new Error(`AST execution ${executionId} timed out after 30 minutes`))
-    }, 30 * 60 * 1000)
+    const timeout = setTimeout(
+      () => {
+        worker.off('message', handler)
+        reject(new Error(`AST execution ${executionId} timed out after 30 minutes`))
+      },
+      30 * 60 * 1000,
+    )
 
     function handler(msg: { type: string; executionId?: string; status?: string; error?: string }) {
       if (msg.type === 'ast.complete' && msg.executionId === executionId) {

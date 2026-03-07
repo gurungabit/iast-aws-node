@@ -17,12 +17,16 @@ export const executionService = {
     return execution
   },
 
-  async updateStatus(executionId: string, status: ASTStatus, counts?: {
-    totalPolicies?: number
-    successCount?: number
-    failureCount?: number
-    errorCount?: number
-  }) {
+  async updateStatus(
+    executionId: string,
+    status: ASTStatus,
+    counts?: {
+      totalPolicies?: number
+      successCount?: number
+      failureCount?: number
+      errorCount?: number
+    },
+  ) {
     const updates: Record<string, unknown> = { status }
     if (status === 'completed' || status === 'failed' || status === 'cancelled') {
       updates.completedAt = new Date()

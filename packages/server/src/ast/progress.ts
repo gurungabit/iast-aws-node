@@ -48,7 +48,10 @@ export class ProgressReporter {
     })
   }
 
-  reportStatus(status: 'running' | 'paused' | 'completed' | 'failed' | 'cancelled', astName: string) {
+  reportStatus(
+    status: 'running' | 'paused' | 'completed' | 'failed' | 'cancelled',
+    astName: string,
+  ) {
     this.send({
       type: 'ast.status',
       status,

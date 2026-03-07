@@ -11,7 +11,9 @@ export function Navbar(): React.ReactNode {
   return (
     <header className="flex items-center justify-between px-4 py-2 bg-gray-50 dark:bg-zinc-900 border-b border-gray-200 dark:border-zinc-800">
       <div className="flex items-center gap-6">
-        <span className="text-lg font-semibold text-gray-900 dark:text-zinc-100">TN3270 Terminal</span>
+        <span className="text-lg font-semibold text-gray-900 dark:text-zinc-100">
+          TN3270 Terminal
+        </span>
         <nav className="flex items-center gap-1">
           <Link
             to="/"

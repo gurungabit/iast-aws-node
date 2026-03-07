@@ -16,14 +16,19 @@ export function BiRenewASTForm(): React.ReactNode {
   const { getAST } = useASTRegistry()
   const astConfig = getAST(AST_ID)
 
-  const [missedRunDate, setMissedRunDate] = useFormField<string>('biRenew.missedRunDate', getDefaultDate())
+  const [missedRunDate, setMissedRunDate] = useFormField<string>(
+    'biRenew.missedRunDate',
+    getDefaultDate(),
+  )
 
   function getConfigParams(): Record<string, unknown> {
     return { missedRunDate }
   }
 
   function applyConfigParams(params: Record<string, unknown>) {
-    setMissedRunDate(typeof params.missedRunDate === 'string' ? params.missedRunDate : getDefaultDate())
+    setMissedRunDate(
+      typeof params.missedRunDate === 'string' ? params.missedRunDate : getDefaultDate(),
+    )
   }
 
   function buildPayload(common: CommonFormParams): Record<string, unknown> {

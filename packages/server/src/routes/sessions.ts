@@ -70,7 +70,11 @@ export async function sessionRoutes(app: FastifyInstance) {
       },
     },
     async (request, reply) => {
-      const session = await sessionService.rename(request.params.id, request.user.id, request.body.name)
+      const session = await sessionService.rename(
+        request.params.id,
+        request.user.id,
+        request.body.name,
+      )
       if (!session) return reply.status(404).send({ error: 'Session not found' })
       return session
     },

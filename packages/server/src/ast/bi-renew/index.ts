@@ -144,7 +144,8 @@ function enrichItemsWithAccessData(
 
     // Mark policies with multiple PND records
     if (pndCount > 1) {
-      item.PolicyStatus = 'Multiple PNDs found in the RW1AA271 on this policy - POLICY NOT PROCESSED!'
+      item.PolicyStatus =
+        'Multiple PNDs found in the RW1AA271 on this policy - POLICY NOT PROCESSED!'
     }
 
     // Mark policies with excluded queue records
@@ -285,7 +286,11 @@ export async function runBiRenewAST(
   }
   const processableItems = filterProcessableItems(items)
 
-  reporter.reportProgress(0, processableItems.length, `Prepared ${processableItems.length} items for processing`)
+  reporter.reportProgress(
+    0,
+    processableItems.length,
+    `Prepared ${processableItems.length} items for processing`,
+  )
 
   if (processableItems.length === 0) {
     reporter.reportProgress(1, 1, 'No processable items after filtering')

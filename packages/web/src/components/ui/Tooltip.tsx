@@ -7,7 +7,12 @@ interface TooltipProps {
   delay?: number
 }
 
-export function Tooltip({ content, children, position = 'top', delay = 0 }: TooltipProps): React.ReactNode {
+export function Tooltip({
+  content,
+  children,
+  position = 'top',
+  delay = 0,
+}: TooltipProps): React.ReactNode {
   const [isVisible, setIsVisible] = useState(false)
   const [coords, setCoords] = useState({ top: 0, left: 0 })
   const triggerRef = useRef<HTMLDivElement>(null)
@@ -73,7 +78,12 @@ export function Tooltip({ content, children, position = 'top', delay = 0 }: Tool
 
   return (
     <>
-      <div ref={triggerRef} onMouseEnter={showTooltip} onMouseLeave={hideTooltip} className="inline-flex">
+      <div
+        ref={triggerRef}
+        onMouseEnter={showTooltip}
+        onMouseLeave={hideTooltip}
+        className="inline-flex"
+      >
         {children}
       </div>
       {isVisible && (

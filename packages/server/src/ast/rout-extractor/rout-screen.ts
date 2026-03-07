@@ -176,11 +176,7 @@ export class RoutScreen {
     return items
   }
 
-  private readDetailPage(
-    sectionName: string,
-    queueName: string,
-    occurNum: string,
-  ): RouteItem[] {
+  private readDetailPage(sectionName: string, queueName: string, occurNum: string): RouteItem[] {
     const items: RouteItem[] = []
 
     for (let row = 12; row <= 41; row++) {
@@ -224,8 +220,14 @@ export class RoutScreen {
         servOrUndr: '',
         queueName,
         noOfErrors: 0,
-        errorCode1: '', errorCode2: '', errorCode3: '', errorCode4: '',
-        errorCode5: '', errorCode6: '', errorCode7: '', errorCode8: '',
+        errorCode1: '',
+        errorCode2: '',
+        errorCode3: '',
+        errorCode4: '',
+        errorCode5: '',
+        errorCode6: '',
+        errorCode7: '',
+        errorCode8: '',
         streamed: '',
         images: '',
         status: '',
@@ -306,10 +308,7 @@ export class RoutScreen {
       await this.session.fillFieldAtPosition(27, 42, 'NAME')
       await this.session.enter()
 
-      const matched = await this.session.waitForAnyText(
-        [PDQ_NAME_TITLE, PDQ_NO_RECORD],
-        5,
-      )
+      const matched = await this.session.waitForAnyText([PDQ_NAME_TITLE, PDQ_NO_RECORD], 5)
 
       if (matched === PDQ_NO_RECORD || (!matched && this.session.screenContains(PDQ_NO_RECORD))) {
         await this.backOutToFss()

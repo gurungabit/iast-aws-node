@@ -167,9 +167,7 @@ export function RoutExtractorForm(): React.ReactNode {
       typeof params.statusActive === 'boolean' ? params.statusActive : (d.statusActive as boolean),
     )
     setStatusPended(
-      typeof params.statusPended === 'boolean'
-        ? params.statusPended
-        : (d.statusPended as boolean),
+      typeof params.statusPended === 'boolean' ? params.statusPended : (d.statusPended as boolean),
     )
     setStatusOther(
       typeof params.statusOther === 'boolean' ? params.statusOther : (d.statusOther as boolean),

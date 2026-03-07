@@ -9,49 +9,99 @@
 /** (SystemPolicyType code, FormLine subcode) -> RoutType description */
 const FORM_LINE_TYPES = new Map<string, string>([
   // A = Farm/Ranch
-  ['A:', 'FARM'], ['A:2', 'FARM'], ['A:3', 'FARM'], ['A:FH', 'FARM'],
+  ['A:', 'FARM'],
+  ['A:2', 'FARM'],
+  ['A:3', 'FARM'],
+  ['A:FH', 'FARM'],
   // B = Boatowners
-  ['B:', 'BOAT'], ['B:0', 'BOAT'], ['B:1', 'BOAT'],
+  ['B:', 'BOAT'],
+  ['B:0', 'BOAT'],
+  ['B:1', 'BOAT'],
   // C = Rental Condo Unitowners
-  ['C:', 'RCUP'], ['C:6', 'RCUP'],
+  ['C:', 'RCUP'],
+  ['C:6', 'RCUP'],
   // D = Flood
   ['D:0', 'FLD'],
   // E = Contractors
-  ['E:', 'CONT'], ['E:3', 'CONT'],
+  ['E:', 'CONT'],
+  ['E:3', 'CONT'],
   // F = Residential Fire
-  ['F:', 'FIRE'], ['F:A', 'FIRE'], ['F:V', 'FIRE'],
+  ['F:', 'FIRE'],
+  ['F:A', 'FIRE'],
+  ['F:V', 'FIRE'],
   // G = CEA
-  ['G:', 'CEA'], ['G:W', 'CEA'], ['G:3', 'CEA'], ['G:4', 'CEA'], ['G:6', 'CEA'],
+  ['G:', 'CEA'],
+  ['G:W', 'CEA'],
+  ['G:3', 'CEA'],
+  ['G:4', 'CEA'],
+  ['G:6', 'CEA'],
   // H = Homeowners
-  ['H:', 'HO'], ['H:HO', 'HO'], ['H:2', 'HO 2'], ['H:3', 'HO 3'],
-  ['H:4', 'HO 4'], ['H:5', 'HO 5'], ['H:6', 'HO 6'], ['H:8', 'HO W'],
-  ['H:9', 'HO 4'], ['H:W', 'HO W'], ['H:A', 'HO A'],
+  ['H:', 'HO'],
+  ['H:HO', 'HO'],
+  ['H:2', 'HO 2'],
+  ['H:3', 'HO 3'],
+  ['H:4', 'HO 4'],
+  ['H:5', 'HO 5'],
+  ['H:6', 'HO 6'],
+  ['H:8', 'HO W'],
+  ['H:9', 'HO 4'],
+  ['H:W', 'HO W'],
+  ['H:A', 'HO A'],
   // L = PLUP
-  ['L:', 'PLUP'], ['L:1', 'PLUP'], ['L:2', 'PLUP'], ['L:3', 'PLUP'], ['L:4', 'PLUP'],
+  ['L:', 'PLUP'],
+  ['L:1', 'PLUP'],
+  ['L:2', 'PLUP'],
+  ['L:3', 'PLUP'],
+  ['L:4', 'PLUP'],
   // M = Monthly payment / Commercial
-  ['M:', ''], ['M:00', 'COMP'], ['M:02', 'COMP'], ['M:10', 'COML'],
-  ['M:16', 'INMA'], ['M:17', 'INMA'], ['M:60', 'BOND'], ['M:62', 'LIAB'],
-  ['M:64', 'COML'], ['M:68', 'UMBR'], ['M:74', 'DBL'],
+  ['M:', ''],
+  ['M:00', 'COMP'],
+  ['M:02', 'COMP'],
+  ['M:10', 'COML'],
+  ['M:16', 'INMA'],
+  ['M:17', 'INMA'],
+  ['M:60', 'BOND'],
+  ['M:62', 'LIAB'],
+  ['M:64', 'COML'],
+  ['M:68', 'UMBR'],
+  ['M:74', 'DBL'],
   // N = Miscellaneous Business
-  ['N:', 'MISC'], ['N:1', 'MISC'], ['N:3', 'MISC'],
+  ['N:', 'MISC'],
+  ['N:1', 'MISC'],
+  ['N:3', 'MISC'],
   // P = Personal Articles
-  ['P:', 'PAP'], ['P:0', 'PAP'], ['P:A', 'PAP'], ['P:I', 'PAP'], ['P:P', 'PAP'],
+  ['P:', 'PAP'],
+  ['P:0', 'PAP'],
+  ['P:A', 'PAP'],
+  ['P:I', 'PAP'],
+  ['P:P', 'PAP'],
   // Q = Earthquake
-  ['Q:5', 'EQ 5'], ['Q:6', 'EQ 6'],
+  ['Q:5', 'EQ 5'],
+  ['Q:6', 'EQ 6'],
   // R = Rental Dwelling
-  ['R:', 'RD 3'], ['R:3', 'RD 3'], ['R:RD', 'RD 3'],
+  ['R:', 'RD 3'],
+  ['R:3', 'RD 3'],
+  ['R:RD', 'RD 3'],
   // T = Manufactured Home
-  ['T:', 'MH 3'], ['T:MH', 'MH 3'], ['T:3', 'MH 3'],
+  ['T:', 'MH 3'],
+  ['T:MH', 'MH 3'],
+  ['T:3', 'MH 3'],
   // U = Business Office
-  ['U:', 'OFF'], ['U:3', 'OFF'],
+  ['U:', 'OFF'],
+  ['U:3', 'OFF'],
   // V = Condominium
-  ['V:', 'COND'], ['V:3', 'COND'],
+  ['V:', 'COND'],
+  ['V:3', 'COND'],
   // W = Apartment
-  ['W:', 'APT'], ['W:3', 'APT'],
+  ['W:', 'APT'],
+  ['W:3', 'APT'],
   // Y = Church
-  ['Y:', 'CHUR'], ['Y:3', 'CHUR'],
+  ['Y:', 'CHUR'],
+  ['Y:3', 'CHUR'],
   // Z = Business - Mercantile/Service
-  ['Z:', 'BUS'], ['Z:2', 'MERC'], ['Z:3', 'MERC'],
+  ['Z:', 'BUS'],
+  ['Z:2', 'MERC'],
+  ['Z:3', 'MERC'],
 ])
 
 /** PDQ display string -> policy type id (RoutType) */

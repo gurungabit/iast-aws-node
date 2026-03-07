@@ -55,7 +55,10 @@ function attachLocal(
           executionDate: today,
         })
       } catch (err) {
-        console.error('Failed to create execution:', err instanceof Error ? err.message : String(err))
+        console.error(
+          'Failed to create execution:',
+          err instanceof Error ? err.message : String(err),
+        )
       }
       worker.postMessage({ ...msg, executionId })
     } else {
@@ -96,14 +99,15 @@ function attachLocal(
     }
 
     for (const [execId, items] of grouped) {
-      executionService
-        .batchInsertPolicies(execId, items)
-        .catch((err) => {
-          const cause = err instanceof Error && 'cause' in err && err.cause instanceof Error
+      executionService.batchInsertPolicies(execId, items).catch((err) => {
+        const cause =
+          err instanceof Error && 'cause' in err && err.cause instanceof Error
             ? err.cause.message
             : ''
-          console.error(`Failed to persist policies: ${cause || (err instanceof Error ? err.constructor.name : 'unknown error')}`)
-        })
+        console.error(
+          `Failed to persist policies: ${cause || (err instanceof Error ? err.constructor.name : 'unknown error')}`,
+        )
+      })
     }
   }
 
@@ -145,7 +149,10 @@ function attachLocal(
 
   const cleanup = () => {
     flushDbBuffer()
-    if (dbFlushTimer) { clearInterval(dbFlushTimer); dbFlushTimer = null }
+    if (dbFlushTimer) {
+      clearInterval(dbFlushTimer)
+      dbFlushTimer = null
+    }
     worker.off('message', onWorkerMessage)
     terminalManager.detachWebSocket(sessionId)
   }
@@ -232,129 +239,121 @@ function proxyToRemotePod(
 
 export async function terminalWsRoutes(app: FastifyInstance) {
   // ── Public endpoint: browser connects here ──────────────────────────────
-  app.get(
-    '/api/terminal/:sessionId',
-    { websocket: true },
-    async (socket, req) => {
-      const sessionId = (req.params as { sessionId: string }).sessionId
-      const wsSocket = socket as unknown as WebSocket
+  app.get('/api/terminal/:sessionId', { websocket: true }, async (socket, req) => {
+    const sessionId = (req.params as { sessionId: string }).sessionId
+    const wsSocket = socket as unknown as WebSocket
 
-      // Buffer messages that arrive during async auth/routing setup.
-      // The browser may send { type: 'connect' } before we've registered
-      // the real message handler — without buffering, that message is lost
-      // and the terminal stays stuck on "Connecting...".
-      const pendingMessages: unknown[] = []
-      const bufferHandler = (data: unknown) => {
-        try {
-          pendingMessages.push(JSON.parse(String(data)))
-        } catch {
-          // ignore malformed
-        }
-      }
-      wsSocket.on('message', bufferHandler)
-
-      const url = new URL(req.url, `http://${req.headers.host}`)
-      const token = url.searchParams.get('token') ?? undefined
-      const user = await verifyWsToken(token)
-
-      if (!user) {
-        wsSocket.off('message', bufferHandler)
-        socket.close(4001, 'Unauthorized')
-        return
-      }
-
-      const userId = user.id
-
-      // Look up existing assignment
-      let assignment = await getSessionAssignment(sessionId)
-
-      if (!assignment || assignment.status === 'terminated') {
-        // New session — assign to least-loaded pod
-        const podIp = await getLeastLoadedPod()
-        await registerSessionAssignment(sessionId, podIp, userId)
-        assignment = { podIp, userId, status: 'active' }
-        app.log.info({ sessionId, podIp }, 'New session assigned to pod')
-      }
-
-      const ownerPodIp = assignment.podIp
-
-      // Remove buffer handler before attaching the real one
-      wsSocket.off('message', bufferHandler)
-
-      // Fast path: session is on this pod
-      if (ownerPodIp === MY_POD_IP) {
-        attachLocal(wsSocket, sessionId, userId, pendingMessages)
-        return
-      }
-
-      // Cross-pod: proxy to the owning pod
+    // Buffer messages that arrive during async auth/routing setup.
+    // The browser may send { type: 'connect' } before we've registered
+    // the real message handler — without buffering, that message is lost
+    // and the terminal stays stuck on "Connecting...".
+    const pendingMessages: unknown[] = []
+    const bufferHandler = (data: unknown) => {
       try {
-        await proxyToRemotePod(wsSocket, ownerPodIp, sessionId, app)
-        // Replay buffered messages to remote pod
-        for (const msg of pendingMessages) {
-          if (wsSocket.readyState === WebSocket.OPEN) {
-            wsSocket.send(JSON.stringify(msg))
-          }
-        }
+        pendingMessages.push(JSON.parse(String(data)))
       } catch {
-        // Connection to remote pod failed — check if pod is alive
-        app.log.warn({ sessionId, ownerPodIp }, 'Remote pod connection failed, checking health')
+        // ignore malformed
+      }
+    }
+    wsSocket.on('message', bufferHandler)
 
-        const currentPods = await discoverPods()
-        const alive = await isPodAlive(ownerPodIp, currentPods)
+    const url = new URL(req.url, `http://${req.headers.host}`)
+    const token = url.searchParams.get('token') ?? undefined
+    const user = await verifyWsToken(token)
 
-        if (!alive) {
-          // Pod is dead — reassign to a new pod
-          app.log.info({ sessionId, deadPodIp: ownerPodIp }, 'Pod dead, reassigning session')
-          await terminateSessionAssignment(sessionId)
-          const newPodIp = await getLeastLoadedPod(currentPods)
-          await registerSessionAssignment(sessionId, newPodIp, userId)
+    if (!user) {
+      wsSocket.off('message', bufferHandler)
+      socket.close(4001, 'Unauthorized')
+      return
+    }
 
-          if (newPodIp === MY_POD_IP) {
-            attachLocal(wsSocket, sessionId, userId, pendingMessages)
-          } else {
-            try {
-              await proxyToRemotePod(wsSocket, newPodIp, sessionId, app)
-              for (const msg of pendingMessages) {
-                if (wsSocket.readyState === WebSocket.OPEN) {
-                  wsSocket.send(JSON.stringify(msg))
-                }
-              }
-            } catch (retryErr) {
-              app.log.error({ sessionId, err: retryErr }, 'Retry to new pod failed')
-              socket.close(4003, 'Terminal unavailable')
-            }
-          }
+    const userId = user.id
+
+    // Look up existing assignment
+    let assignment = await getSessionAssignment(sessionId)
+
+    if (!assignment || assignment.status === 'terminated') {
+      // New session — assign to least-loaded pod
+      const podIp = await getLeastLoadedPod()
+      await registerSessionAssignment(sessionId, podIp, userId)
+      assignment = { podIp, userId, status: 'active' }
+      app.log.info({ sessionId, podIp }, 'New session assigned to pod')
+    }
+
+    const ownerPodIp = assignment.podIp
+
+    // Remove buffer handler before attaching the real one
+    wsSocket.off('message', bufferHandler)
+
+    // Fast path: session is on this pod
+    if (ownerPodIp === MY_POD_IP) {
+      attachLocal(wsSocket, sessionId, userId, pendingMessages)
+      return
+    }
+
+    // Cross-pod: proxy to the owning pod
+    try {
+      await proxyToRemotePod(wsSocket, ownerPodIp, sessionId, app)
+      // Replay buffered messages to remote pod
+      for (const msg of pendingMessages) {
+        if (wsSocket.readyState === WebSocket.OPEN) {
+          wsSocket.send(JSON.stringify(msg))
+        }
+      }
+    } catch {
+      // Connection to remote pod failed — check if pod is alive
+      app.log.warn({ sessionId, ownerPodIp }, 'Remote pod connection failed, checking health')
+
+      const currentPods = await discoverPods()
+      const alive = await isPodAlive(ownerPodIp, currentPods)
+
+      if (!alive) {
+        // Pod is dead — reassign to a new pod
+        app.log.info({ sessionId, deadPodIp: ownerPodIp }, 'Pod dead, reassigning session')
+        await terminateSessionAssignment(sessionId)
+        const newPodIp = await getLeastLoadedPod(currentPods)
+        await registerSessionAssignment(sessionId, newPodIp, userId)
+
+        if (newPodIp === MY_POD_IP) {
+          attachLocal(wsSocket, sessionId, userId, pendingMessages)
         } else {
-          // Pod alive but transient failure — retry once after delay
-          app.log.info({ sessionId, ownerPodIp }, 'Pod alive, retrying after delay')
-          await new Promise((r) => setTimeout(r, 1000))
           try {
-            await proxyToRemotePod(wsSocket, ownerPodIp, sessionId, app)
+            await proxyToRemotePod(wsSocket, newPodIp, sessionId, app)
             for (const msg of pendingMessages) {
               if (wsSocket.readyState === WebSocket.OPEN) {
                 wsSocket.send(JSON.stringify(msg))
               }
             }
-          } catch {
+          } catch (retryErr) {
+            app.log.error({ sessionId, err: retryErr }, 'Retry to new pod failed')
             socket.close(4003, 'Terminal unavailable')
           }
         }
+      } else {
+        // Pod alive but transient failure — retry once after delay
+        app.log.info({ sessionId, ownerPodIp }, 'Pod alive, retrying after delay')
+        await new Promise((r) => setTimeout(r, 1000))
+        try {
+          await proxyToRemotePod(wsSocket, ownerPodIp, sessionId, app)
+          for (const msg of pendingMessages) {
+            if (wsSocket.readyState === WebSocket.OPEN) {
+              wsSocket.send(JSON.stringify(msg))
+            }
+          }
+        } catch {
+          socket.close(4003, 'Terminal unavailable')
+        }
       }
-    },
-  )
+    }
+  })
 
   // ── Internal endpoint: pod-to-pod proxy target ──────────────────────────
   // Only reachable within the cluster (not exposed via OpenShift Route).
   // Skips JWT auth — internal trust between pods.
-  app.get(
-    '/internal/terminal/:sessionId',
-    { websocket: true },
-    async (socket, _req) => {
-      const sessionId = (_req.params as { sessionId: string }).sessionId
-      const assignment = await getSessionAssignment(sessionId)
-      const userId = assignment?.userId ?? 'unknown'
-      attachLocal(socket as unknown as WebSocket, sessionId, userId)
-    },
-  )
+  app.get('/internal/terminal/:sessionId', { websocket: true }, async (socket, _req) => {
+    const sessionId = (_req.params as { sessionId: string }).sessionId
+    const assignment = await getSessionAssignment(sessionId)
+    const userId = assignment?.userId ?? 'unknown'
+    attachLocal(socket as unknown as WebSocket, sessionId, userId)
+  })
 }

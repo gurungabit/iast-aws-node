@@ -12,10 +12,15 @@ export const Toggle = forwardRef<HTMLInputElement, ToggleProps>(
     return (
       <div className={`flex items-center justify-between gap-3 max-w-sm ${className}`}>
         <div className="flex flex-col">
-          <label htmlFor={toggleId} className="text-sm font-medium text-gray-700 dark:text-zinc-300 cursor-pointer select-none">
+          <label
+            htmlFor={toggleId}
+            className="text-sm font-medium text-gray-700 dark:text-zinc-300 cursor-pointer select-none"
+          >
             {label}
           </label>
-          {description && <span className="text-xs text-gray-500 dark:text-zinc-500">{description}</span>}
+          {description && (
+            <span className="text-xs text-gray-500 dark:text-zinc-500">{description}</span>
+          )}
         </div>
         <button
           type="button"
@@ -39,7 +44,14 @@ export const Toggle = forwardRef<HTMLInputElement, ToggleProps>(
             `}
           />
         </button>
-        <input ref={ref} type="checkbox" id={toggleId} checked={checked} className="sr-only" {...props} />
+        <input
+          ref={ref}
+          type="checkbox"
+          id={toggleId}
+          checked={checked}
+          className="sr-only"
+          {...props}
+        />
       </div>
     )
   },

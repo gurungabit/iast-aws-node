@@ -4,7 +4,11 @@ export interface StatusLogListProps {
   className?: string
 }
 
-export function StatusLogList({ messages, maxHeight = '120px', className = '' }: StatusLogListProps): React.ReactNode {
+export function StatusLogList({
+  messages,
+  maxHeight = '120px',
+  className = '',
+}: StatusLogListProps): React.ReactNode {
   if (messages.length === 0) return null
 
   return (

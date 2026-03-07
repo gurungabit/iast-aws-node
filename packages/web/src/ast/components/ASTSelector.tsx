@@ -177,8 +177,7 @@ export function ASTSelector({
             tabIndex={0}
             onClick={handleClear}
             onKeyDown={(e) => {
-              if (e.key === 'Enter' || e.key === ' ')
-                handleClear(e as unknown as React.MouseEvent)
+              if (e.key === 'Enter' || e.key === ' ') handleClear(e as unknown as React.MouseEvent)
             }}
             className="p-0.5 text-gray-400 dark:text-zinc-500 hover:text-gray-600 dark:hover:text-zinc-300 transition-colors cursor-pointer"
           >
@@ -208,10 +207,7 @@ export function ASTSelector({
             </div>
           </div>
 
-          <div
-            className="max-h-[280px] overflow-auto"
-            onMouseLeave={() => setHighlightedIndex(-1)}
-          >
+          <div className="max-h-[280px] overflow-auto" onMouseLeave={() => setHighlightedIndex(-1)}>
             {searchResults.length === 0 ? (
               <div className="px-3 py-4 text-center text-sm text-gray-500 dark:text-zinc-500">
                 No ASTs found{searchQuery && ` matching "${searchQuery}"`}

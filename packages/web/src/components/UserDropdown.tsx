@@ -53,7 +53,9 @@ export function UserDropdown({ email, onSignOut }: UserDropdownProps): React.Rea
                 <User className="w-5 h-5 text-white" />
               </div>
               <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium text-gray-900 dark:text-zinc-100 truncate">{email}</p>
+                <p className="text-sm font-medium text-gray-900 dark:text-zinc-100 truncate">
+                  {email}
+                </p>
                 <p className="text-xs text-gray-500 dark:text-zinc-500">Signed in</p>
               </div>
             </div>

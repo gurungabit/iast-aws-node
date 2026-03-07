@@ -54,10 +54,7 @@ function HistoryPage() {
       {/* Execution list */}
       <div className="w-96 border-r border-gray-200 dark:border-zinc-800 bg-white dark:bg-zinc-900/50 flex flex-col">
         <div className="p-3">
-          <DatePicker
-            value={date}
-            onChange={setDate}
-          />
+          <DatePicker value={date} onChange={setDate} />
         </div>
         <div className="flex-1 overflow-y-auto">
           {executions.length === 0 ? (
@@ -82,14 +79,20 @@ function HistoryPage() {
                   )}
                 >
                   <div className="flex items-center justify-between">
-                    <span className="text-xs font-medium text-gray-900 dark:text-zinc-100">{exec.astName}</span>
+                    <span className="text-xs font-medium text-gray-900 dark:text-zinc-100">
+                      {exec.astName}
+                    </span>
                     <span
                       className={cn(
                         'rounded-full px-2 py-0.5 text-[10px] font-medium',
-                        exec.status === 'completed' && 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400',
-                        exec.status === 'failed' && 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400',
-                        exec.status === 'cancelled' && 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400',
-                        exec.status === 'running' && 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400',
+                        exec.status === 'completed' &&
+                          'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400',
+                        exec.status === 'failed' &&
+                          'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400',
+                        exec.status === 'cancelled' &&
+                          'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400',
+                        exec.status === 'running' &&
+                          'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400',
                       )}
                     >
                       {exec.status}
@@ -98,8 +101,14 @@ function HistoryPage() {
                   <div className="mt-1 flex items-center gap-2 text-[10px] text-gray-500 dark:text-zinc-500">
                     <span>{formatTime(exec.startedAt)}</span>
                     <span>{exec.totalPolicies} policies</span>
-                    <span className="text-green-600 dark:text-green-500">{exec.successCount}ok</span>
-                    {exec.failureCount > 0 && <span className="text-red-600 dark:text-red-500">{exec.failureCount}fail</span>}
+                    <span className="text-green-600 dark:text-green-500">
+                      {exec.successCount}ok
+                    </span>
+                    {exec.failureCount > 0 && (
+                      <span className="text-red-600 dark:text-red-500">
+                        {exec.failureCount}fail
+                      </span>
+                    )}
                   </div>
                 </button>
               ))}
@@ -118,7 +127,9 @@ function HistoryPage() {
               <div className="rounded-full bg-gray-100 dark:bg-zinc-800 p-4 mb-4 mx-auto w-fit">
                 <FileText className="h-8 w-8 text-gray-400 dark:text-zinc-500" />
               </div>
-              <p className="text-sm text-gray-500 dark:text-zinc-400">Select an execution to view policies</p>
+              <p className="text-sm text-gray-500 dark:text-zinc-400">
+                Select an execution to view policies
+              </p>
             </div>
           </div>
         )}
@@ -143,7 +154,9 @@ function PolicyList({ policies }: { policies: PolicyDto[] }) {
         <span className="text-xs text-gray-500 dark:text-zinc-400">{policies.length} policies</span>
       </div>
       <div ref={parentRef} className="flex-1 overflow-y-auto px-2">
-        <div style={{ height: `${virtualizer.getTotalSize()}px`, width: '100%', position: 'relative' }}>
+        <div
+          style={{ height: `${virtualizer.getTotalSize()}px`, width: '100%', position: 'relative' }}
+        >
           {virtualizer.getVirtualItems().map((virtualRow) => {
             const policy = policies[virtualRow.index]
             return (
@@ -159,22 +172,32 @@ function PolicyList({ policies }: { policies: PolicyDto[] }) {
                 }}
                 className={cn(
                   'flex items-center justify-between rounded-md px-3 text-xs',
-                  virtualRow.index % 2 === 0
-                    ? 'bg-gray-50/50 dark:bg-zinc-800/30'
-                    : '',
+                  virtualRow.index % 2 === 0 ? 'bg-gray-50/50 dark:bg-zinc-800/30' : '',
                 )}
               >
-                <span className="font-mono text-gray-700 dark:text-zinc-300">{policy.policyNumber}</span>
+                <span className="font-mono text-gray-700 dark:text-zinc-300">
+                  {policy.policyNumber}
+                </span>
                 <div className="flex items-center gap-3">
-                  <span className="text-gray-400 dark:text-zinc-500">{formatDuration(policy.durationMs)}</span>
-                  {policy.error && <span className="max-w-[200px] truncate text-red-500 dark:text-red-400">{policy.error}</span>}
+                  <span className="text-gray-400 dark:text-zinc-500">
+                    {formatDuration(policy.durationMs)}
+                  </span>
+                  {policy.error && (
+                    <span className="max-w-[200px] truncate text-red-500 dark:text-red-400">
+                      {policy.error}
+                    </span>
+                  )}
                   <span
                     className={cn(
                       'rounded-full px-2 py-0.5 text-[10px] font-medium',
-                      policy.status === 'success' && 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400',
-                      policy.status === 'failure' && 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400',
-                      policy.status === 'error' && 'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400',
-                      policy.status === 'skipped' && 'bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400',
+                      policy.status === 'success' &&
+                        'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400',
+                      policy.status === 'failure' &&
+                        'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400',
+                      policy.status === 'error' &&
+                        'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400',
+                      policy.status === 'skipped' &&
+                        'bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400',
                     )}
                   >
                     {policy.status}

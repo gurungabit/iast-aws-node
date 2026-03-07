@@ -27,6 +27,11 @@ export type WorkerToMainMessage =
   | { type: 'screen'; ansi: string; meta: ScreenMeta }
   | { type: 'ast.status'; status: ASTStatus; astName: ASTName; executionId: string }
   | { type: 'ast.progress'; progress: ASTProgress }
-  | { type: 'ast.item_result_batch'; executionId: string; items: ASTItemResult[]; persistOnly?: boolean }
+  | {
+      type: 'ast.item_result_batch'
+      executionId: string
+      items: ASTItemResult[]
+      persistOnly?: boolean
+    }
   | { type: 'ast.complete'; status: ASTStatus; executionId: string; error?: string }
   | { type: 'error'; message: string }

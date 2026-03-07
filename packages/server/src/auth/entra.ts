@@ -23,7 +23,13 @@ export async function verifyEntraToken(token: string): Promise<VerifiedToken> {
     audience: audiences,
     issuer: `https://login.microsoftonline.com/${config.entraTenantId}/v2.0`,
   })) as JWTVerifyResult & {
-    payload: { sub: string; preferred_username?: string; email?: string; name?: string; oid: string }
+    payload: {
+      sub: string
+      preferred_username?: string
+      email?: string
+      name?: string
+      oid: string
+    }
   }
 
   return {

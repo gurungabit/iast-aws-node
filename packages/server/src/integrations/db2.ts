@@ -15,7 +15,11 @@ export interface Db2Config {
   password: string
 }
 
-export async function queryDb2(config: Db2Config, sql: string, params: SQLParam[] = []): Promise<Record<string, unknown>[]> {
+export async function queryDb2(
+  config: Db2Config,
+  sql: string,
+  params: SQLParam[] = [],
+): Promise<Record<string, unknown>[]> {
   const connStr =
     `DATABASE=${config.database};` +
     `HOSTNAME=${config.hostname};` +

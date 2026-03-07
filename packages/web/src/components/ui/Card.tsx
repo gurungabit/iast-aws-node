@@ -28,8 +28,12 @@ export function Card({
     >
       {(title || description) && (
         <div className="px-4 py-3 border-b border-gray-200 dark:border-zinc-800">
-          {title && <h3 className="text-sm font-semibold text-gray-900 dark:text-zinc-100">{title}</h3>}
-          {description && <p className="mt-0.5 text-xs text-gray-500 dark:text-zinc-500">{description}</p>}
+          {title && (
+            <h3 className="text-sm font-semibold text-gray-900 dark:text-zinc-100">{title}</h3>
+          )}
+          {description && (
+            <p className="mt-0.5 text-xs text-gray-500 dark:text-zinc-500">{description}</p>
+          )}
         </div>
       )}
       <div className={noPadding ? '' : 'p-4'}>{children}</div>
