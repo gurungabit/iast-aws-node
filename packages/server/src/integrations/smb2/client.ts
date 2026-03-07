@@ -305,87 +305,196 @@ interface DfsTarget {
   pathConsumed: number // number of UTF-16 chars consumed from request path
 }
 
-async function getDfsReferral(
+/** Connect to IPC$ and issue a FSCTL_DFS_GET_REFERRALS request. */
+async function tryDfsReferral(
   transport: Smb2Transport,
   sessionId: bigint,
   signingKey: Buffer,
+  host: string,
   dfsPath: string,
-): Promise<DfsTarget> {
-  // TreeConnect to IPC$
-  // Extract host from dfsPath (\\host\...)
-  const hostMatch = dfsPath.match(/^\\\\([^\\]+)\\/)
-  if (!hostMatch) throw new Error(`Invalid DFS path: ${dfsPath}`)
-  const host = hostMatch[1]
+  ipcTreeId?: number,
+): Promise<{ target: DfsTarget; ipcTreeId: number } | null> {
+  // TreeConnect to IPC$ if we don't already have one
+  if (ipcTreeId == null) {
+    const ipcPath = `\\\\${host}\\IPC$`
+    const ipcResp = await signedSend(
+      transport, SMB2_TREE_CONNECT, buildTreeConnectBody(ipcPath),
+      signingKey, { sessionId },
+    )
+    assertStatus(ipcResp, 'TreeConnect(IPC$)', [STATUS_SUCCESS])
+    ipcTreeId = ipcResp.treeId
+  }
 
-  const ipcPath = `\\\\${host}\\IPC$`
-  const ipcResp = await signedSend(
-    transport, SMB2_TREE_CONNECT, buildTreeConnectBody(ipcPath),
-    signingKey, { sessionId },
-  )
-  assertStatus(ipcResp, 'TreeConnect(IPC$)', [STATUS_SUCCESS])
-  const ipcTreeId = ipcResp.treeId
-
-  // IOCTL: FSCTL_DFS_GET_REFERRALS
   const ioctlBody = buildIoctlDfsBody(dfsPath)
   const ioctlResp = await signedSend(
     transport, SMB2_IOCTL, ioctlBody,
     signingKey, { sessionId, treeId: ipcTreeId },
   )
-  assertStatus(ioctlResp, 'IOCTL(DFS_GET_REFERRALS)', [STATUS_SUCCESS])
 
-  return parseDfsReferralResponse(ioctlResp.body)
+  if (ioctlResp.status !== STATUS_SUCCESS) {
+    const hex = '0x' + (ioctlResp.status >>> 0).toString(16).padStart(8, '0')
+    console.log(`[SMB2] DFS referral for "${dfsPath}" failed: ${hex}`)
+    return null
+  }
+
+  return { target: parseDfsReferralResponse(ioctlResp.body), ipcTreeId }
+}
+
+/**
+ * Resolve DFS path using multi-level referral:
+ * 1. Root referral: \domain\dfsname → find namespace server
+ * 2. Link referral on namespace server: full path → find file server
+ */
+async function resolveDfs(
+  transport: Smb2Transport,
+  sessionId: bigint,
+  signingKey: Buffer,
+  host: string,
+  share: string,
+  filePath: string,
+  port: number,
+  timeout: number,
+  domain: string,
+  username: string,
+  password: string,
+): Promise<{
+  transport: Smb2Transport
+  sessionId: bigint
+  signingKey: Buffer
+  treeId: number
+  filePath: string
+}> {
+  const fullPath = `\\${host}\\${share}\\${filePath.replace(/\//g, '\\')}`
+  const fullPathUnc = `\\\\${host}\\${share}\\${filePath.replace(/\//g, '\\')}`
+  const rootPath = `\\${host}\\${share}`
+  const rootPathUnc = `\\\\${host}\\${share}`
+
+  // Track IPC$ tree ID across attempts (reuse after first connect)
+  let ipcId: number | undefined
+
+  // Try full path referral on current server (domain format, then UNC format)
+  let result = await tryDfsReferral(transport, sessionId, signingKey, host, fullPath)
+  ipcId = result?.ipcTreeId ?? ipcId
+  if (!result) {
+    result = await tryDfsReferral(transport, sessionId, signingKey, host, fullPathUnc, ipcId)
+    ipcId = result?.ipcTreeId ?? ipcId
+  }
+  if (!result) {
+    // Try root referral to find namespace server
+    result = await tryDfsReferral(transport, sessionId, signingKey, host, rootPath, ipcId)
+    ipcId = result?.ipcTreeId ?? ipcId
+    if (!result) {
+      result = await tryDfsReferral(transport, sessionId, signingKey, host, rootPathUnc, ipcId)
+      ipcId = result?.ipcTreeId ?? ipcId
+    }
+
+    if (result) {
+      // Got a root referral — connect to the namespace server and do link referral
+      const nsServer = result.target.server
+      const nsShare = result.target.share
+      console.log(`[SMB2] DFS root target: \\\\${nsServer}\\${nsShare}`)
+
+      // Connect to namespace server if different
+      if (nsServer.toLowerCase() !== host.toLowerCase()) {
+        transport.close()
+        const ns = await connectAndAuth(nsServer, port, timeout, domain, username, password)
+        transport = ns.transport
+        sessionId = ns.sessionId
+        signingKey = ns.signingKey
+      }
+
+      // Try link referral on namespace server
+      const linkResult = await tryDfsReferral(transport, sessionId, signingKey, nsServer,
+        `\\${host}\\${share}\\${filePath.replace(/\//g, '\\')}`)
+      if (linkResult) {
+        result = linkResult
+      } else {
+        // If link referral fails, try TreeConnect to the referred share directly
+        const targetSharePath = `\\\\${nsServer}\\${nsShare}`
+        const treeResp = await signedSend(
+          transport, SMB2_TREE_CONNECT, buildTreeConnectBody(targetSharePath),
+          signingKey, { sessionId },
+        )
+        assertStatus(treeResp, `TreeConnect(${targetSharePath})`, [STATUS_SUCCESS])
+        console.log(`[SMB2] Tree connected via DFS root: ${targetSharePath}`)
+        return { transport, sessionId, signingKey, treeId: treeResp.treeId, filePath }
+      }
+    }
+  }
+
+  if (!result) {
+    throw new Error(`DFS referral resolution failed for \\\\${host}\\${share}\\${filePath}`)
+  }
+
+  // Follow the final referral
+  const target = result.target
+  const consumedPath = fullPath.substring(target.pathConsumed).replace(/^\\+/, '')
+  const actualFilePath = consumedPath || filePath
+  console.log(`[SMB2] DFS final target: \\\\${target.server}\\${target.share}, file=${actualFilePath}`)
+
+  // Connect to target server if different
+  if (target.server.toLowerCase() !== host.toLowerCase()) {
+    transport.close()
+    const tgt = await connectAndAuth(target.server, port, timeout, domain, username, password)
+    transport = tgt.transport
+    sessionId = tgt.sessionId
+    signingKey = tgt.signingKey
+  }
+
+  // TreeConnect to target share
+  const targetSharePath = `\\\\${target.server}\\${target.share}`
+  const treeResp = await signedSend(
+    transport, SMB2_TREE_CONNECT, buildTreeConnectBody(targetSharePath),
+    signingKey, { sessionId },
+  )
+  assertStatus(treeResp, `TreeConnect(${targetSharePath})`, [STATUS_SUCCESS])
+  console.log(`[SMB2] Tree connected: ${targetSharePath}, treeId=${treeResp.treeId}`)
+
+  return { transport, sessionId, signingKey, treeId: treeResp.treeId, filePath: actualFilePath }
 }
 
 function parseDfsReferralResponse(body: Buffer): DfsTarget {
-  // IOCTL response fixed part: 48 bytes
-  // StructureSize(2) + Reserved(2) + CtlCode(4) + FileId(16) +
-  // InputOffset(4) + InputCount(4) + OutputOffset(4) + OutputCount(4) +
-  // Flags(4) + Reserved2(4)
+  // IOCTL response: OutputOffset and OutputCount at offsets 24 and 28
   const outputOffset = body.readUInt32LE(24) - SMB2_HEADER_SIZE
   const outputCount = body.readUInt32LE(28)
   const output = body.subarray(outputOffset, outputOffset + outputCount)
 
-  // RESP_GET_DFS_REFERRAL
-  const pathConsumed = output.readUInt16LE(0) // bytes of UTF-16LE
+  const pathConsumed = output.readUInt16LE(0)
   const numReferrals = output.readUInt16LE(2)
-  // ReferralHeaderFlags at offset 4 (4 bytes)
 
   if (numReferrals === 0) throw new Error('No DFS referrals returned')
 
   // Parse first referral entry (starts at offset 8)
   const entryStart = 8
   const version = output.readUInt16LE(entryStart)
+  const entrySize = output.readUInt16LE(entryStart + 2)
 
   let networkAddress: string
 
   if (version === 3 || version === 4) {
     const entryFlags = output.readUInt16LE(entryStart + 6)
     if (entryFlags & 0x0002) {
-      // NameListReferral — has different layout, try DFSPath instead
-      const dfsPathOffset = output.readUInt16LE(entryStart + 12)
-      networkAddress = readUtf16NullTerminated(output, entryStart + dfsPathOffset)
+      // NameListReferral — use SpecialName
+      const specialNameOffset = output.readUInt16LE(entryStart + 12)
+      networkAddress = readUtf16NullTerminated(output, entryStart + specialNameOffset)
     } else {
       const netAddrOffset = output.readUInt16LE(entryStart + 18)
       networkAddress = readUtf16NullTerminated(output, entryStart + netAddrOffset)
     }
   } else if (version === 1) {
-    // V1 referral: Size(2) + ServerType(2) + ReferralEntryFlags(2) + ShareNameOffset(2) + ...
-    // Simpler: NetworkAddress at offset 16 from entry start (V1 is 8 bytes header + string)
-    // Actually V1 has a fixed 8-byte header then a null-terminated UTF-16LE path
     networkAddress = readUtf16NullTerminated(output, entryStart + 8)
   } else {
     throw new Error(`Unsupported DFS referral version: ${version}`)
   }
 
-  console.log(`[SMB2] DFS referral: "${networkAddress}", pathConsumed=${pathConsumed} bytes`)
+  console.log(`[SMB2] DFS referral v${version}: "${networkAddress}", pathConsumed=${pathConsumed}b, entries=${numReferrals}`)
 
-  // Parse: \\server\share or \\server\share\subpath
-  const cleaned = networkAddress.replace(/^\\\\/, '')
+  const cleaned = networkAddress.replace(/^\\\\/, '').replace(/^\\/, '')
   const parts = cleaned.split('\\')
   return {
     server: parts[0],
     share: parts[1] || '',
-    pathConsumed: pathConsumed / 2, // convert bytes to chars
+    pathConsumed: pathConsumed / 2,
   }
 }
 
@@ -432,36 +541,18 @@ export async function readFile(config: Smb2ClientConfig, filePath: string): Prom
     let actualFilePath = filePath
 
     if (treeResp.status === STATUS_BAD_NETWORK_NAME) {
-      // DFS namespace — resolve via referral
-      const fullDfsPath = `\\\\${config.host}\\${config.share}\\${filePath.replace(/\//g, '\\')}`
-      const referral = await getDfsReferral(transport, sessionId, signingKey, fullDfsPath)
-
-      // Compute remaining path: full path minus consumed prefix
-      const fullNormalized = fullDfsPath.replace(/\//g, '\\')
-      actualFilePath = fullNormalized.substring(referral.pathConsumed).replace(/^\\+/, '')
-
-      console.log(`[SMB2] DFS target: \\\\${referral.server}\\${referral.share}, file=${actualFilePath}`)
-
-      // If target is a different server, reconnect
-      if (referral.server.toLowerCase() !== config.host.toLowerCase()) {
-        transport.close()
-        const newSession = await connectAndAuth(
-          referral.server, port, timeout, config.domain, config.username, config.password,
-        )
-        transport = newSession.transport
-        sessionId = newSession.sessionId
-        signingKey = newSession.signingKey
-      }
-
-      // TreeConnect to actual share
-      const targetSharePath = `\\\\${referral.server}\\${referral.share}`
-      const targetTreeResp = await signedSend(
-        transport, SMB2_TREE_CONNECT, buildTreeConnectBody(targetSharePath),
-        signingKey, { sessionId },
+      // DFS namespace — resolve via multi-level referral
+      console.log(`[SMB2] Share "${config.share}" not found, attempting DFS resolution...`)
+      const dfs = await resolveDfs(
+        transport, sessionId, signingKey,
+        config.host, config.share, filePath,
+        port, timeout, config.domain, config.username, config.password,
       )
-      assertStatus(targetTreeResp, `TreeConnect(${targetSharePath})`, [STATUS_SUCCESS])
-      treeId = targetTreeResp.treeId
-      console.log(`[SMB2] Tree connected: ${targetSharePath}, treeId=${treeId}`)
+      transport = dfs.transport
+      sessionId = dfs.sessionId
+      signingKey = dfs.signingKey
+      treeId = dfs.treeId
+      actualFilePath = dfs.filePath
     } else {
       assertStatus(treeResp, 'TreeConnect', [STATUS_SUCCESS])
       treeId = treeResp.treeId
