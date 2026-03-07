@@ -1,5 +1,6 @@
 /**
  * Minimal SMB2 client: Negotiate → SessionSetup (SPNEGO/NTLMv2) → TreeConnect → Read → Close.
+ * Supports DFS namespace referrals (FSCTL_DFS_GET_REFERRALS via IPC$).
  *
  * Implements just enough of the SMB2 protocol to read files from a share.
  * Packet framing follows [MS-SMB2] with NetBIOS session header (4-byte length prefix).
@@ -27,6 +28,7 @@ const SMB2_TREE_CONNECT = 0x0003
 const SMB2_CREATE = 0x0005
 const SMB2_CLOSE = 0x0006
 const SMB2_READ = 0x0008
+const SMB2_IOCTL = 0x000b
 
 // Flags
 const SMB2_FLAGS_SIGNED = 0x00000008
@@ -34,7 +36,7 @@ const SMB2_FLAGS_SIGNED = 0x00000008
 // Status codes
 const STATUS_SUCCESS = 0x00000000
 const STATUS_MORE_PROCESSING_REQUIRED = 0xc0000016
-const STATUS_PENDING = 0x00000103
+const STATUS_BAD_NETWORK_NAME = 0xc00000cc
 
 // Dialects
 const SMB2_DIALECT_0202 = 0x0202
@@ -50,21 +52,24 @@ const FILE_READ_ATTRIBUTES = 0x00000080
 // Share access
 const FILE_SHARE_READ = 0x00000001
 
+// IOCTL
+const FSCTL_DFS_GET_REFERRALS = 0x00060194
+const SMB2_0_IOCTL_IS_FSCTL = 0x00000001
+
 // ═══════════════════════════════════════════════════════════════
 // SMB2 Packet Builder
 // ═══════════════════════════════════════════════════════════════
 
 let messageIdCounter = 0n
 
-function buildSmb2Header(command: number, payloadLen: number, opts: {
+function buildSmb2Header(command: number, opts: {
   sessionId?: bigint
   treeId?: number
-  creditCharge?: number
 } = {}): Buffer {
   const hdr = Buffer.alloc(SMB2_HEADER_SIZE)
   SMB2_MAGIC.copy(hdr, 0)
   hdr.writeUInt16LE(SMB2_HEADER_SIZE, 4) // StructureSize
-  hdr.writeUInt16LE(opts.creditCharge ?? 1, 6) // CreditCharge
+  hdr.writeUInt16LE(1, 6) // CreditCharge
   // Status = 0 (offset 8)
   hdr.writeUInt16LE(command, 12) // Command
   hdr.writeUInt16LE(1, 14) // CreditRequest
@@ -80,7 +85,6 @@ function buildSmb2Header(command: number, payloadLen: number, opts: {
 
 function framePacket(hdr: Buffer, body: Buffer): Buffer {
   const pkt = Buffer.concat([hdr, body])
-  // NetBIOS session header: 4-byte big-endian length prefix
   const nb = Buffer.alloc(4)
   nb.writeUInt32BE(pkt.length, 0)
   return Buffer.concat([nb, pkt])
@@ -88,29 +92,37 @@ function framePacket(hdr: Buffer, body: Buffer): Buffer {
 
 /** Sign an SMB2 packet (after NetBIOS header). Modifies the buffer in-place. */
 function signPacket(framed: Buffer, signingKey: Buffer): void {
-  // The SMB2 packet starts at offset 4 (after NetBIOS 4-byte header)
   const pkt = framed.subarray(4)
-  // Set SMB2_FLAGS_SIGNED in Flags field (offset 16, 4 bytes LE)
   const flags = pkt.readUInt32LE(16)
   pkt.writeUInt32LE(flags | SMB2_FLAGS_SIGNED, 16)
-  // Zero the signature field (offset 48, 16 bytes)
   pkt.fill(0, 48, 64)
-  // HMAC-SHA256(signingKey, entire SMB2 packet)
   const sig = createHmac('sha256', signingKey).update(pkt).digest()
-  // Copy first 16 bytes into signature field
   sig.copy(pkt, 48, 0, 16)
 }
 
 /** Build, frame, sign, send, and parse a signed request. */
 async function signedSend(
   transport: Smb2Transport,
-  hdr: Buffer,
+  command: number,
   body: Buffer,
   signingKey: Buffer,
+  opts: { sessionId?: bigint; treeId?: number } = {},
 ): Promise<SmB2Response> {
+  const hdr = buildSmb2Header(command, opts)
   const framed = framePacket(hdr, body)
   signPacket(framed, signingKey)
   return parseResponse(await transport.send(framed))
+}
+
+/** Build, frame, send (unsigned). */
+async function unsignedSend(
+  transport: Smb2Transport,
+  command: number,
+  body: Buffer,
+  opts: { sessionId?: bigint; treeId?: number } = {},
+): Promise<SmB2Response> {
+  const hdr = buildSmb2Header(command, opts)
+  return parseResponse(await transport.send(framePacket(hdr, body)))
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -122,7 +134,7 @@ interface SmB2Response {
   command: number
   sessionId: bigint
   treeId: number
-  body: Buffer // everything after the 64-byte header
+  body: Buffer
 }
 
 function parseResponse(pkt: Buffer): SmB2Response {
@@ -220,7 +232,6 @@ class Smb2Transport {
       this.pendingReject = (err) => { clearTimeout(timer); reject(err) }
       this.socket.write(data)
 
-      // Check if data already buffered
       this.tryDeliver()
     })
   }
@@ -232,7 +243,163 @@ class Smb2Transport {
 }
 
 // ═══════════════════════════════════════════════════════════════
-// SMB2 Client
+// Connection + Authentication
+// ═══════════════════════════════════════════════════════════════
+
+interface AuthenticatedSession {
+  transport: Smb2Transport
+  sessionId: bigint
+  signingKey: Buffer
+}
+
+async function connectAndAuth(
+  host: string,
+  port: number,
+  timeout: number,
+  domain: string,
+  username: string,
+  password: string,
+): Promise<AuthenticatedSession> {
+  messageIdCounter = 0n
+  const transport = new Smb2Transport(host, port, timeout)
+  await transport.connect()
+
+  // Negotiate
+  const negResp = await unsignedSend(transport, SMB2_NEGOTIATE, buildNegotiateBody())
+  assertStatus(negResp, 'Negotiate', [STATUS_SUCCESS])
+
+  // Session Setup 1 (NTLM Type 1)
+  const type1Raw = createType1()
+  const ss1Resp = await unsignedSend(
+    transport, SMB2_SESSION_SETUP, buildSessionSetupBody(wrapSpnegoInit(type1Raw)),
+  )
+  assertStatus(ss1Resp, 'SessionSetup1', [STATUS_MORE_PROCESSING_REQUIRED])
+
+  const sessionId = ss1Resp.sessionId
+  const type2Raw = extractNtlmToken(extractSecurityBuffer(ss1Resp.body))
+  const type2Info = parseType2(type2Raw)
+  const serverDomain = getNetBiosDomain(type2Info.targetInfo) || domain
+  console.log(`[SMB2] Server NetBIOS domain: "${serverDomain}", using for NTOWFv2`)
+
+  // Session Setup 2 (NTLM Type 3 with MIC)
+  const { type3, sessionBaseKey } = createType3(
+    type1Raw, type2Info, username, password, serverDomain,
+  )
+  const ss2Resp = await unsignedSend(
+    transport, SMB2_SESSION_SETUP, buildSessionSetupBody(wrapSpnegoAuth(type3)),
+    { sessionId },
+  )
+  assertStatus(ss2Resp, 'SessionSetup2', [STATUS_SUCCESS])
+  console.log(`[SMB2] Authentication successful on ${host}, sessionId=${sessionId}`)
+
+  return { transport, sessionId, signingKey: sessionBaseKey }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// DFS Referral
+// ═══════════════════════════════════════════════════════════════
+
+interface DfsTarget {
+  server: string
+  share: string
+  pathConsumed: number // number of UTF-16 chars consumed from request path
+}
+
+async function getDfsReferral(
+  transport: Smb2Transport,
+  sessionId: bigint,
+  signingKey: Buffer,
+  dfsPath: string,
+): Promise<DfsTarget> {
+  // TreeConnect to IPC$
+  // Extract host from dfsPath (\\host\...)
+  const hostMatch = dfsPath.match(/^\\\\([^\\]+)\\/)
+  if (!hostMatch) throw new Error(`Invalid DFS path: ${dfsPath}`)
+  const host = hostMatch[1]
+
+  const ipcPath = `\\\\${host}\\IPC$`
+  const ipcResp = await signedSend(
+    transport, SMB2_TREE_CONNECT, buildTreeConnectBody(ipcPath),
+    signingKey, { sessionId },
+  )
+  assertStatus(ipcResp, 'TreeConnect(IPC$)', [STATUS_SUCCESS])
+  const ipcTreeId = ipcResp.treeId
+
+  // IOCTL: FSCTL_DFS_GET_REFERRALS
+  const ioctlBody = buildIoctlDfsBody(dfsPath)
+  const ioctlResp = await signedSend(
+    transport, SMB2_IOCTL, ioctlBody,
+    signingKey, { sessionId, treeId: ipcTreeId },
+  )
+  assertStatus(ioctlResp, 'IOCTL(DFS_GET_REFERRALS)', [STATUS_SUCCESS])
+
+  return parseDfsReferralResponse(ioctlResp.body)
+}
+
+function parseDfsReferralResponse(body: Buffer): DfsTarget {
+  // IOCTL response fixed part: 48 bytes
+  // StructureSize(2) + Reserved(2) + CtlCode(4) + FileId(16) +
+  // InputOffset(4) + InputCount(4) + OutputOffset(4) + OutputCount(4) +
+  // Flags(4) + Reserved2(4)
+  const outputOffset = body.readUInt32LE(24) - SMB2_HEADER_SIZE
+  const outputCount = body.readUInt32LE(28)
+  const output = body.subarray(outputOffset, outputOffset + outputCount)
+
+  // RESP_GET_DFS_REFERRAL
+  const pathConsumed = output.readUInt16LE(0) // bytes of UTF-16LE
+  const numReferrals = output.readUInt16LE(2)
+  // ReferralHeaderFlags at offset 4 (4 bytes)
+
+  if (numReferrals === 0) throw new Error('No DFS referrals returned')
+
+  // Parse first referral entry (starts at offset 8)
+  const entryStart = 8
+  const version = output.readUInt16LE(entryStart)
+
+  let networkAddress: string
+
+  if (version === 3 || version === 4) {
+    const entryFlags = output.readUInt16LE(entryStart + 6)
+    if (entryFlags & 0x0002) {
+      // NameListReferral — has different layout, try DFSPath instead
+      const dfsPathOffset = output.readUInt16LE(entryStart + 12)
+      networkAddress = readUtf16NullTerminated(output, entryStart + dfsPathOffset)
+    } else {
+      const netAddrOffset = output.readUInt16LE(entryStart + 18)
+      networkAddress = readUtf16NullTerminated(output, entryStart + netAddrOffset)
+    }
+  } else if (version === 1) {
+    // V1 referral: Size(2) + ServerType(2) + ReferralEntryFlags(2) + ShareNameOffset(2) + ...
+    // Simpler: NetworkAddress at offset 16 from entry start (V1 is 8 bytes header + string)
+    // Actually V1 has a fixed 8-byte header then a null-terminated UTF-16LE path
+    networkAddress = readUtf16NullTerminated(output, entryStart + 8)
+  } else {
+    throw new Error(`Unsupported DFS referral version: ${version}`)
+  }
+
+  console.log(`[SMB2] DFS referral: "${networkAddress}", pathConsumed=${pathConsumed} bytes`)
+
+  // Parse: \\server\share or \\server\share\subpath
+  const cleaned = networkAddress.replace(/^\\\\/, '')
+  const parts = cleaned.split('\\')
+  return {
+    server: parts[0],
+    share: parts[1] || '',
+    pathConsumed: pathConsumed / 2, // convert bytes to chars
+  }
+}
+
+function readUtf16NullTerminated(buf: Buffer, offset: number): string {
+  let end = offset
+  while (end + 1 < buf.length) {
+    if (buf[end] === 0 && buf[end + 1] === 0) break
+    end += 2
+  }
+  return buf.subarray(offset, end).toString('utf16le')
+}
+
+// ═══════════════════════════════════════════════════════════════
+// SMB2 Client — Public API
 // ═══════════════════════════════════════════════════════════════
 
 export interface Smb2ClientConfig {
@@ -248,109 +415,95 @@ export interface Smb2ClientConfig {
 export async function readFile(config: Smb2ClientConfig, filePath: string): Promise<Buffer> {
   const port = config.port ?? 445
   const timeout = config.timeout ?? 30_000
-  const transport = new Smb2Transport(config.host, port, timeout)
 
-  // Reset message ID counter for each connection
-  messageIdCounter = 0n
+  let { transport, sessionId, signingKey } = await connectAndAuth(
+    config.host, port, timeout, config.domain, config.username, config.password,
+  )
 
   try {
-    await transport.connect()
-
-    // ── Step 1: Negotiate ──
-    const negotiateBody = buildNegotiateBody()
-    const negHdr = buildSmb2Header(SMB2_NEGOTIATE, negotiateBody.length)
-    const negResp = parseResponse(await transport.send(framePacket(negHdr, negotiateBody)))
-    assertStatus(negResp, 'Negotiate', [STATUS_SUCCESS])
-
-    // ── Step 2: Session Setup (NTLM Type 1) ──
-    const type1Raw = createType1()
-    const spnegoInit = wrapSpnegoInit(type1Raw)
-    const ss1Body = buildSessionSetupBody(spnegoInit)
-    const ss1Hdr = buildSmb2Header(SMB2_SESSION_SETUP, ss1Body.length)
-    const ss1Resp = parseResponse(await transport.send(framePacket(ss1Hdr, ss1Body)))
-    assertStatus(ss1Resp, 'SessionSetup1', [STATUS_MORE_PROCESSING_REQUIRED])
-
-    const sessionId = ss1Resp.sessionId
-
-    // Extract Type 2 from response
-    const ss1SecurityBuf = extractSecurityBuffer(ss1Resp.body)
-    const type2Raw = extractNtlmToken(ss1SecurityBuf)
-    const type2Info = parseType2(type2Raw)
-
-    // Use server's NetBIOS domain from TargetInfo for NTOWFv2
-    const serverDomain = getNetBiosDomain(type2Info.targetInfo) || config.domain
-    console.log(`[SMB2] Server NetBIOS domain: "${serverDomain}", using for NTOWFv2`)
-
-    // ── Step 3: Session Setup (NTLM Type 3 with MIC) ──
-    const { type3, sessionBaseKey } = createType3(
-      type1Raw,
-      type2Info,
-      config.username,
-      config.password,
-      serverDomain,
-    )
-    const spnegoAuth = wrapSpnegoAuth(type3)
-    const ss2Body = buildSessionSetupBody(spnegoAuth)
-    const ss2Hdr = buildSmb2Header(SMB2_SESSION_SETUP, ss2Body.length, { sessionId })
-    const ss2Resp = parseResponse(await transport.send(framePacket(ss2Hdr, ss2Body)))
-    assertStatus(ss2Resp, 'SessionSetup2', [STATUS_SUCCESS])
-
-    console.log(`[SMB2] Authentication successful, sessionId=${sessionId}`)
-
-    // Signing key for all subsequent requests (SMB 2.0.2 uses SessionBaseKey)
-    const signingKey = sessionBaseKey
-
-    // ── Step 4: Tree Connect ──
+    // Try TreeConnect to the requested share
     const sharePath = `\\\\${config.host}\\${config.share}`
-    const treeBody = buildTreeConnectBody(sharePath)
-    const treeHdr = buildSmb2Header(SMB2_TREE_CONNECT, treeBody.length, { sessionId })
-    const treeResp = await signedSend(transport, treeHdr, treeBody, signingKey)
-    assertStatus(treeResp, 'TreeConnect', [STATUS_SUCCESS])
+    const treeResp = await signedSend(
+      transport, SMB2_TREE_CONNECT, buildTreeConnectBody(sharePath),
+      signingKey, { sessionId },
+    )
 
-    const treeId = treeResp.treeId
-    console.log(`[SMB2] Tree connected: ${sharePath}, treeId=${treeId}`)
+    let treeId: number
+    let actualFilePath = filePath
 
-    // ── Step 5: Create (open file) ──
-    // Normalize path separators
-    const normalizedPath = filePath.replace(/\//g, '\\').replace(/^\\+/, '')
+    if (treeResp.status === STATUS_BAD_NETWORK_NAME) {
+      // DFS namespace — resolve via referral
+      const fullDfsPath = `\\\\${config.host}\\${config.share}\\${filePath.replace(/\//g, '\\')}`
+      const referral = await getDfsReferral(transport, sessionId, signingKey, fullDfsPath)
+
+      // Compute remaining path: full path minus consumed prefix
+      const fullNormalized = fullDfsPath.replace(/\//g, '\\')
+      actualFilePath = fullNormalized.substring(referral.pathConsumed).replace(/^\\+/, '')
+
+      console.log(`[SMB2] DFS target: \\\\${referral.server}\\${referral.share}, file=${actualFilePath}`)
+
+      // If target is a different server, reconnect
+      if (referral.server.toLowerCase() !== config.host.toLowerCase()) {
+        transport.close()
+        const newSession = await connectAndAuth(
+          referral.server, port, timeout, config.domain, config.username, config.password,
+        )
+        transport = newSession.transport
+        sessionId = newSession.sessionId
+        signingKey = newSession.signingKey
+      }
+
+      // TreeConnect to actual share
+      const targetSharePath = `\\\\${referral.server}\\${referral.share}`
+      const targetTreeResp = await signedSend(
+        transport, SMB2_TREE_CONNECT, buildTreeConnectBody(targetSharePath),
+        signingKey, { sessionId },
+      )
+      assertStatus(targetTreeResp, `TreeConnect(${targetSharePath})`, [STATUS_SUCCESS])
+      treeId = targetTreeResp.treeId
+      console.log(`[SMB2] Tree connected: ${targetSharePath}, treeId=${treeId}`)
+    } else {
+      assertStatus(treeResp, 'TreeConnect', [STATUS_SUCCESS])
+      treeId = treeResp.treeId
+      console.log(`[SMB2] Tree connected: ${sharePath}, treeId=${treeId}`)
+    }
+
+    // ── Create (open file) ──
+    const normalizedPath = actualFilePath.replace(/\//g, '\\').replace(/^\\+/, '')
     const createBody = buildCreateBody(normalizedPath)
-    const createHdr = buildSmb2Header(SMB2_CREATE, createBody.length, { sessionId, treeId })
-    const createResp = await signedSend(transport, createHdr, createBody, signingKey)
+    const createResp = await signedSend(
+      transport, SMB2_CREATE, createBody,
+      signingKey, { sessionId, treeId },
+    )
     assertStatus(createResp, `Create(${normalizedPath})`, [STATUS_SUCCESS])
 
-    // Parse Create response to get FileId (16 bytes at offset 64 of body)
-    // StructureSize(2) + OplockLevel(1) + Flags(1) + CreateAction(4) + CreationTime(8) +
-    // LastAccessTime(8) + LastWriteTime(8) + ChangeTime(8) + AllocationSize(8) + EndofFile(8) +
-    // FileAttributes(4) + Reserved2(4) = 64
-    const fileId = Buffer.from(createResp.body.subarray(64, 80)) // persistent + volatile file ID
-    const fileSize = Number(createResp.body.readBigUInt64LE(48)) // EndofFile
-
+    const fileId = Buffer.from(createResp.body.subarray(64, 80))
+    const fileSize = Number(createResp.body.readBigUInt64LE(48))
     console.log(`[SMB2] File opened: ${normalizedPath}, size=${fileSize}`)
 
-    // ── Step 6: Read ──
+    // ── Read ──
     const chunks: Buffer[] = []
     let readOffset = 0
-    const maxReadSize = 65536 // 64KB per read
+    const maxReadSize = 65536
 
     while (readOffset < fileSize) {
       const readLen = Math.min(maxReadSize, fileSize - readOffset)
       const readBody = buildReadBody(fileId, readOffset, readLen)
-      const readHdr = buildSmb2Header(SMB2_READ, readBody.length, { sessionId, treeId })
-      const readResp = await signedSend(transport, readHdr, readBody, signingKey)
+      const readResp = await signedSend(
+        transport, SMB2_READ, readBody,
+        signingKey, { sessionId, treeId },
+      )
       assertStatus(readResp, `Read(offset=${readOffset})`, [STATUS_SUCCESS])
 
-      // Parse Read response: StructureSize(2) + DataOffset(1) + Reserved(1) + DataLength(4)
-      const dataOffset = readResp.body.readUInt8(2) - SMB2_HEADER_SIZE // relative to response start
+      const dataOffset = readResp.body.readUInt8(2) - SMB2_HEADER_SIZE
       const dataLength = readResp.body.readUInt32LE(4)
       chunks.push(Buffer.from(readResp.body.subarray(dataOffset, dataOffset + dataLength)))
       readOffset += dataLength
     }
 
-    // ── Step 7: Close ──
+    // ── Close ──
     const closeBody = buildCloseBody(fileId)
-    const closeHdr = buildSmb2Header(SMB2_CLOSE, closeBody.length, { sessionId, treeId })
-    await signedSend(transport, closeHdr, closeBody, signingKey)
-    // Don't check status — best effort close
+    await signedSend(transport, SMB2_CLOSE, closeBody, signingKey, { sessionId, treeId })
 
     transport.close()
     return Buffer.concat(chunks)
@@ -370,12 +523,8 @@ function buildNegotiateBody(): Buffer {
   body.writeUInt16LE(36, 0) // StructureSize
   body.writeUInt16LE(dialects.length, 2) // DialectCount
   body.writeUInt16LE(1, 4) // SecurityMode (signing enabled)
-  // Reserved (2 bytes at 6)
-  // Capabilities (4 bytes at 8) = 0
-  // ClientGuid (16 bytes at 12)
   const guid = randomBytes(16)
   guid.copy(body, 12)
-  // ClientStartTime (8 bytes at 28) = 0
   for (let i = 0; i < dialects.length; i++) {
     body.writeUInt16LE(dialects[i], 36 + i * 2)
   }
@@ -383,29 +532,20 @@ function buildNegotiateBody(): Buffer {
 }
 
 function buildSessionSetupBody(securityBuffer: Buffer): Buffer {
-  // StructureSize(2) + Flags(1) + SecurityMode(1) + Capabilities(4) +
-  // Channel(4) + SecurityBufferOffset(2) + SecurityBufferLength(2) + PreviousSessionId(8) = 24 fixed
-  // SecurityBufferOffset = 64 (header) + 24 (body fixed) = 88
   const body = Buffer.alloc(24 + securityBuffer.length)
-  body.writeUInt16LE(25, 0) // StructureSize (25 per spec, odd = includes variable part)
-  // Flags = 0, SecurityMode = 1
+  body.writeUInt16LE(25, 0) // StructureSize
   body.writeUInt8(1, 3) // SecurityMode
   body.writeUInt32LE(1, 4) // Capabilities (DFS)
-  // Channel = 0
   body.writeUInt16LE(SMB2_HEADER_SIZE + 24, 12) // SecurityBufferOffset = 88
   body.writeUInt16LE(securityBuffer.length, 14) // SecurityBufferLength
-  // PreviousSessionId = 0
   securityBuffer.copy(body, 24)
   return body
 }
 
 function buildTreeConnectBody(path: string): Buffer {
   const pathBuf = Buffer.from(path, 'utf16le')
-  // StructureSize(2) + Reserved(2) + PathOffset(2) + PathLength(2) = 8 fixed
-  // PathOffset = 64 (header) + 8 (body fixed) = 72
   const body = Buffer.alloc(8 + pathBuf.length)
   body.writeUInt16LE(9, 0) // StructureSize
-  // Reserved = 0
   body.writeUInt16LE(SMB2_HEADER_SIZE + 8, 4) // PathOffset = 72
   body.writeUInt16LE(pathBuf.length, 6) // PathLength
   pathBuf.copy(body, 8)
@@ -414,51 +554,59 @@ function buildTreeConnectBody(path: string): Buffer {
 
 function buildCreateBody(fileName: string): Buffer {
   const nameBuf = Buffer.from(fileName, 'utf16le')
-  // Fixed part: 56 bytes
-  // StructureSize(2) + SecurityFlags(1) + RequestedOplockLevel(1) + ImpersonationLevel(4) +
-  // SmbCreateFlags(8) + Reserved(8) + DesiredAccess(4) + FileAttributes(4) +
-  // ShareAccess(4) + CreateDisposition(4) + CreateOptions(4) +
-  // NameOffset(2) + NameLength(2) + CreateContextsOffset(4) + CreateContextsLength(4) = 56
   const body = Buffer.alloc(56 + nameBuf.length)
   body.writeUInt16LE(57, 0) // StructureSize
-  // SecurityFlags = 0, RequestedOplockLevel = 0 (none)
   body.writeUInt32LE(2, 4) // ImpersonationLevel = Impersonation
-  // SmbCreateFlags = 0, Reserved = 0
   body.writeUInt32LE(FILE_READ_DATA | FILE_READ_ATTRIBUTES, 24) // DesiredAccess
   body.writeUInt32LE(0x00000080, 28) // FileAttributes = NORMAL
   body.writeUInt32LE(FILE_SHARE_READ, 32) // ShareAccess
   body.writeUInt32LE(FILE_OPEN, 36) // CreateDisposition = FILE_OPEN
-  // CreateOptions = 0 (we're reading a file)
   body.writeUInt16LE(SMB2_HEADER_SIZE + 56, 44) // NameOffset = 120
   body.writeUInt16LE(nameBuf.length, 46) // NameLength
-  // CreateContextsOffset = 0, CreateContextsLength = 0
   nameBuf.copy(body, 56)
   return body
 }
 
 function buildReadBody(fileId: Buffer, offset: number, length: number): Buffer {
-  // StructureSize(2) + Padding(1) + Flags(1) + Length(4) + Offset(8) +
-  // FileId(16) + MinimumCount(4) + Channel(4) + RemainingBytes(4) +
-  // ReadChannelInfoOffset(2) + ReadChannelInfoLength(2) + Buffer(1) = 49
   const body = Buffer.alloc(49)
   body.writeUInt16LE(49, 0) // StructureSize
-  // Padding = 0, Flags = 0
   body.writeUInt32LE(length, 4) // Length
   body.writeBigUInt64LE(BigInt(offset), 8) // Offset
-  fileId.copy(body, 16) // FileId (16 bytes)
+  fileId.copy(body, 16) // FileId
   body.writeUInt32LE(1, 32) // MinimumCount
-  // Channel = 0, RemainingBytes = 0
-  // ReadChannelInfoOffset = 0, ReadChannelInfoLength = 0
-  // Buffer = 0x00 (1 byte padding)
   return body
 }
 
 function buildCloseBody(fileId: Buffer): Buffer {
-  // StructureSize(2) + Flags(2) + Reserved(4) + FileId(16) = 24
   const body = Buffer.alloc(24)
   body.writeUInt16LE(24, 0) // StructureSize
-  // Flags = 0, Reserved = 0
-  fileId.copy(body, 8) // FileId
+  fileId.copy(body, 8)
+  return body
+}
+
+function buildIoctlDfsBody(dfsPath: string): Buffer {
+  // REQ_GET_DFS_REFERRAL: MaxReferralLevel(2) + RequestFileName (UTF-16LE null-terminated)
+  const pathBuf = Buffer.from(dfsPath + '\0', 'utf16le')
+  const inputBuf = Buffer.alloc(2 + pathBuf.length)
+  inputBuf.writeUInt16LE(3, 0) // MaxReferralLevel = 3
+  pathBuf.copy(inputBuf, 2)
+
+  // SMB2 IOCTL body: 56 bytes fixed + inputBuf
+  const fileId = Buffer.alloc(16, 0xff) // sentinel FileId for IPC$ IOCTL
+  const body = Buffer.alloc(56 + inputBuf.length)
+  body.writeUInt16LE(57, 0) // StructureSize
+  // Reserved(2) = 0
+  body.writeUInt32LE(FSCTL_DFS_GET_REFERRALS, 4) // CtlCode
+  fileId.copy(body, 8) // FileId (16 bytes)
+  body.writeUInt32LE(SMB2_HEADER_SIZE + 56, 24) // InputOffset
+  body.writeUInt32LE(inputBuf.length, 28) // InputCount
+  body.writeUInt32LE(0, 32) // MaxInputResponse
+  body.writeUInt32LE(0, 36) // OutputOffset (filled by server)
+  body.writeUInt32LE(0, 40) // OutputCount
+  body.writeUInt32LE(65536, 44) // MaxOutputResponse
+  body.writeUInt32LE(SMB2_0_IOCTL_IS_FSCTL, 48) // Flags
+  // Reserved2(4) = 0
+  inputBuf.copy(body, 56)
   return body
 }
 
@@ -467,8 +615,7 @@ function buildCloseBody(fileId: Buffer): Buffer {
 // ═══════════════════════════════════════════════════════════════
 
 function extractSecurityBuffer(body: Buffer): Buffer {
-  // SessionSetup response: StructureSize(2) + SessionFlags(2) + SecurityBufferOffset(2) + SecurityBufferLength(2) + Buffer...
-  const offset = body.readUInt16LE(4) - SMB2_HEADER_SIZE // SecurityBufferOffset is from packet start
+  const offset = body.readUInt16LE(4) - SMB2_HEADER_SIZE
   const length = body.readUInt16LE(6)
   return Buffer.from(body.subarray(offset, offset + length))
 }
