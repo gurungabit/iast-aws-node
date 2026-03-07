@@ -21,6 +21,7 @@ import { getPolicyTypeFromPdq } from './policy-types.js'
 import { RoutScreen } from './rout-screen.js'
 import { readSmbFile } from '../../integrations/smb.js'
 import { config as serverConfig } from '../../config.js'
+import { loadFromCache, writeToCache } from './cache.js'
 
 // Auth config for Fire system
 const AUTH_CONFIG = {
@@ -80,14 +81,20 @@ export async function runRoutExtractorAST(
 
   // Persist bulk items to DB only (no need to send to browser individually)
   if (bulkItems.length > 0) {
-    reporter.reportProgress(0, workItems.length, `Storing ${bulkItems.length} pre-computed records...`)
-    reporter.addItemsPersistOnly(bulkItems.map((item) => ({
-      id: randomUUID(),
-      policyNumber: item.id,
-      status: 'success' as const,
-      durationMs: 0,
-      data: item.bulkResult,
-    })))
+    reporter.reportProgress(
+      0,
+      workItems.length,
+      `Storing ${bulkItems.length} pre-computed records...`,
+    )
+    reporter.addItemsPersistOnly(
+      bulkItems.map((item) => ({
+        id: randomUUID(),
+        policyNumber: item.id,
+        status: 'success' as const,
+        durationMs: 0,
+        data: item.bulkResult,
+      })),
+    )
   }
 
   // If no items need host interaction, we're done
@@ -189,45 +196,62 @@ async function prepareFrom412(
       return []
     }
   } else {
-    // Read 412 file via SMB2
-    reporter.reportProgress(0, 1, 'Resolving 412 file path...')
-    const filePath = resolve412Path(config.oc, config.file412Path)
+    // Check cache first
+    reporter.reportProgress(0, 1, 'Checking 412 cache...')
+    const cached = await loadFromCache(config.oc)
+    if (cached) {
+      allItems = cached
+      reporter.reportProgress(0, 1, `Loaded ${allItems.length} records from cache`)
+    } else {
+      // Cache miss — read 412 file via SMB2
+      reporter.reportProgress(0, 1, 'Resolving 412 file path...')
+      const filePath = resolve412Path(config.oc, config.file412Path)
 
-    if (!serverConfig.smbShare) {
-      throw new Error(
-        'No 412 file source configured. Set SMB_SHARE or upload a file.',
-      )
-    }
-
-    try {
-      reporter.reportProgress(0, 1, `Downloading 412 file via SMB...`)
-      const data = await readSmbFile({
-        share: serverConfig.smbShare,
-        domain: serverConfig.smbDomain,
-        username: serverConfig.smbUsername,
-        password: serverConfig.smbPassword,
-      }, filePath)
-
-      const fileContent = data.toString('latin1')
-      const dateOfRun = new Date().toLocaleDateString('en-US')
-      reporter.reportProgress(0, 1, 'Parsing 412 file...')
-      allItems = parse412File(fileContent, dateOfRun)
-      reporter.reportProgress(0, 1, `Parsed ${allItems.length} records from 412 file`)
-    } catch (err) {
-      const errorMsg = String(err)
-      reporter.reportProgress(0, 1, `412 file unavailable: ${errorMsg}`)
-      if (config.missing412Strategy === 'use_rout') {
-        reporter.reportProgress(0, 1, 'Falling back to ROUT mode...')
-        return prepareFromRout(config, reporter)
+      if (!serverConfig.smbShare) {
+        throw new Error('No 412 file source configured. Set SMB_SHARE or upload a file.')
       }
-      throw err instanceof Error ? err : new Error(errorMsg)
+
+      try {
+        reporter.reportProgress(0, 1, `Downloading 412 file via SMB...`)
+        const data = await readSmbFile(
+          {
+            share: serverConfig.smbShare,
+            domain: serverConfig.smbDomain,
+            username: serverConfig.smbUsername,
+            password: serverConfig.smbPassword,
+          },
+          filePath,
+        )
+
+        const fileContent = data.toString('latin1')
+        const dateOfRun = new Date().toLocaleDateString('en-US')
+        reporter.reportProgress(0, 1, 'Parsing 412 file...')
+        allItems = parse412File(fileContent, dateOfRun)
+        reporter.reportProgress(0, 1, `Parsed ${allItems.length} records from 412 file`)
+
+        // Write to cache (non-fatal)
+        await writeToCache(config.oc, allItems)
+        reporter.reportProgress(0, 1, `Cached ${allItems.length} records for OC ${config.oc}`)
+      } catch (err) {
+        const errorMsg = String(err)
+        reporter.reportProgress(0, 1, `412 file unavailable: ${errorMsg}`)
+        if (config.missing412Strategy === 'use_rout') {
+          reporter.reportProgress(0, 1, 'Falling back to ROUT mode...')
+          return prepareFromRout(config, reporter)
+        }
+        throw err instanceof Error ? err : new Error(errorMsg)
+      }
     }
   }
 
   // Apply filters
   reporter.reportProgress(0, 1, 'Applying filters...')
   const filtered = applyAllFilters(allItems, config)
-  reporter.reportProgress(0, 1, `Filtered to ${filtered.length} records (from ${allItems.length} total)`)
+  reporter.reportProgress(
+    0,
+    1,
+    `Filtered to ${filtered.length} records (from ${allItems.length} total)`,
+  )
 
   // Split into bulk (resolved PolicyType) and PDQ-needing items
   const items: WorkItem[] = []
@@ -254,7 +278,9 @@ async function prepareFrom412(
   }
 
   if (pdqCount > 0) {
-    reporter.reportProgress(0, 1,
+    reporter.reportProgress(
+      0,
+      1,
       `${filtered.length - pdqCount} items ready for bulk insert, ${pdqCount} items need PDQ enrichment`,
     )
   }
@@ -262,10 +288,7 @@ async function prepareFrom412(
   return items
 }
 
-function prepareFromRout(
-  config: RoutExtractorConfig,
-  reporter: ProgressReporter,
-): WorkItem[] {
+function prepareFromRout(config: RoutExtractorConfig, reporter: ProgressReporter): WorkItem[] {
   const workItems: WorkItem[] = []
   let itemIdx = 0
 
@@ -285,7 +308,9 @@ function prepareFromRout(
     }
   }
 
-  reporter.reportProgress(0, 1,
+  reporter.reportProgress(
+    0,
+    1,
     `Prepared ${workItems.length} ROUT work items (${occRange.length} OCCs x ${config.sections.length} sections)`,
   )
 

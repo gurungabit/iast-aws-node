@@ -68,6 +68,11 @@ vi.mock('@src/ast/rout-extractor/policy-types.js', () => ({
   getPolicyTypeFromPdq: vi.fn().mockReturnValue(null),
 }))
 
+vi.mock('@src/ast/rout-extractor/cache.js', () => ({
+  loadFromCache: vi.fn().mockResolvedValue(null),
+  writeToCache: vi.fn().mockResolvedValue(undefined),
+}))
+
 vi.mock('crypto', () => ({
   randomUUID: vi.fn().mockReturnValue('test-uuid'),
 }))
