@@ -13,6 +13,7 @@ export const executions = pgTable(
       .notNull()
       .references(() => users.id),
     astName: text('ast_name').notNull(),
+    configName: text('config_name'),
     status: text('status').notNull().default('running'),
     hostUser: text('host_user'),
     runId: text('run_id'),

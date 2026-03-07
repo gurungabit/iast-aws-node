@@ -47,11 +47,13 @@ function attachLocal(
       const executionId = `exec_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
       const today = new Date().toISOString().slice(0, 10)
       try {
+        const params = (msg.params ?? {}) as Record<string, unknown>
         await executionService.create({
           id: executionId,
           sessionId,
           userId,
           astName: String(msg.astName),
+          configName: typeof params.configName === 'string' ? params.configName : undefined,
           executionDate: today,
         })
       } catch (err) {

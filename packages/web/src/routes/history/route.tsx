@@ -22,6 +22,7 @@ interface ExecutionDto {
   id: string
   sessionId: string
   astName: string
+  configName: string | null
   status: string
   hostUser: string | null
   runId: string | null
@@ -212,7 +213,9 @@ function ExecutionListItem({
             compact ? 'text-xs' : 'text-sm',
           )}
         >
-          {execution.astName}
+          {execution.configName
+            ? `${execution.configName} (${execution.astName})`
+            : execution.astName}
         </span>
         <span
           className={cn(

@@ -173,8 +173,8 @@ describe('executionService', () => {
       const result = await executionService.findByUser('u1')
 
       expect(result).toEqual([
-        { id: 'e1', launcherName: null },
-        { id: 'e2', launcherName: 'MyLauncher' },
+        { id: 'e1', configName: null, launcherName: null },
+        { id: 'e2', configName: null, launcherName: 'MyLauncher' },
       ])
       expect(mockDb.select).toHaveBeenCalled()
       expect(mockDb.leftJoin).toHaveBeenCalled()

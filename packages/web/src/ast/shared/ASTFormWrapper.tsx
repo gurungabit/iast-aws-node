@@ -399,6 +399,7 @@ export function ASTFormWrapper({
       const payload = buildPayload(getCommonParams())
       payload.oc = oc
       if (selectedConfigId) payload.configId = selectedConfigId
+      if (configurationName) payload.configName = configurationName
       onRun(payload)
     } catch (err) {
       setConfigError(err instanceof Error ? err.message : 'Failed to run')

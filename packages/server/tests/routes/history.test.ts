@@ -55,6 +55,7 @@ describe('history routes', () => {
           id: 'e1',
           sessionId: 's1',
           astName: 'ast1',
+          configName: null,
           status: 'completed',
           hostUser: null,
           runId: null,

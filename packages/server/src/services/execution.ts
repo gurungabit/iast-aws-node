@@ -12,6 +12,7 @@ export const executionService = {
     executionDate: string
     hostUser?: string
     runId?: string
+    configName?: string
   }) {
     const [execution] = await db.insert(executions).values(data).returning()
     return execution
@@ -48,6 +49,7 @@ export const executionService = {
         id: executions.id,
         sessionId: executions.sessionId,
         astName: executions.astName,
+        configName: executions.configName,
         status: executions.status,
         hostUser: executions.hostUser,
         runId: executions.runId,
@@ -74,6 +76,7 @@ export const executionService = {
 
     return rows.map((r) => ({
       ...r,
+      configName: r.configName ?? null,
       launcherName: r.launcherName ?? null,
     }))
   },

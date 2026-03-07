@@ -156,6 +156,7 @@ export const autoLauncherService = {
           sessionId,
           userId: userId ?? 'unknown',
           astName: step.astName,
+          configName: step.configName,
           executionDate: (step.params.userLocalDate as string) ?? today,
           runId,
         })
