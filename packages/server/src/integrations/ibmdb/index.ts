@@ -7,6 +7,10 @@
  */
 
 import ibmdb from 'ibm_db'
+import { fileURLToPath } from 'url'
+import { dirname, join } from 'path'
+
+const CERT_PATH = join(dirname(fileURLToPath(import.meta.url)), 'cacerts.crt')
 
 export interface Db2Config {
   database: string
@@ -16,7 +20,6 @@ export interface Db2Config {
   uid: string
   pwd: string
   schema: string
-  sslCertPath?: string
 }
 
 export interface Db2Connection {
@@ -25,20 +28,17 @@ export interface Db2Connection {
 }
 
 function buildConnectionString(config: Db2Config): string {
-  let connStr =
+  return (
     `DATABASE=${config.database};` +
     `HOSTNAME=${config.hostname};` +
     `PORT=${config.port};` +
     `PROTOCOL=${config.protocol};` +
     `UID=${config.uid};` +
     `PWD=${config.pwd};` +
-    `CurrentSchema=${config.schema};`
-
-  if (config.sslCertPath) {
-    connStr += `SECURITY=SSL;SSLServerCertificate=${config.sslCertPath};`
-  }
-
-  return connStr
+    `CurrentSchema=${config.schema};` +
+    `SECURITY=SSL;` +
+    `SSLServerCertificate=${CERT_PATH};`
+  )
 }
 
 export async function connect(config: Db2Config): Promise<Db2Connection> {

@@ -38,20 +38,19 @@ describe('ibmdb', () => {
   })
 
   describe('connect', () => {
-    it('should build connection string with all config fields', async () => {
+    it('should build connection string with all config fields and SSL cert', async () => {
       await connect(testConfig)
 
-      expect(mocks.ibmdb.open).toHaveBeenCalledWith(
-        'DATABASE=TESTDB;HOSTNAME=db2.example.com;PORT=50000;PROTOCOL=TCPIP;UID=admin;PWD=secret123;CurrentSchema=RU99;',
-      )
-    })
-
-    it('should include SSL params when sslCertPath is provided', async () => {
-      await connect({ ...testConfig, sslCertPath: '/certs/cacerts.crt' })
-
-      expect(mocks.ibmdb.open).toHaveBeenCalledWith(
-        expect.stringContaining('SECURITY=SSL;SSLServerCertificate=/certs/cacerts.crt;'),
-      )
+      const connStr = mocks.ibmdb.open.mock.calls[0][0] as string
+      expect(connStr).toContain('DATABASE=TESTDB;')
+      expect(connStr).toContain('HOSTNAME=db2.example.com;')
+      expect(connStr).toContain('PORT=50000;')
+      expect(connStr).toContain('PROTOCOL=TCPIP;')
+      expect(connStr).toContain('UID=admin;')
+      expect(connStr).toContain('PWD=secret123;')
+      expect(connStr).toContain('CurrentSchema=RU99;')
+      expect(connStr).toContain('SECURITY=SSL;')
+      expect(connStr).toMatch(/SSLServerCertificate=.*cacerts\.crt;/)
     })
   })
 
