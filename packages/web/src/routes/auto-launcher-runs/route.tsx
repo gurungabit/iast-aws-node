@@ -1,8 +1,9 @@
 import { createFileRoute } from '@tanstack/react-router'
 import { useState, useEffect, useMemo } from 'react'
-import { RefreshCw, ChevronRight } from 'lucide-react'
+import { RefreshCw, ChevronRight, Clock, Loader2 } from 'lucide-react'
 import { useApiQuery } from '../../hooks/useApi'
-import { cn } from '../../utils'
+import { useASTStore } from '../../stores/ast-store'
+import { cn, formatDuration } from '../../utils'
 import { Button } from '../../components/ui/Button'
 import { Card } from '../../components/ui/Card'
 
@@ -78,6 +79,26 @@ function getActiveStepIndex(run: RunDto): number {
   return Math.max(0, idx > 0 ? idx - 1 : 0)
 }
 
+function stepDuration(step: RunStep): string | null {
+  if (!step.startedAt) return null
+  const start = new Date(step.startedAt).getTime()
+  const end = step.completedAt ? new Date(step.completedAt).getTime() : Date.now()
+  return formatDuration(end - start)
+}
+
+/** Returns live progress for a run by matching runId in the AST store. */
+function useLiveProgress(runId: string | null) {
+  return useASTStore((s) => {
+    if (!runId) return null
+    for (const tab of Object.values(s.tabs)) {
+      if (tab.autoLauncherRun?.runId === runId && tab.progress) {
+        return tab.progress
+      }
+    }
+    return null
+  })
+}
+
 // ---------------------------------------------------------------------------
 // RunStepCard
 // ---------------------------------------------------------------------------
@@ -85,16 +106,22 @@ function getActiveStepIndex(run: RunDto): number {
 function RunStepCard({
   label,
   sublabel,
+  step,
   status,
   isActive,
+  progress,
   compact = false,
 }: {
   label: string
   sublabel: string
+  step: RunStep
   status: RunStep['status']
   isActive: boolean
+  progress?: { current: number; total: number; percentage: number; message?: string } | null
   compact?: boolean
 }) {
+  const duration = stepDuration(step)
+
   return (
     <div
       className={cn(
@@ -114,13 +141,40 @@ function RunStepCard({
         >
           {label}
         </div>
-        <div className={cn('text-xs font-medium', getStepStatusColor(status))}>{status}</div>
+        <div className="flex items-center gap-2">
+          {duration && (
+            <div className="flex items-center gap-0.5 text-[11px] text-gray-500 dark:text-zinc-500">
+              <Clock className="w-3 h-3" />
+              {duration}
+            </div>
+          )}
+          <div className={cn('text-xs font-medium', getStepStatusColor(status))}>{status}</div>
+        </div>
       </div>
       <div
         className={cn('mt-1 text-gray-600 dark:text-zinc-400', compact ? 'text-[11px]' : 'text-xs')}
       >
         {sublabel}
       </div>
+      {isActive && progress && progress.total > 0 && (
+        <div className="mt-2">
+          <div className="flex items-center justify-between text-[11px] text-gray-600 dark:text-zinc-400 mb-1">
+            <span className="flex items-center gap-1">
+              <Loader2 className="w-3 h-3 animate-spin" />
+              {progress.message ?? 'Processing...'}
+            </span>
+            <span>
+              {progress.current}/{progress.total}
+            </span>
+          </div>
+          <div className="h-1.5 bg-gray-200 dark:bg-zinc-700 rounded-full overflow-hidden">
+            <div
+              className="h-full bg-blue-500 dark:bg-blue-400 rounded-full transition-all duration-300"
+              style={{ width: `${String(progress.percentage)}%` }}
+            />
+          </div>
+        </div>
+      )}
     </div>
   )
 }
@@ -135,12 +189,14 @@ function CollapsibleStepGroup({
   items,
   groupStatus,
   run,
+  liveProgress,
 }: {
   stepLabel: string
   configName?: string
   items: { step: RunStep; globalIdx: number }[]
   groupStatus: RunStep['status']
   run: RunDto
+  liveProgress: { current: number; total: number; percentage: number; message?: string } | null
 }) {
   const [collapsed, setCollapsed] = useState(false)
 
@@ -201,8 +257,10 @@ function CollapsibleStepGroup({
                 key={`${String(globalIdx)}-${step.astName}`}
                 label={step.taskLabel ?? `Task ${String(globalIdx + 1)}`}
                 sublabel={step.astName}
+                step={step}
                 status={step.status}
                 isActive={isActive}
+                progress={isActive ? liveProgress : null}
                 compact
               />
             )
@@ -232,6 +290,9 @@ function AutoLauncherRunsPage() {
     () => runs.find((r) => r.id === effectiveRunId) ?? null,
     [runs, effectiveRunId],
   )
+
+  // Live progress from AST store for the selected run
+  const liveProgress = useLiveProgress(effectiveRunId)
 
   // Poll while there are running runs
   const shouldPoll = runs.some((r) => r.status === 'running') || selectedRun?.status === 'running'
@@ -372,8 +433,10 @@ function AutoLauncherRunsPage() {
                                 key={`${String(idx)}-${s.astName}`}
                                 label={`Step ${String(idx + 1)} — ${s.configName ?? s.astName}`}
                                 sublabel={s.astName}
+                                step={s}
                                 status={s.status}
                                 isActive={isActive}
+                                progress={isActive ? liveProgress : null}
                               />
                             )
                           })
@@ -426,13 +489,11 @@ function AutoLauncherRunsPage() {
                               <RunStepCard
                                 key={group.stepLabel}
                                 label={`${group.stepLabel} — ${step.configName ?? step.astName}`}
-                                sublabel={
-                                  step.executionId
-                                    ? `executionId=${step.executionId}`
-                                    : 'executionId=—'
-                                }
+                                sublabel={step.astName}
+                                step={step}
                                 status={step.status}
                                 isActive={isActive}
+                                progress={isActive ? liveProgress : null}
                               />
                             )
                           }
@@ -445,6 +506,7 @@ function AutoLauncherRunsPage() {
                               items={group.items}
                               groupStatus={groupStatus}
                               run={selectedRun}
+                              liveProgress={liveProgress}
                             />
                           )
                         })
