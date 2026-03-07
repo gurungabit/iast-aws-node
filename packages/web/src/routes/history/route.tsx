@@ -1,6 +1,6 @@
 import { createFileRoute } from '@tanstack/react-router'
 import { useState, useMemo, useEffect } from 'react'
-import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { useQuery, useInfiniteQuery, useQueryClient } from '@tanstack/react-query'
 import { Check, X, Clock, Loader2, Pause, Ban, Circle, ChevronRight } from 'lucide-react'
 import { apiGet } from '../../services/api'
 import { cn, formatDuration } from '../../utils'
@@ -367,6 +367,9 @@ function PoliciesList({
   onSelectPolicy,
   onBack,
   isLoading,
+  hasNextPage,
+  isFetchingNextPage,
+  onLoadMore,
 }: {
   execution: ExecutionDto
   policies: PolicyDto[]
@@ -374,6 +377,9 @@ function PoliciesList({
   onSelectPolicy: (p: PolicyDto) => void
   onBack: () => void
   isLoading: boolean
+  hasNextPage: boolean
+  isFetchingNextPage: boolean
+  onLoadMore: () => void
 }) {
   const counts = useMemo(
     () => ({
@@ -478,6 +484,23 @@ function PoliciesList({
               </div>
             </button>
           ))
+        )}
+        {hasNextPage && (
+          <button
+            type="button"
+            onClick={onLoadMore}
+            disabled={isFetchingNextPage}
+            className="cursor-pointer w-full py-2 text-xs font-medium text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 flex items-center justify-center gap-1.5"
+          >
+            {isFetchingNextPage ? (
+              <>
+                <Loader2 className="w-3 h-3 animate-spin" />
+                Loading...
+              </>
+            ) : (
+              `Load more (${policies.length}/${execution.totalPolicies || '?'})`
+            )}
+          </button>
         )}
       </div>
     </div>
@@ -641,13 +664,32 @@ function HistoryPage() {
   )
   const hasLiveStream = stream !== null
 
-  // Fetch from DB: initial load + refetch on completion (no polling when WS is active)
-  const { data: dbPolicies = [], isLoading: isLoadingPolicies } = useQuery({
+  const PAGE_SIZE = 100
+
+  // Fetch from DB with pagination (live data comes via WS when available)
+  const {
+    data: policyPages,
+    isLoading: isLoadingPolicies,
+    fetchNextPage,
+    hasNextPage,
+    isFetchingNextPage,
+  } = useInfiniteQuery({
     queryKey: ['policies', selectedExecution?.id],
-    queryFn: () => apiGet<PolicyDto[]>(`/history/${selectedExecution?.id}/policies?limit=10000`),
+    queryFn: ({ pageParam }) =>
+      apiGet<PolicyDto[]>(
+        `/history/${selectedExecution?.id}/policies?limit=${PAGE_SIZE}&offset=${pageParam}`,
+      ),
+    initialPageParam: 0,
+    getNextPageParam: (lastPage, allPages) =>
+      lastPage.length < PAGE_SIZE ? undefined : allPages.length * PAGE_SIZE,
     enabled: !!selectedExecution,
     refetchInterval: isSelectedRunning && !hasLiveStream ? 2000 : false,
   })
+
+  const dbPolicies = useMemo(
+    () => policyPages?.pages.flat() ?? [],
+    [policyPages],
+  )
 
   // When stream completes, refetch from DB to get authoritative data
   const streamCompleted = stream?.completed ?? false
@@ -807,6 +849,9 @@ function HistoryPage() {
             onSelectPolicy={setSelectedPolicy}
             onBack={handleBackToList}
             isLoading={isLoadingPolicies}
+            hasNextPage={hasNextPage ?? false}
+            isFetchingNextPage={isFetchingNextPage}
+            onLoadMore={() => void fetchNextPage()}
           />
         ) : (
           <EmptyPanel message="Select an execution to view policies" />
