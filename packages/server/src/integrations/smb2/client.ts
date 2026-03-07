@@ -302,6 +302,7 @@ async function connectAndAuth(
 interface DfsTarget {
   server: string
   share: string
+  subPath: string // sub-path within the share (from network address)
   pathConsumed: number // number of UTF-16 chars consumed from request path
 }
 
@@ -398,23 +399,12 @@ async function resolveDfs(
     throw new Error(`DFS referral resolution failed for \\\\${host}\\${share}\\${filePathBs} (tried ${pathsToTry.length} paths)`)
   }
 
-  console.log(`[SMB2] DFS resolved "${matchedPath}" → \\\\${target.server}\\${target.share}`)
+  console.log(`[SMB2] DFS resolved "${matchedPath}" → \\\\${target.server}\\${target.share}${target.subPath ? '\\' + target.subPath : ''}`)
 
-  // Compute remaining file path: original path minus consumed prefix
-  const consumedChars = target.pathConsumed
-  const fullRequestPath = matchedPath
-  const consumedPrefix = fullRequestPath.substring(0, consumedChars)
-  // The file path portion that wasn't consumed by DFS
-  const remainingFromRequest = fullRequestPath.substring(consumedChars).replace(/^\\+/, '')
-  // Add back any path parts that weren't in the request (if we used a shorter path)
-  const requestedSubPath = fullRequestPath.substring(`\\${host}\\${share}`.length).replace(/^\\+/, '')
-  const fullSubPath = filePathBs
-  const unqueried = fullSubPath.substring(requestedSubPath.length).replace(/^\\+/, '')
-  let actualFilePath = remainingFromRequest
-    ? (unqueried ? `${remainingFromRequest}\\${unqueried}` : remainingFromRequest)
-    : (unqueried || filePathBs)
-
-  console.log(`[SMB2] DFS file path: "${actualFilePath}" (consumed=${consumedChars} chars from "${matchedPath}")`)
+  // Compute the file path on the target share:
+  // = target.subPath (from network address) + remaining from matched path after consumed + unqueried tail
+  let actualFilePath = computeTargetFilePath(target, matchedPath, host, share, filePathBs)
+  console.log(`[SMB2] DFS file path: "${actualFilePath}"`)
 
   // If target is a different server, close current and connect to target
   const rootTarget = target
@@ -455,16 +445,8 @@ async function resolveDfs(
 
     if (linkTarget) {
       // Recompute file path from link referral
-      const linkConsumed = linkTarget.pathConsumed
-      const linkMatchedPath = matchedPath
-      const linkRemaining = linkMatchedPath.substring(linkConsumed).replace(/^\\+/, '')
-      const linkRequestedSub = linkMatchedPath.substring(`\\${host}\\${share}`.length).replace(/^\\+/, '')
-      const linkUnqueried = filePathBs.substring(linkRequestedSub.length).replace(/^\\+/, '')
-      actualFilePath = linkRemaining
-        ? (linkUnqueried ? `${linkRemaining}\\${linkUnqueried}` : linkRemaining)
-        : (linkUnqueried || filePathBs)
-
-      console.log(`[SMB2] DFS link resolved "${linkMatchedPath}" → \\\\${linkTarget.server}\\${linkTarget.share}, file=${actualFilePath}`)
+      actualFilePath = computeTargetFilePath(linkTarget, matchedPath, host, share, filePathBs)
+      console.log(`[SMB2] DFS link resolved "${matchedPath}" → \\\\${linkTarget.server}\\${linkTarget.share}${linkTarget.subPath ? '\\' + linkTarget.subPath : ''}, file=${actualFilePath}`)
 
       // If link target is a different server, reconnect
       if (linkTarget.server.toLowerCase() !== rootTarget.server.toLowerCase()) {
@@ -490,6 +472,28 @@ async function resolveDfs(
   console.log(`[SMB2] Tree connected: ${targetSharePath}, treeId=${treeResp.treeId}`)
 
   return { transport, sessionId, signingKey, treeId: treeResp.treeId, filePath: actualFilePath }
+}
+
+/**
+ * Compute the actual file path on the target share.
+ * targetPath = subPath (from referral network address) + remaining after pathConsumed + unqueried tail
+ */
+function computeTargetFilePath(
+  target: DfsTarget,
+  matchedPath: string,
+  host: string,
+  share: string,
+  filePathBs: string,
+): string {
+  // What the DFS referral consumed from the request path
+  const remaining = matchedPath.substring(target.pathConsumed).replace(/^\\+/, '')
+  // What wasn't included in the request (if we used a shorter path for the referral)
+  const requestedSub = matchedPath.substring(`\\${host}\\${share}`.length).replace(/^\\+/, '')
+  const unqueried = filePathBs.substring(requestedSub.length).replace(/^\\+/, '')
+
+  // Build: subPath + remaining + unqueried
+  const parts = [target.subPath, remaining, unqueried].filter(Boolean)
+  return parts.join('\\') || filePathBs
 }
 
 function parseDfsReferralResponse(body: Buffer): DfsTarget {
@@ -551,6 +555,7 @@ function parseDfsReferralResponse(body: Buffer): DfsTarget {
   return {
     server: parts[0],
     share: parts[1] || '',
+    subPath: parts.slice(2).join('\\'), // sub-path within the share
     pathConsumed: pathConsumed / 2, // convert UTF-16LE bytes to chars
   }
 }
