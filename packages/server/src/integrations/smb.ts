@@ -51,8 +51,13 @@ export async function readSmbFile(config: SmbConfig, path: string): Promise<Buff
     const buffer = await tree.readFile('/' + relativePath)
     await client.close()
     return buffer
-  } catch (err) {
+  } catch (err: any) {
     try { await client.close() } catch { /* best effort */ }
-    throw new Error(`Failed to read SMB file ${path}: ${err}`)
+    // Library rejects with Response objects, not Errors
+    const status = err?.header?.status
+    const msg = status != null
+      ? `SMB2 status 0x${status.toString(16).padStart(8, '0')} at ${err?.request?.typeName ?? 'unknown'}`
+      : (err?.message ?? String(err))
+    throw new Error(`Failed to read SMB file ${path}: ${msg}`)
   }
 }
