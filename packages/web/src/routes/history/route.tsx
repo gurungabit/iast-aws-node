@@ -678,8 +678,16 @@ function HistoryPage() {
     getNextPageParam: (lastPage, allPages) =>
       lastPage.length < PAGE_SIZE ? undefined : allPages.length * PAGE_SIZE,
     enabled: !!selectedExecution,
-    refetchInterval: isSelectedRunning && !hasLiveStream ? 2000 : false,
+    refetchInterval: isSelectedRunning && !hasLiveStream ? 3000 : false,
   })
+
+  // Auto-load next pages for running executions using polling fallback
+  const autoLoadNextPage = hasNextPage && !isFetchingNextPage && isSelectedRunning && !hasLiveStream
+  useEffect(() => {
+    if (autoLoadNextPage) {
+      void fetchNextPage()
+    }
+  }, [autoLoadNextPage, fetchNextPage])
 
   const dbPolicies = useMemo(
     () => policyPages?.pages.flat() ?? [],

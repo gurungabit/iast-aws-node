@@ -57,8 +57,11 @@ export function useExecutionStream(
   sessionId: string | null,
   isRunning: boolean,
 ): ExecutionStreamResult | null {
-  const tabs = useSessionStore((s) => s.tabs)
-  const ws = sessionId ? (tabs.get(sessionId)?.ws ?? null) : null
+  // Targeted selector: only re-render when the WS instance itself changes,
+  // not on every screen update or other tab mutations.
+  const ws = useSessionStore((s) =>
+    sessionId ? (s.tabs.get(sessionId)?.ws ?? null) : null,
+  )
   const hasWs = ws !== null && isRunning && executionId !== null
 
   const [state, setState] = useState<StreamState>(INITIAL_STATE)
