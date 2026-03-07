@@ -21,6 +21,7 @@ import { getPolicyTypeFromPdq } from './policy-types.js'
 import { RoutScreen } from './rout-screen.js'
 import { readSmbFile } from '../../integrations/smb.js'
 import { config as serverConfig } from '../../config.js'
+import { DFS_SHARE } from '../../integrations/smb-paths.js'
 import { loadFromCache, writeToCache } from './cache.js'
 
 // Auth config for Fire system
@@ -266,19 +267,15 @@ async function prepareFrom412(
       reporter.reportProgress(0, 1, 'Resolving 412 file path...')
       const filePath = resolve412Path(config.oc, config.file412Path)
 
-      if (!serverConfig.smbShare) {
-        throw new Error('No 412 file source configured. Set SMB_SHARE or upload a file.')
-      }
-
       try {
         reporter.reportProgress(
           0,
           1,
-          `Downloading 412 file from ${serverConfig.smbShare}${filePath}...`,
+          `Downloading 412 file from ${filePath}...`,
         )
         const data = await readSmbFile(
           {
-            share: serverConfig.smbShare,
+            share: DFS_SHARE,
             domain: serverConfig.smbDomain,
             username: serverConfig.smbUsername,
             password: serverConfig.smbPassword,

@@ -7,6 +7,7 @@
 
 import type { RouteItem } from './models.js'
 import { getPolicyType } from './policy-types.js'
+import { FTP_412_PATH, FTP_412_CANADA_PATH } from '../../integrations/smb-paths.js'
 
 // Field specs: [fieldName, start1Based, length]
 const FIELD_SPECS: Array<[string, number, number]> = [
@@ -315,8 +316,6 @@ export function parse412File(fileContent: string, dateOfRun?: string): RouteItem
 export function resolve412Path(oc: string, customPath?: string): string {
   if (customPath) return customPath
   const filename = `R${oc}.fire.rw412.txt`
-  if (oc === '03') {
-    return `\\\\Opr.statefarm.org\\dfs\\ZONE\\CANADA\\WORKGROUP\\FTP\\FTP_412\\${filename}`
-  }
-  return `\\\\Opr.statefarm.org\\dfs\\CORP\\00\\WORKGROUP\\FTP\\FTP_412\\${filename}`
+  const basePath = oc === '03' ? FTP_412_CANADA_PATH : FTP_412_PATH
+  return `${basePath}\\${filename}`
 }

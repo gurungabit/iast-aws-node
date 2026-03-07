@@ -3,6 +3,8 @@ import type { ProgressReporter } from '../progress.js'
 import type { ASTContext } from '../executor.js'
 import { randomUUID } from 'crypto'
 import { Session } from '../session.js'
+import { config } from '../../config.js'
+import { DFS_SHARE, FTP_SHARE } from '../../integrations/smb-paths.js'
 
 /**
  * BI Renew AST - Automated Billing Invoice Renewal Processing
@@ -14,7 +16,6 @@ import { Session } from '../session.js'
  * 4. Processing eligible policies through the mainframe
  */
 
-// Auth config matching Python BiRenew class
 const AUTH_CONFIG = {
   expectedKeywords: ['Personal Queue Status', 'End Of Transaction'],
   application: 'AUTO04',
@@ -61,14 +62,10 @@ function transformBiRenewRecords(dbRecords: DbRecord[]): BiRenewItem[] {
       // Format PEND_DATE from "20251115" to "MM/DD/YYYY"
       let formattedDate = pendDate
       if (pendDate.length === 8) {
-        try {
-          const year = pendDate.slice(0, 4)
-          const month = pendDate.slice(4, 6)
-          const day = pendDate.slice(6, 8)
-          formattedDate = `${month}/${day}/${year}`
-        } catch {
-          // keep original
-        }
+        const year = pendDate.slice(0, 4)
+        const month = pendDate.slice(4, 6)
+        const day = pendDate.slice(6, 8)
+        formattedDate = `${month}/${day}/${year}`
       }
 
       result.push({
@@ -161,6 +158,27 @@ function filterProcessableItems(items: BiRenewItem[]): BiRenewItem[] {
   return items.filter((item) => !item.PolicyStatus)
 }
 
+function getDb2Config() {
+  return {
+    database: config.db2Database,
+    hostname: config.db2Hostname,
+    port: config.db2Port,
+    protocol: config.db2Protocol,
+    uid: config.db2Uid,
+    pwd: config.db2Pwd,
+    schema: config.db2Schema,
+  }
+}
+
+function getSmbConfig(username: string, password: string) {
+  return {
+    share: DFS_SHARE,
+    domain: config.smbDomain || 'statefarm',
+    username: config.smbUsername || username,
+    password: config.smbPassword || password,
+  }
+}
+
 export async function runBiRenewAST(
   ati: Ati,
   params: Record<string, unknown>,
@@ -193,15 +211,10 @@ export async function runBiRenewAST(
   let excludedRecords: Array<{ POLICY: string }> = []
 
   try {
-    // Import dynamically to keep the integration isolated
     const { readSmbFile } = await import('../../integrations/smb.js')
-    const smbConfig = {
-      share: `\\\\Opr.statefarm.org\\dfs\\CORP\\${officeCode}`,
-      domain: 'statefarm',
-      username,
-      password,
-    }
-    const reportData = await readSmbFile(smbConfig, `WORKGROUP/RW1AA271_${officeCode}.csv`)
+    const smbConfig = getSmbConfig(username, password)
+    const reportPath = `${FTP_SHARE}\\RW1AA271_${officeCode}.csv`
+    const reportData = await readSmbFile(smbConfig, reportPath)
     const reportText = reportData.toString('utf-8')
 
     // Parse CSV-like report data into records
@@ -241,27 +254,11 @@ export async function runBiRenewAST(
   let dbRecords: DbRecord[] = []
 
   try {
-    const { queryDb2 } = await import('../../integrations/db2.js')
-    const db2Config = {
-      hostname: process.env.DB2_HOSTNAME ?? 'localhost',
-      port: Number(process.env.DB2_PORT ?? 50000),
-      database: process.env.DB2_DATABASE ?? 'SAMPLE',
-      username: process.env.DB2_USERNAME ?? username,
-      password: process.env.DB2_PASSWORD ?? password,
-    }
-    const results = (await queryDb2(
-      db2Config,
-      `SELECT PEND_KEY, PEND_INFO, PEND_DATE
-       FROM RU99.NZ490
-       WHERE PART_KEY = '0'
-         AND DATE_PROCESSED = ?
-         AND PEND_CODE = '21'
-         AND PEND_INFO = 'BI_RENEW'
-         AND DATE_DELETED IS NULL
-       WITH UR`,
-      [prevBusinessDate],
-    )) as unknown as DbRecord[]
-    dbRecords = results
+    const { getBiRenewPendingRecords } = await import(
+      '../../integrations/ibmdb/bi-renew-queries.js'
+    )
+    const db2Config = getDb2Config()
+    dbRecords = await getBiRenewPendingRecords(db2Config, prevBusinessDate)
     reporter.reportProgress(0, 1, `Retrieved ${dbRecords.length} BI_RENEW records`)
   } catch {
     reporter.reportProgress(0, 1, 'DB2 unavailable, using policy list from params')
