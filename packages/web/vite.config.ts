@@ -13,17 +13,6 @@ export default defineConfig({
   server: {
     proxy: {
       '/api': 'http://localhost:3000',
-      '/health': 'http://localhost:3000',
-      '/ping': 'http://localhost:3000',
-      '/metrics': 'http://localhost:3000',
-      '/auth': 'http://localhost:3000',
-      '/sessions': 'http://localhost:3000',
-      '/history': 'http://localhost:3000',
-      '/ast-configs': 'http://localhost:3000',
-      '/auto-launchers': 'http://localhost:3000',
-      '/auto-launcher-runs': 'http://localhost:3000',
-      '/schedules': 'http://localhost:3000',
-      '/docs': 'http://localhost:3000',
     },
   },
 })

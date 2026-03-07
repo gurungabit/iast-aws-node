@@ -35,12 +35,16 @@ export function App() {
   )
 }
 
-// MSAL must be initialized before rendering — ensures cached accounts
-// are loaded so direct navigation to any route works.
-msalInstance.initialize().then(() => {
-  createRoot(document.getElementById('root')!).render(
-    <StrictMode>
-      <App />
-    </StrictMode>,
-  )
-})
+// MSAL must fully initialize and process any cached/redirect auth
+// before rendering — otherwise direct navigation fires API calls
+// before accounts are available, causing 401s.
+msalInstance
+  .initialize()
+  .then(() => msalInstance.handleRedirectPromise())
+  .then(() => {
+    createRoot(document.getElementById('root')!).render(
+      <StrictMode>
+        <App />
+      </StrictMode>,
+    )
+  })
