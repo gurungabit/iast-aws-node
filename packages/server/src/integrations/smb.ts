@@ -1,10 +1,9 @@
 /**
  * SMB file access for 412 files.
- * Pure-JS SMB2 client — connects directly to SMB share over the network.
- * Works cross-platform without any CLI dependency.
+ * Uses @awo00/smb2 library for NTLM-authenticated SMB2 connections.
  */
 
-import { SMB2Client } from './smb2/index.js'
+import { Client } from '@awo00/smb2'
 
 export interface SmbConfig {
   share: string
@@ -14,7 +13,7 @@ export interface SmbConfig {
 }
 
 /**
- * Read a file from an SMB share using the built-in SMB2 client.
+ * Read a file from an SMB share.
  */
 export async function readSmbFile(config: SmbConfig, path: string): Promise<Buffer> {
   // Parse share: //server/sharename or \\server\sharename
@@ -33,7 +32,7 @@ export async function readSmbFile(config: SmbConfig, path: string): Promise<Buff
     ? normalizedPath.slice(sharePrefix.length)
     : normalizedPath.replace(/^\/+/, '')
 
-  // Handle DOMAIN\username format — split into separate domain and username
+  // Handle DOMAIN\username format
   let username = config.username
   let domain = config.domain || ''
   if (username.includes('\\')) {
@@ -44,19 +43,16 @@ export async function readSmbFile(config: SmbConfig, path: string): Promise<Buff
 
   console.log(`[SMB] host=${host}, share=${shareName}, relative="${relativePath}", user=${username}, domain=${domain}`)
 
-  const client = new SMB2Client()
+  const client = new Client(host, { requestTimeout: 30_000 })
   try {
-    await client.connect({
-      host,
-      share: shareName,
-      domain: domain || undefined,
-      username,
-      password: config.password,
-    })
-    return await client.readFile(relativePath)
+    await client.connect()
+    const session = await client.authenticate({ domain, username, password: config.password })
+    const tree = await session.connectTree(shareName)
+    const buffer = await tree.readFile('/' + relativePath)
+    await client.close()
+    return buffer
   } catch (err) {
+    try { await client.close() } catch { /* best effort */ }
     throw new Error(`Failed to read SMB file ${path}: ${err}`)
-  } finally {
-    await client.disconnect()
   }
 }
