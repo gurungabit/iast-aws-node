@@ -12,6 +12,7 @@ import {
 } from 'lucide-react'
 import { Modal } from '../../components/ui/Modal'
 import { Button } from '../../components/ui/Button'
+import { DatePicker } from '../../components/ui/DatePicker'
 import { apiPost } from '../../services/api'
 import { cn } from '../../utils'
 
@@ -476,7 +477,26 @@ export function DataInquiryModal({ isOpen, onClose }: DataInquiryModalProps): Re
           {/* Row 2 */}
           {renderText('Policy Type', 'policyType', '*')}
           {renderSelect('Status', 'status', STATUS_OPTIONS)}
-          {renderText('Date (mm/dd/yy)', 'gfuDate')}
+          <div>
+            <label className={labelCls}>Date</label>
+            <div className="flex items-center gap-1">
+              <DatePicker
+                value={filters.gfuDate || undefined}
+                onChange={(v) => setFilter('gfuDate', v)}
+                allowFuture
+                className="flex-1 [&_button]:py-1.5 [&_button]:text-sm [&_button]:rounded-md [&_button]:rounded-lg!"
+              />
+              {filters.gfuDate && (
+                <button
+                  type="button"
+                  onClick={() => setFilter('gfuDate', '')}
+                  className="p-1 rounded-md text-gray-400 hover:text-gray-600 dark:hover:text-zinc-300 hover:bg-gray-100 dark:hover:bg-zinc-800 transition-colors"
+                >
+                  <X className="h-3.5 w-3.5" />
+                </button>
+              )}
+            </div>
+          </div>
           {renderText('GFU Code', 'gfuCode', '*')}
 
           {/* Row 3 */}
