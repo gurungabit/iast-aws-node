@@ -28,6 +28,7 @@ import { StatusLogList } from '../../components/ui/StatusLogList'
 import { ItemResultList } from '../../components/ui/ItemResultList'
 
 import { useASTStore, type AutoLauncherStepState } from '../../stores/ast-store'
+import { formatDuration } from '../../utils'
 import { useAutoLauncherDraftStore, type DraftStep } from '../../stores/auto-launcher-draft-store'
 import { useAuth } from '../../auth/useAuth'
 import { CredentialsInput } from '../shared/CredentialsInput'
@@ -804,12 +805,19 @@ const AutoLauncherLiveOutput = memo(function AutoLauncherLiveOutput(props: { tab
             <div className="text-xs font-medium text-gray-700 dark:text-zinc-300">
               {autoLauncherRun.displayName ?? 'AutoLauncher'} — Steps
             </div>
-            <div className={`text-[11px] font-medium ${
-              autoLauncherRun.status === 'completed' ? 'text-green-600 dark:text-green-400'
-              : autoLauncherRun.status === 'failed' ? 'text-red-600 dark:text-red-400'
-              : 'text-blue-600 dark:text-blue-400'
-            }`}>
-              {autoLauncherRun.status}
+            <div className="flex items-center gap-2">
+              {autoLauncherRun.startedAt && autoLauncherRun.completedAt && (
+                <div className="text-[11px] text-gray-500 dark:text-zinc-500">
+                  {formatDuration(autoLauncherRun.completedAt - autoLauncherRun.startedAt)}
+                </div>
+              )}
+              <div className={`text-[11px] font-medium ${
+                autoLauncherRun.status === 'completed' ? 'text-green-600 dark:text-green-400'
+                : autoLauncherRun.status === 'failed' ? 'text-red-600 dark:text-red-400'
+                : 'text-blue-600 dark:text-blue-400'
+              }`}>
+                {autoLauncherRun.status}
+              </div>
             </div>
           </div>
 
@@ -912,7 +920,14 @@ function StepStatusRow(props: {
           <div className="text-[11px] text-red-700 dark:text-red-400 truncate">{step.error}</div>
         )}
       </div>
-      <div className={`text-xs font-medium flex-shrink-0 ${statusClass}`}>{statusText}</div>
+      <div className="flex items-center gap-2 flex-shrink-0">
+        {step.startedAt && step.completedAt && (
+          <div className="text-[11px] text-gray-500 dark:text-zinc-500">
+            {formatDuration(step.completedAt - step.startedAt)}
+          </div>
+        )}
+        <div className={`text-xs font-medium ${statusClass}`}>{statusText}</div>
+      </div>
     </div>
   )
 }

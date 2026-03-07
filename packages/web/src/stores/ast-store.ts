@@ -15,6 +15,8 @@ export interface AutoLauncherStepState {
   stepLabel?: string
   taskLabel?: string | null
   configName?: string
+  startedAt?: number
+  completedAt?: number
 }
 
 export interface AutoLauncherRunState {
@@ -26,6 +28,8 @@ export interface AutoLauncherRunState {
   lastError?: string
   source: AutoLauncherRunSource
   displayName?: string
+  startedAt?: number
+  completedAt?: number
 }
 
 // Tab state
@@ -224,7 +228,7 @@ export const useASTStore = create<ASTStore>((set) => ({
         const currentIdx = run.nextStepIndex
 
         if (info.status === 'running' && currentIdx < steps.length) {
-          steps[currentIdx] = { ...steps[currentIdx], status: 'running' }
+          steps[currentIdx] = { ...steps[currentIdx], status: 'running', startedAt: Date.now() }
         } else if (info.status === 'completed' && currentIdx < steps.length) {
           steps[currentIdx] = { ...steps[currentIdx], status: 'success' }
           run.nextStepIndex = currentIdx + 1
@@ -284,18 +288,21 @@ export const useASTStore = create<ASTStore>((set) => ({
         const idx = run.nextStepIndex
 
         if (idx < steps.length) {
+          const now = Date.now()
           if (result.status === 'completed') {
-            steps[idx] = { ...steps[idx], status: 'success' }
+            steps[idx] = { ...steps[idx], status: 'success', completedAt: now }
             run.nextStepIndex = idx + 1
             if (run.nextStepIndex >= steps.length) {
               run.status = 'completed'
+              run.completedAt = now
             } else {
               // More steps to go — keep tab status as 'running'
               keepRunning = true
             }
           } else if (result.status === 'failed' || result.status === 'cancelled') {
-            steps[idx] = { ...steps[idx], status: 'failed', error: result.message }
+            steps[idx] = { ...steps[idx], status: 'failed', error: result.message, completedAt: now }
             run.status = 'failed'
+            run.completedAt = now
             run.lastError = result.message
           }
         }
@@ -364,6 +371,7 @@ export const useASTStore = create<ASTStore>((set) => ({
         launcherId: config.launcherId,
         status: 'running',
         nextStepIndex: 0,
+        startedAt: Date.now(),
         steps: config.steps.map((s) => ({
           astName: s.astName,
           configId: s.configId,
