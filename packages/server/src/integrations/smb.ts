@@ -41,8 +41,6 @@ export async function readSmbFile(config: SmbConfig, path: string): Promise<Buff
     username = parts2[1]
   }
 
-  console.log(`[SMB] host=${host}, share=${shareName}, relative="${relativePath}", user=${username}, domain=${domain}`)
-
   try {
     return await readFile({
       host,
@@ -51,7 +49,7 @@ export async function readSmbFile(config: SmbConfig, path: string): Promise<Buff
       username,
       password: config.password,
     }, relativePath)
-  } catch (err: any) {
-    throw new Error(`Failed to read SMB file ${path}: ${err.message ?? String(err)}`)
+  } catch (err) {
+    throw new Error(`Failed to read SMB file ${path}: ${err instanceof Error ? err.message : String(err)}`)
   }
 }

@@ -66,18 +66,25 @@ export const executionService = {
   async batchInsertPolicies(executionId: string, items: ASTItemResult[]) {
     if (items.length === 0) return
 
-    const values = items.map((item) => ({
-      executionId,
-      policyNumber: item.policyNumber,
-      status: item.status,
-      durationMs: item.durationMs,
-      error: item.error ?? null,
-      data: item.data ?? null,
-    }))
+    // Only insert policies that don't need PDQ enrichment
+    const insertable = items.filter(
+      (item) => !(item.data as Record<string, unknown> | null)?.needsPdqEnrichment,
+    )
 
-    await db.insert(policyResults).values(values)
+    if (insertable.length > 0) {
+      const values = insertable.map((item) => ({
+        executionId,
+        policyNumber: item.policyNumber,
+        status: item.status,
+        durationMs: item.durationMs,
+        error: item.error ?? null,
+        data: item.data ?? null,
+      }))
 
-    // Update counts on execution
+      await db.insert(policyResults).values(values)
+    }
+
+    // Update counts based on ALL items (including PDQ ones)
     const successCount = items.filter((i) => i.status === 'success').length
     const failureCount = items.filter((i) => i.status === 'failure').length
     const errorCount = items.filter((i) => i.status === 'error').length

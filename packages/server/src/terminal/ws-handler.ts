@@ -35,16 +35,38 @@ const MY_POD_IP = config.podIp
 function attachLocal(
   socket: WebSocket,
   sessionId: string,
+  userId: string,
   pendingMessages?: unknown[],
 ) {
   const worker = terminalManager.getOrCreateWorker(sessionId)
   terminalManager.attachWebSocket(sessionId, socket as never)
 
-  // Browser → Worker
+  // Browser → Worker (intercept ast.run to create execution record)
+  const forwardToWorker = async (msg: Record<string, unknown>) => {
+    if (msg.type === 'ast.run') {
+      const executionId = `exec_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
+      const today = new Date().toISOString().slice(0, 10)
+      try {
+        await executionService.create({
+          id: executionId,
+          sessionId,
+          userId,
+          astName: String(msg.astName),
+          executionDate: today,
+        })
+      } catch (err) {
+        console.error('Failed to create execution:', err instanceof Error ? err.message : String(err))
+      }
+      worker.postMessage({ ...msg, executionId })
+    } else {
+      worker.postMessage(msg)
+    }
+  }
+
   socket.on('message', (data) => {
     try {
       const msg = JSON.parse(String(data))
-      worker.postMessage(msg)
+      forwardToWorker(msg).catch(() => {})
     } catch {
       // ignore malformed
     }
@@ -56,7 +78,13 @@ function attachLocal(
       if (msg.type === 'ast.item_result_batch') {
         executionService
           .batchInsertPolicies(msg.executionId, msg.items)
-          .catch((err) => console.error('Failed to persist policies:', err))
+          .catch((err) => {
+            // Log only the root cause — DrizzleQueryError.message includes full query + params (PII)
+            const cause = err instanceof Error && 'cause' in err && err.cause instanceof Error
+              ? err.cause.message
+              : ''
+            console.error(`Failed to persist policies: ${cause || (err instanceof Error ? err.constructor.name : 'unknown error')}`)
+          })
       }
       if (msg.type === 'error') {
         console.error(`[worker:${sessionId}] ${msg.message}`)
@@ -214,7 +242,7 @@ export async function terminalWsRoutes(app: FastifyInstance) {
 
       // Fast path: session is on this pod
       if (ownerPodIp === MY_POD_IP) {
-        attachLocal(wsSocket, sessionId, pendingMessages)
+        attachLocal(wsSocket, sessionId, userId, pendingMessages)
         return
       }
 
@@ -242,7 +270,7 @@ export async function terminalWsRoutes(app: FastifyInstance) {
           await registerSessionAssignment(sessionId, newPodIp, userId)
 
           if (newPodIp === MY_POD_IP) {
-            attachLocal(wsSocket, sessionId, pendingMessages)
+            attachLocal(wsSocket, sessionId, userId, pendingMessages)
           } else {
             try {
               await proxyToRemotePod(wsSocket, newPodIp, sessionId, app)
@@ -283,7 +311,9 @@ export async function terminalWsRoutes(app: FastifyInstance) {
     { websocket: true },
     async (socket, _req) => {
       const sessionId = (_req.params as { sessionId: string }).sessionId
-      attachLocal(socket as unknown as WebSocket, sessionId)
+      const assignment = await getSessionAssignment(sessionId)
+      const userId = assignment?.userId ?? 'unknown'
+      attachLocal(socket as unknown as WebSocket, sessionId, userId)
     },
   )
 }
