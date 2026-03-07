@@ -297,7 +297,7 @@ export class RoutScreen {
       }
 
       // PDQControl -> PDQName
-      await this.session.waitForKeyboard(1)
+      // await this.session.waitForKeyboard(1)
       await this.session.fillFieldAtPosition(6, 10, ho)
       await this.session.fillFieldAtPosition(6, 12, term)
       await this.session.fillFieldAtPosition(6, 17, pui)
