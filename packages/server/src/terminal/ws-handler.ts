@@ -130,6 +130,12 @@ function attachLocal(
       if (msg.type === 'ast.complete') {
         // Flush remaining items before completion
         flushDbBuffer()
+        // Update execution status in DB
+        executionService.updateStatus(msg.executionId, msg.status).catch((err) => {
+          console.error(
+            `Failed to update execution status: ${err instanceof Error ? err.message : String(err)}`,
+          )
+        })
         if (msg.status === 'failed') {
           console.error(`[worker:${sessionId}] AST failed: ${msg.error}`)
         }
