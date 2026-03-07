@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { renderHook, act } from '@testing-library/react'
 import { useExecutionStream } from '../../src/hooks/useExecutionStream'
 import type { ServerMessage } from '../../src/services/websocket'
@@ -13,7 +13,12 @@ vi.mock('../../src/stores/session-store', () => ({
 
 describe('useExecutionStream', () => {
   beforeEach(() => {
+    vi.useFakeTimers()
     mockTabs.clear()
+  })
+
+  afterEach(() => {
+    vi.useRealTimers()
   })
 
   it('returns null when no WS connection exists', () => {
@@ -41,7 +46,7 @@ describe('useExecutionStream', () => {
     expect(result.current).toBeNull()
   })
 
-  it('streams live policy results from WS', () => {
+  it('streams live policy results from WS after throttle', () => {
     let handler: ((msg: ServerMessage) => void) | null = null
     const onMessage = vi.fn((h: (msg: ServerMessage) => void) => {
       handler = h
@@ -57,6 +62,7 @@ describe('useExecutionStream', () => {
     expect(result.current?.livePolicies).toHaveLength(0)
     expect(onMessage).toHaveBeenCalled()
 
+    // Send items — not yet flushed
     act(() => {
       handler?.({
         type: 'ast.item_result_batch',
@@ -66,6 +72,14 @@ describe('useExecutionStream', () => {
           { id: 'p2', policyNumber: 'POL002', status: 'failure', durationMs: 800, error: 'timeout' },
         ],
       })
+    })
+
+    // Before throttle fires, still empty
+    expect(result.current?.livePolicies).toHaveLength(0)
+
+    // Advance timer to flush
+    act(() => {
+      vi.advanceTimersByTime(300)
     })
 
     expect(result.current?.livePolicies).toHaveLength(2)
@@ -94,12 +108,13 @@ describe('useExecutionStream', () => {
         executionId: 'exec-other',
         items: [{ id: 'p1', policyNumber: 'POL001', status: 'success', durationMs: 100 }],
       })
+      vi.advanceTimersByTime(300)
     })
 
     expect(result.current?.livePolicies).toHaveLength(0)
   })
 
-  it('tracks completion status', () => {
+  it('tracks completion status immediately (no throttle)', () => {
     let handler: ((msg: ServerMessage) => void) | null = null
     mockTabs.set('session-1', {
       ws: {
@@ -124,11 +139,12 @@ describe('useExecutionStream', () => {
       })
     })
 
+    // Completion flushes immediately
     expect(result.current?.completed).toBe(true)
     expect(result.current?.completedStatus).toBe('completed')
   })
 
-  it('tracks progress updates', () => {
+  it('tracks progress updates after throttle', () => {
     let handler: ((msg: ServerMessage) => void) | null = null
     mockTabs.set('session-1', {
       ws: {
@@ -148,6 +164,7 @@ describe('useExecutionStream', () => {
         type: 'ast.progress',
         progress: { current: 5, total: 10, message: 'Processing...' },
       })
+      vi.advanceTimersByTime(300)
     })
 
     expect(result.current?.progress).toEqual({
@@ -200,9 +217,52 @@ describe('useExecutionStream', () => {
         executionId: 'exec-1',
         items: [{ id: 'p1', policyNumber: 'POL001', status: 'failure', durationMs: 200 }],
       })
+      vi.advanceTimersByTime(300)
     })
 
     expect(result.current?.livePolicies).toHaveLength(1)
     expect(result.current?.livePolicies[0].status).toBe('failure')
+  })
+
+  it('batches multiple rapid updates into single flush', () => {
+    let handler: ((msg: ServerMessage) => void) | null = null
+    mockTabs.set('session-1', {
+      ws: {
+        onMessage: vi.fn((h: (msg: ServerMessage) => void) => {
+          handler = h
+          return vi.fn()
+        }),
+      },
+    })
+
+    const { result } = renderHook(() =>
+      useExecutionStream('exec-1', 'session-1', true),
+    )
+
+    // Rapid-fire 100 progress + item messages
+    act(() => {
+      for (let i = 0; i < 100; i++) {
+        handler?.({
+          type: 'ast.progress',
+          progress: { current: i, total: 100, message: `Item ${i}` },
+        })
+        handler?.({
+          type: 'ast.item_result_batch',
+          executionId: 'exec-1',
+          items: [{ id: `p${i}`, policyNumber: `POL${i}`, status: 'success', durationMs: 10 }],
+        })
+      }
+    })
+
+    // Before flush: still no data
+    expect(result.current?.livePolicies).toHaveLength(0)
+
+    // Single flush gets all 100 items
+    act(() => {
+      vi.advanceTimersByTime(300)
+    })
+
+    expect(result.current?.livePolicies).toHaveLength(100)
+    expect(result.current?.progress?.current).toBe(99)
   })
 })

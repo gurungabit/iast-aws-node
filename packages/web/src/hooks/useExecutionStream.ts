@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import { useSessionStore } from '../stores/session-store'
 import type { ServerMessage, ASTItemResult } from '../services/websocket'
 
@@ -45,6 +45,9 @@ const INITIAL_STATE: StreamState = {
   progress: null,
 }
 
+// Throttle UI updates to max ~4/sec to avoid freezing on high-throughput ASTs
+const THROTTLE_MS = 250
+
 /**
  * Subscribes to a session's WebSocket to stream live execution updates.
  * Returns null if the session has no active WS connection (caller should fallback to polling).
@@ -59,40 +62,77 @@ export function useExecutionStream(
   const hasWs = ws !== null && isRunning && executionId !== null
 
   const [state, setState] = useState<StreamState>(INITIAL_STATE)
+  const flushTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
-  // Subscribe to WS messages
+  // Subscribe to WS messages with throttled state updates
   useEffect(() => {
     if (!ws || !executionId || !isRunning) return
 
     const policyMap = new Map<string, LivePolicy>()
+    let dirty = false
+    let pendingProgress: { current: number; total: number; message: string } | null = null
+    let pendingCompleted = false
+    let pendingCompletedStatus: string | null = null
+
+    const flushToState = () => {
+      flushTimerRef.current = null
+      if (!dirty && !pendingProgress && !pendingCompleted) return
+
+      setState((prev) => {
+        const next: StreamState = {
+          ...prev,
+          execId: executionId,
+        }
+        if (dirty) {
+          next.policies = Array.from(policyMap.values())
+          dirty = false
+        }
+        if (pendingProgress) {
+          next.progress = pendingProgress
+          pendingProgress = null
+        }
+        if (pendingCompleted) {
+          next.completed = true
+          next.completedStatus = pendingCompletedStatus
+        }
+        return next
+      })
+    }
+
+    const scheduleFlush = () => {
+      if (flushTimerRef.current === null) {
+        flushTimerRef.current = setTimeout(flushToState, THROTTLE_MS)
+      }
+    }
 
     const cleanup = ws.onMessage((msg: ServerMessage) => {
       if (msg.type === 'ast.item_result_batch' && msg.executionId === executionId) {
         for (const item of msg.items) {
           policyMap.set(item.id, mapItemToPolicy(item))
         }
-        setState((prev) => ({
-          ...prev,
-          execId: executionId,
-          policies: Array.from(policyMap.values()),
-        }))
+        dirty = true
+        scheduleFlush()
       } else if (msg.type === 'ast.complete' && msg.executionId === executionId) {
-        setState((prev) => ({
-          ...prev,
-          execId: executionId,
-          completed: true,
-          completedStatus: msg.status,
-        }))
+        pendingCompleted = true
+        pendingCompletedStatus = msg.status
+        // Flush immediately on completion
+        if (flushTimerRef.current !== null) {
+          clearTimeout(flushTimerRef.current)
+        }
+        flushToState()
       } else if (msg.type === 'ast.progress') {
-        setState((prev) => ({
-          ...prev,
-          execId: executionId,
-          progress: msg.progress,
-        }))
+        pendingProgress = msg.progress
+        scheduleFlush()
       }
     })
 
-    return cleanup
+    return () => {
+      cleanup()
+      if (flushTimerRef.current !== null) {
+        clearTimeout(flushTimerRef.current)
+        flushTimerRef.current = null
+      }
+    }
   }, [ws, executionId, isRunning])
 
   if (!hasWs) return null
