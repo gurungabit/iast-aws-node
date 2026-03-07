@@ -479,7 +479,7 @@ function parseDfsReferralResponse(body: Buffer): DfsTarget {
       const specialNameOffset = output.readUInt16LE(entryStart + 12)
       networkAddress = readUtf16NullTerminated(output, entryStart + specialNameOffset)
     } else {
-      const netAddrOffset = output.readUInt16LE(entryStart + 18)
+      const netAddrOffset = output.readUInt16LE(entryStart + 16)
       networkAddress = readUtf16NullTerminated(output, entryStart + netAddrOffset)
     }
   } else if (version === 1) {
