@@ -181,11 +181,13 @@ function ExecutionListItem({
   isSelected,
   onClick,
   compact = false,
+  stepIndex,
 }: {
   execution: ExecutionDto
   isSelected: boolean
   onClick: () => void
   compact?: boolean
+  stepIndex?: number
 }) {
   const startTime = new Date(execution.startedAt)
   const fmtTime = (date: Date) =>
@@ -213,9 +215,11 @@ function ExecutionListItem({
             compact ? 'text-xs' : 'text-sm',
           )}
         >
-          {execution.configName
-            ? `${execution.configName} (${execution.astName})`
-            : execution.astName}
+          {stepIndex != null
+            ? `Step ${stepIndex + 1}: ${execution.configName ?? execution.astName}`
+            : execution.configName
+              ? `${execution.configName} (${execution.astName})`
+              : execution.astName}
         </span>
         <span
           className={cn(
@@ -344,13 +348,14 @@ function RunGroupRow({
       </button>
       {!collapsed && (
         <div className="pl-4 space-y-1">
-          {group.executions.map((exec) => (
+          {group.executions.map((exec, idx) => (
             <ExecutionListItem
               key={exec.id}
               execution={exec}
               isSelected={selectedExecutionId === exec.id}
               onClick={() => onSelectExecution(exec)}
               compact
+              stepIndex={idx}
             />
           ))}
         </div>
