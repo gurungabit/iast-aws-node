@@ -639,6 +639,7 @@ export async function readFile(config: Smb2ClientConfig, filePath: string): Prom
     const chunks: Buffer[] = []
     let readOffset = 0
     const maxReadSize = 65536
+    let lastProgressMb = 0
 
     while (readOffset < fileSize) {
       const readLen = Math.min(maxReadSize, fileSize - readOffset)
@@ -653,6 +654,13 @@ export async function readFile(config: Smb2ClientConfig, filePath: string): Prom
       const dataLength = readResp.body.readUInt32LE(4)
       chunks.push(Buffer.from(readResp.body.subarray(dataOffset, dataOffset + dataLength)))
       readOffset += dataLength
+
+      const currentMb = Math.floor(readOffset / (10 * 1024 * 1024))
+      if (currentMb > lastProgressMb) {
+        lastProgressMb = currentMb
+        const pct = ((readOffset / fileSize) * 100).toFixed(1)
+        console.log(`[SMB2] Download progress: ${(readOffset / 1024 / 1024).toFixed(1)} MB / ${(fileSize / 1024 / 1024).toFixed(1)} MB (${pct}%)`)
+      }
     }
 
     // ── Close ──
