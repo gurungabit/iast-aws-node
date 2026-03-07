@@ -4,7 +4,7 @@
  */
 
 import { Socket } from 'net'
-import { createType1, createType3, extractNtlmToken } from './ntlm.js'
+import { createType1, createType3, extractNtlmToken, wrapSpnego, wrapSpnegoAuth } from './ntlm.js'
 
 // SMB2 command codes
 const SMB2_NEGOTIATE = 0x0000
@@ -311,25 +311,25 @@ export class SMB2Client {
   }
 
   private async sessionSetup(username: string, password: string, domain: string, hostname: string): Promise<void> {
-    // Round 1: Send raw NTLM Type 1 (no SPNEGO wrapping, matching reference)
+    // Round 1: SPNEGO-wrapped NTLM Type 1
     const type1 = createType1()
-    const setup1 = this.buildSessionSetup(type1)
+    const setup1 = this.buildSessionSetup(wrapSpnego(type1))
     const response1 = await this.sendRequest(SMB2_SESSION_SETUP, setup1)
     this.checkStatus(response1, [STATUS_MORE_PROCESSING_REQUIRED], 'session setup (NTLM negotiate)')
 
     // Extract session ID from response
     this.sessionId = response1.readBigUInt64LE(40)
 
-    // Extract NTLM Type 2 from response (may be raw NTLM or SPNEGO-wrapped)
+    // Extract NTLM Type 2 from SPNEGO response
     const secBufOffset1 = response1.readUInt16LE(SMB2_HEADER_SIZE + 4)
     const secBufLen1 = response1.readUInt16LE(SMB2_HEADER_SIZE + 6)
     const responseBuf = response1.subarray(secBufOffset1, secBufOffset1 + secBufLen1)
     const type2 = extractNtlmToken(responseBuf)
     console.log(`[SMB2] Type2: ${type2.length}b, flags=0x${type2.readUInt32LE(20).toString(16)}`)
 
-    // Round 2: Send raw NTLM Type 3 (no SPNEGO wrapping)
+    // Round 2: SPNEGO-wrapped NTLM Type 3
     const type3 = createType3(type1, type2, username, password, domain, hostname)
-    const setup2 = this.buildSessionSetup(type3)
+    const setup2 = this.buildSessionSetup(wrapSpnegoAuth(type3))
     const response2 = await this.sendRequest(SMB2_SESSION_SETUP, setup2)
     this.checkStatus(response2, [STATUS_SUCCESS], 'session setup (NTLM authenticate)')
   }

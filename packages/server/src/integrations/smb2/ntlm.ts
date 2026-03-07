@@ -142,6 +142,55 @@ export function extractNtlmToken(buf: Buffer): Buffer {
   return Buffer.from(buf.subarray(idx))
 }
 
+// --- SPNEGO / GSS-API wrapping ---
+
+/** Wrap NTLM Type 1 in SPNEGO NegTokenInit */
+export function wrapSpnego(ntlmToken: Buffer): Buffer {
+  const mechType = Buffer.from([
+    0x06, 0x0a, 0x2b, 0x06, 0x01, 0x04, 0x01, 0x82, 0x37, 0x02, 0x02, 0x0a,
+  ]) // OID 1.3.6.1.4.1.311.2.2.10 (NTLMSSP)
+
+  // mechTypes [0] MechTypeList (SEQUENCE OF OID)
+  const mechTypes = asn1Wrap(0xa0, asn1Wrap(0x30, mechType))
+  // mechToken [2] OCTET STRING
+  const mechTokenField = asn1Wrap(0xa2, asn1Wrap(0x04, ntlmToken))
+  // NegTokenInit SEQUENCE
+  const negTokenInit = asn1Wrap(0x30, Buffer.concat([mechTypes, mechTokenField]))
+  // [0] explicit tag
+  const contextTag = asn1Wrap(0xa0, negTokenInit)
+  // Application [0] with SPNEGO OID
+  const spnegoOid = Buffer.from([0x06, 0x06, 0x2b, 0x06, 0x01, 0x05, 0x05, 0x02])
+  return asn1Wrap(0x60, Buffer.concat([spnegoOid, contextTag]))
+}
+
+/** Wrap NTLM Type 3 in SPNEGO NegTokenResp */
+export function wrapSpnegoAuth(ntlmToken: Buffer): Buffer {
+  const mechTokenWrapped = asn1Wrap(0xa2, asn1Wrap(0x04, ntlmToken))
+  return asn1Wrap(0xa1, asn1Wrap(0x30, mechTokenWrapped))
+}
+
+function asn1Wrap(tag: number, data: Buffer): Buffer {
+  const len = data.length
+  let header: Buffer
+  if (len < 128) {
+    header = Buffer.from([tag, len])
+  } else if (len < 256) {
+    header = Buffer.from([tag, 0x81, len])
+  } else if (len < 65536) {
+    header = Buffer.alloc(4)
+    header[0] = tag
+    header[1] = 0x82
+    header.writeUInt16BE(len, 2)
+  } else {
+    header = Buffer.alloc(5)
+    header[0] = tag
+    header[1] = 0x83
+    header[2] = (len >> 16) & 0xff
+    header.writeUInt16BE(len & 0xffff, 3)
+  }
+  return Buffer.concat([header, data])
+}
+
 // --- NTLMv1 DES-based hash functions (matching reference) ---
 
 /** Expand 7-byte key to 8-byte DES key by inserting zeros every 7 bits */
