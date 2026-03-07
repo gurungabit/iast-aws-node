@@ -70,6 +70,9 @@ export function ASTEventBridge(): React.ReactNode {
       })
 
       cleanups.push(cleanup)
+
+      // Query server for current AST state (handles page refresh while AST is running/paused)
+      tab.ws.send({ type: 'ast.getStatus' })
     }
 
     return () => cleanups.forEach((fn) => fn())

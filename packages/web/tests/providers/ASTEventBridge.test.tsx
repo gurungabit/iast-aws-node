@@ -40,7 +40,7 @@ describe('ASTEventBridge', () => {
 
   it('sets up message handlers on tabs with WS connections', () => {
     const mockOnMessage = vi.fn().mockReturnValue(() => {})
-    mockTabs.current = new Map([['tab-1', { ws: { onMessage: mockOnMessage } }]])
+    mockTabs.current = new Map([['tab-1', { ws: { onMessage: mockOnMessage, send: vi.fn() } }]])
 
     render(<ASTEventBridge />)
 
@@ -51,7 +51,7 @@ describe('ASTEventBridge', () => {
     const mockOnMessage = vi.fn().mockReturnValue(() => {})
     mockTabs.current = new Map([
       ['tab-1', { ws: null }],
-      ['tab-2', { ws: { onMessage: mockOnMessage } }],
+      ['tab-2', { ws: { onMessage: mockOnMessage, send: vi.fn() } }],
     ])
 
     render(<ASTEventBridge />)
@@ -75,7 +75,7 @@ describe('ASTEventBridge', () => {
       handler = h
       return () => {}
     })
-    mockTabs.current = new Map([['tab-1', { ws: { onMessage: mockOnMessage } }]])
+    mockTabs.current = new Map([['tab-1', { ws: { onMessage: mockOnMessage, send: vi.fn() } }]])
 
     render(<ASTEventBridge />)
     handler({ type: 'ast.status', status: 'running', astName: 'login', executionId: 'exec-1' })
@@ -102,7 +102,7 @@ describe('ASTEventBridge', () => {
       handler = h
       return () => {}
     })
-    mockTabs.current = new Map([['tab-1', { ws: { onMessage: mockOnMessage } }]])
+    mockTabs.current = new Map([['tab-1', { ws: { onMessage: mockOnMessage, send: vi.fn() } }]])
 
     render(<ASTEventBridge />)
     handler({ type: 'ast.complete', status: 'failed', executionId: 'exec-1', error: 'Timeout' })
@@ -116,7 +116,7 @@ describe('ASTEventBridge', () => {
   it('cleans up handlers on unmount', () => {
     const cleanupFn = vi.fn()
     const mockOnMessage = vi.fn().mockReturnValue(cleanupFn)
-    mockTabs.current = new Map([['tab-1', { ws: { onMessage: mockOnMessage } }]])
+    mockTabs.current = new Map([['tab-1', { ws: { onMessage: mockOnMessage, send: vi.fn() } }]])
 
     const { unmount } = render(<ASTEventBridge />)
     expect(cleanupFn).not.toHaveBeenCalled()

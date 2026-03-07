@@ -182,8 +182,6 @@ function attachLocal(
     }
   }
 
-  // Query worker for current AST state (handles browser refresh while AST is running/paused)
-  worker.postMessage({ type: 'ast.getStatus' })
 }
 
 /**
