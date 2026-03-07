@@ -216,6 +216,97 @@ describe('useASTStore', () => {
     })
   })
 
+  describe('handleASTComplete with AutoLauncher', () => {
+    function setupAutoLauncher() {
+      act(() => {
+        useASTStore.getState().initTab('tab-1')
+        useASTStore.getState().executeAST('tab-1', 'login')
+        useASTStore.getState().beginAutoLauncherRun('tab-1', {
+          runId: 'run-1',
+          launcherId: 'l-1',
+          steps: [
+            { astName: 'login', configId: 'c1', order: 0 },
+            { astName: 'bi_renew', configId: 'c2', order: 1 },
+            { astName: 'rout_extractor', configId: 'c3', order: 2 },
+          ],
+        })
+      })
+    }
+
+    it('marks current step as success and advances nextStepIndex', () => {
+      setupAutoLauncher()
+
+      act(() => {
+        useASTStore.getState().handleASTComplete('tab-1', { status: 'completed' })
+      })
+
+      const run = useASTStore.getState().tabs['tab-1'].autoLauncherRun!
+      expect(run.steps[0].status).toBe('success')
+      expect(run.nextStepIndex).toBe(1)
+      expect(run.status).toBe('running')
+    })
+
+    it('keeps tab status as running when more steps remain', () => {
+      setupAutoLauncher()
+
+      act(() => {
+        useASTStore.getState().handleASTComplete('tab-1', { status: 'completed' })
+      })
+
+      const tab = useASTStore.getState().tabs['tab-1']
+      expect(tab.status).toBe('running')
+      expect(tab.lastResult).toBeNull()
+      expect(tab.progress).toBeNull()
+    })
+
+    it('marks run as completed when last step completes', () => {
+      setupAutoLauncher()
+
+      act(() => {
+        useASTStore.getState().handleASTComplete('tab-1', { status: 'completed' })
+        useASTStore.getState().handleASTComplete('tab-1', { status: 'completed' })
+        useASTStore.getState().handleASTComplete('tab-1', { status: 'completed' })
+      })
+
+      const run = useASTStore.getState().tabs['tab-1'].autoLauncherRun!
+      expect(run.steps[0].status).toBe('success')
+      expect(run.steps[1].status).toBe('success')
+      expect(run.steps[2].status).toBe('success')
+      expect(run.status).toBe('completed')
+      expect(run.nextStepIndex).toBe(3)
+    })
+
+    it('marks step as failed and run as failed on failure', () => {
+      setupAutoLauncher()
+
+      act(() => {
+        useASTStore.getState().handleASTComplete('tab-1', { status: 'completed' })
+        useASTStore.getState().handleASTComplete('tab-1', { status: 'failed', message: 'Login timeout' })
+      })
+
+      const run = useASTStore.getState().tabs['tab-1'].autoLauncherRun!
+      expect(run.steps[0].status).toBe('success')
+      expect(run.steps[1].status).toBe('failed')
+      expect(run.steps[1].error).toBe('Login timeout')
+      expect(run.status).toBe('failed')
+      expect(run.lastError).toBe('Login timeout')
+    })
+
+    it('resets progress between steps', () => {
+      setupAutoLauncher()
+
+      act(() => {
+        useASTStore.getState().handleASTProgress('tab-1', {
+          current: 50, total: 100, percentage: 50, message: 'step 1',
+        })
+        useASTStore.getState().handleASTComplete('tab-1', { status: 'completed' })
+      })
+
+      const tab = useASTStore.getState().tabs['tab-1']
+      expect(tab.progress).toBeNull()
+    })
+  })
+
   describe('clearLogs', () => {
     it('resets execution state', () => {
       act(() => {

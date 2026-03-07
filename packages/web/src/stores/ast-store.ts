@@ -274,15 +274,47 @@ export const useASTStore = create<ASTStore>((set) => ({
       if (!tab) return state
       const duration = tab.startedAt ? (Date.now() - tab.startedAt) / 1000 : undefined
       const resultWithDuration = { ...result, duration: result.duration ?? duration }
+
+      // AutoLauncher step tracking: advance the current step
+      let autoLauncherRun = tab.autoLauncherRun
+      let keepRunning = false
+      if (autoLauncherRun) {
+        const run = { ...autoLauncherRun }
+        const steps = [...run.steps]
+        const idx = run.nextStepIndex
+
+        if (idx < steps.length) {
+          if (result.status === 'completed') {
+            steps[idx] = { ...steps[idx], status: 'success' }
+            run.nextStepIndex = idx + 1
+            if (run.nextStepIndex >= steps.length) {
+              run.status = 'completed'
+            } else {
+              // More steps to go — keep tab status as 'running'
+              keepRunning = true
+            }
+          } else if (result.status === 'failed' || result.status === 'cancelled') {
+            steps[idx] = { ...steps[idx], status: 'failed', error: result.message }
+            run.status = 'failed'
+            run.lastError = result.message
+          }
+        }
+
+        run.steps = steps
+        autoLauncherRun = run
+      }
+
       return {
         tabs: {
           ...state.tabs,
           [tabId]: {
             ...tab,
-            status: result.status,
-            runningAST: null,
-            lastResult: resultWithDuration,
-            startedAt: null,
+            status: keepRunning ? 'running' : result.status,
+            runningAST: keepRunning ? tab.runningAST : null,
+            lastResult: keepRunning ? null : resultWithDuration,
+            progress: keepRunning ? null : tab.progress,
+            startedAt: keepRunning ? tab.startedAt : null,
+            autoLauncherRun,
             statusMessages: [
               ...tab.statusMessages,
               result.message || `Completed with status: ${result.status}`,
