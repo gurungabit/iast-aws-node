@@ -84,6 +84,7 @@ describe('ASTEventBridge', () => {
     expect(mockHandleASTStatus).toHaveBeenCalledWith('tab-1', {
       astName: 'login',
       status: 'running',
+      executionId: 'exec-1',
     })
   })
 

@@ -36,6 +36,7 @@ export interface AutoLauncherRunState {
 export interface TabASTState {
   selectedASTId: string | null
   runningAST: string | null
+  executionId: string | null
   status: ASTStatus
   lastResult: ASTResult | null
   progress: ASTProgress | null
@@ -52,6 +53,7 @@ function createDefaultTabState(): TabASTState {
   return {
     selectedASTId: null,
     runningAST: null,
+    executionId: null,
     status: 'idle',
     lastResult: null,
     progress: null,
@@ -84,6 +86,7 @@ interface ASTStore {
     info: {
       astName: string
       status: ASTStatus
+      executionId?: string
       message?: string
       error?: string
       duration?: number
@@ -216,6 +219,7 @@ export const useASTStore = create<ASTStore>((set) => ({
       const updates: Partial<TabASTState> = { status: info.status }
       if (info.status === 'running' || info.status === 'paused') {
         if (info.astName) updates.runningAST = info.astName
+        if (info.executionId) updates.executionId = info.executionId
       }
       if (info.message) {
         updates.statusMessages = [...tab.statusMessages, info.message]
@@ -323,6 +327,7 @@ export const useASTStore = create<ASTStore>((set) => ({
             ...tab,
             status: keepRunning ? 'running' : result.status,
             runningAST: keepRunning ? tab.runningAST : null,
+            executionId: keepRunning ? tab.executionId : null,
             lastResult: keepRunning ? null : resultWithDuration,
             progress: keepRunning ? null : tab.progress,
             startedAt: keepRunning ? tab.startedAt : null,
@@ -362,6 +367,7 @@ export const useASTStore = create<ASTStore>((set) => ({
             progress: null,
             lastResult: null,
             status: 'idle',
+            executionId: null,
           },
         },
       }

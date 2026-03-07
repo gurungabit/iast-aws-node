@@ -20,6 +20,7 @@ export function ASTEventBridge(): React.ReactNode {
             useASTStore.getState().handleASTStatus(tabId, {
               astName: msg.astName,
               status: mappedStatus as 'running' | 'paused' | 'completed' | 'failed' | 'cancelled',
+              executionId: msg.executionId,
             })
             break
           }

@@ -147,9 +147,10 @@ function EmptyPanel({ message, subtitle }: { message: string; subtitle?: string 
 // ASTControls (pause/resume/stop for running/paused executions)
 // ---------------------------------------------------------------------------
 
-function ASTControls({ sessionId, status }: { sessionId: string; status: string }) {
-  // Prefer live AST store status (reflects pause/resume in real-time)
-  const liveStatus = useASTStore((s) => s.tabs[sessionId]?.status ?? null)
+function ASTControls({ sessionId, executionId, status }: { sessionId: string; executionId: string; status: string }) {
+  // Prefer live AST store status only when this is the active execution
+  const isLive = useASTStore((s) => s.tabs[sessionId]?.executionId === executionId)
+  const liveStatus = useASTStore((s) => (isLive ? (s.tabs[sessionId]?.status ?? null) : null))
   const effectiveStatus = liveStatus ?? status
   const isPaused = effectiveStatus === 'paused'
   const isActive = effectiveStatus === 'running' || effectiveStatus === 'paused'
@@ -245,18 +246,18 @@ function ExecutionListItem({
   compact?: boolean
   stepIndex?: number
 }) {
-  // Only overlay live status on executions the DB also thinks are active
-  const dbIsActive = execution.status === 'running' || execution.status === 'paused'
+  // Only overlay live status when this execution is the one currently running on the session
+  const isLiveExecution = useASTStore(
+    (s) => s.tabs[execution.sessionId]?.executionId === execution.id,
+  )
   const liveStatus = useASTStore((s) =>
-    dbIsActive ? (s.tabs[execution.sessionId]?.status ?? null) : null,
+    isLiveExecution ? (s.tabs[execution.sessionId]?.status ?? null) : null,
   )
   const displayStatus =
     liveStatus === 'running' || liveStatus === 'paused' ? liveStatus : execution.status
 
   const progress = useASTStore((s) =>
-    dbIsActive && (displayStatus === 'running' || displayStatus === 'paused')
-      ? (s.tabs[execution.sessionId]?.progress ?? null)
-      : null,
+    isLiveExecution ? (s.tabs[execution.sessionId]?.progress ?? null) : null,
   )
 
   const startTime = new Date(execution.startedAt)
@@ -502,7 +503,7 @@ function PoliciesList({
             </p>
           </div>
           <div className="flex items-center gap-2">
-            <ASTControls sessionId={execution.sessionId} status={execution.status} />
+            <ASTControls sessionId={execution.sessionId} executionId={execution.id} status={execution.status} />
             <span
               className={cn(
                 'px-2.5 py-1 text-xs font-medium rounded-full flex items-center gap-1.5',
@@ -755,8 +756,15 @@ function HistoryPage() {
     queryFn: () => apiGet<ExecutionDto[]>(`/history?date=${date}`),
   })
 
+  const isSelectedLiveExecution = useASTStore((s) =>
+    selectedExecution
+      ? s.tabs[selectedExecution.sessionId]?.executionId === selectedExecution.id
+      : false,
+  )
   const selectedLiveStatus = useASTStore((s) =>
-    selectedExecution ? (s.tabs[selectedExecution.sessionId]?.status ?? null) : null,
+    isSelectedLiveExecution && selectedExecution
+      ? (s.tabs[selectedExecution.sessionId]?.status ?? null)
+      : null,
   )
   const selectedDbStatus = selectedExecution
     ? (executions.find((e) => e.id === selectedExecution.id)?.status ?? null)
