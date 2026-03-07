@@ -4,6 +4,7 @@ import { useQuery, useInfiniteQuery, useQueryClient } from '@tanstack/react-quer
 import { Check, X, Clock, Loader2, Pause, Ban, Circle, ChevronRight } from 'lucide-react'
 import { apiGet } from '../../services/api'
 import { cn, formatDuration } from '../../utils'
+import { useASTStore } from '../../stores/ast-store'
 import { DatePicker } from '../../components/ui/DatePicker'
 import { useExecutionStream } from '../../hooks/useExecutionStream'
 
@@ -189,6 +190,12 @@ function ExecutionListItem({
   compact?: boolean
   stepIndex?: number
 }) {
+  const progress = useASTStore((s) =>
+    execution.status === 'running'
+      ? (s.tabs[execution.sessionId]?.progress ?? null)
+      : null,
+  )
+
   const startTime = new Date(execution.startedAt)
   const fmtTime = (date: Date) =>
     date.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })
@@ -253,6 +260,23 @@ function ExecutionListItem({
           </span>
         )}
       </div>
+      {progress && progress.total > 0 && (
+        <div className="mt-2">
+          <div className="flex items-center justify-between text-[11px] text-gray-500 dark:text-zinc-400 mb-1">
+            <span className="flex items-center gap-1">
+              <Loader2 className="w-3 h-3 animate-spin" />
+              {progress.message ?? 'Processing...'}
+            </span>
+            <span>{progress.current}/{progress.total}</span>
+          </div>
+          <div className="h-1.5 bg-gray-200 dark:bg-zinc-700 rounded-full overflow-hidden">
+            <div
+              className="h-full bg-blue-500 dark:bg-blue-400 rounded-full transition-all duration-300"
+              style={{ width: `${String(progress.percentage)}%` }}
+            />
+          </div>
+        </div>
+      )}
     </button>
   )
 }
