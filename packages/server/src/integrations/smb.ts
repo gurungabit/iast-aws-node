@@ -1,9 +1,9 @@
 /**
  * SMB file access for 412 files.
- * Uses @awo00/smb2 library for NTLM-authenticated SMB2 connections.
+ * Custom SMB2 client with SPNEGO/NTLMv2/MIC authentication.
  */
 
-import { Client } from '@awo00/smb2'
+import { readFile } from './smb2/client.js'
 
 export interface SmbConfig {
   share: string
@@ -43,21 +43,15 @@ export async function readSmbFile(config: SmbConfig, path: string): Promise<Buff
 
   console.log(`[SMB] host=${host}, share=${shareName}, relative="${relativePath}", user=${username}, domain=${domain}`)
 
-  const client = new Client(host, { requestTimeout: 30_000 })
   try {
-    await client.connect()
-    const session = await client.authenticate({ domain, username, password: config.password })
-    const tree = await session.connectTree(shareName)
-    const buffer = await tree.readFile('/' + relativePath)
-    await client.close()
-    return buffer
+    return await readFile({
+      host,
+      share: shareName,
+      domain,
+      username,
+      password: config.password,
+    }, relativePath)
   } catch (err: any) {
-    try { await client.close() } catch { /* best effort */ }
-    // Library rejects with Response objects, not Errors
-    const status = err?.header?.status
-    const msg = status != null
-      ? `SMB2 status 0x${status.toString(16).padStart(8, '0')} at ${err?.request?.typeName ?? 'unknown'}`
-      : (err?.message ?? String(err))
-    throw new Error(`Failed to read SMB file ${path}: ${msg}`)
+    throw new Error(`Failed to read SMB file ${path}: ${err.message ?? String(err)}`)
   }
 }
