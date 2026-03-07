@@ -291,7 +291,7 @@ export class RoutScreen {
       await this.session.fillFieldAtPosition(40, 36, 'PDQ')
       await this.session.enter()
 
-      if (!(await this.session.waitForText(PDQ_CONTROL_TITLE,1))) {
+      if (!(await this.session.waitForText(PDQ_CONTROL_TITLE, 1))) {
         await this.backOutToFss()
         return null
       }
@@ -301,9 +301,13 @@ export class RoutScreen {
       await this.session.fillFieldAtPosition(6, 10, ho)
       await this.session.fillFieldAtPosition(6, 12, term)
       await this.session.fillFieldAtPosition(6, 17, pui)
-      if (companyCode.trim()) {
-        await this.session.fillFieldAtPosition(6, 20, companyCode)
+
+      if (companyCode.trim() === '' && check.trim() === '') {
+        await this.backOutToFss()
+        return null
       }
+
+      await this.session.fillFieldAtPosition(6, 20, companyCode)
       await this.session.fillFieldAtPosition(6, 22, check)
       await this.session.fillFieldAtPosition(27, 42, 'NAME')
       await this.session.enter()

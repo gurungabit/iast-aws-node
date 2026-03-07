@@ -1,10 +1,11 @@
 import { createFileRoute } from '@tanstack/react-router'
-import { useState, useMemo } from 'react'
-import { useQuery } from '@tanstack/react-query'
+import { useState, useMemo, useEffect } from 'react'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Check, X, Clock, Loader2, Pause, Ban, Circle, ChevronRight } from 'lucide-react'
 import { apiGet } from '../../services/api'
 import { cn, formatDuration } from '../../utils'
 import { DatePicker } from '../../components/ui/DatePicker'
+import { useExecutionStream } from '../../hooks/useExecutionStream'
 
 export const Route = createFileRoute('/history')({
   component: HistoryPage,
@@ -205,7 +206,12 @@ function ExecutionListItem({
       )}
     >
       <div className="flex items-center justify-between mb-1">
-        <span className={cn('font-medium text-gray-900 dark:text-zinc-100 truncate', compact ? 'text-xs' : 'text-sm')}>
+        <span
+          className={cn(
+            'font-medium text-gray-900 dark:text-zinc-100 truncate',
+            compact ? 'text-xs' : 'text-sm',
+          )}
+        >
           {execution.astName}
         </span>
         <span
@@ -265,10 +271,18 @@ function RunGroupRow({
 }) {
   const [collapsed, setCollapsed] = useState(false)
 
-  const allCompleted = group.executions.every((e) => e.status === 'completed' || e.status === 'success')
+  const allCompleted = group.executions.every(
+    (e) => e.status === 'completed' || e.status === 'success',
+  )
   const anyFailed = group.executions.some((e) => e.status === 'failed')
   const anyRunning = group.executions.some((e) => e.status === 'running')
-  const groupStatus = anyRunning ? 'running' : anyFailed ? 'failed' : allCompleted ? 'completed' : 'running'
+  const groupStatus = anyRunning
+    ? 'running'
+    : anyFailed
+      ? 'failed'
+      : allCompleted
+        ? 'completed'
+        : 'running'
 
   const totalPolicies = group.executions.reduce((sum, e) => sum + e.totalPolicies, 0)
   const totalSuccess = group.executions.reduce((sum, e) => sum + e.successCount, 0)
@@ -599,6 +613,7 @@ function PolicyDetail({
 // ---------------------------------------------------------------------------
 
 function HistoryPage() {
+  const queryClient = useQueryClient()
   const [activeTab, setActiveTab] = useState<TabFilter>('all')
   const [date, setDate] = useState(new Date().toISOString().slice(0, 10))
   const [selectedExecution, setSelectedExecution] = useState<ExecutionDto | null>(null)
@@ -618,12 +633,42 @@ function HistoryPage() {
     ? executions.find((e) => e.id === selectedExecution.id)?.status === 'running'
     : false
 
-  const { data: policies = [], isLoading: isLoadingPolicies } = useQuery({
+  // Live WS stream for the selected execution
+  const stream = useExecutionStream(
+    selectedExecution?.id ?? null,
+    selectedExecution?.sessionId ?? null,
+    isSelectedRunning,
+  )
+  const hasLiveStream = stream !== null
+
+  // Fetch from DB: initial load + refetch on completion (no polling when WS is active)
+  const { data: dbPolicies = [], isLoading: isLoadingPolicies } = useQuery({
     queryKey: ['policies', selectedExecution?.id],
-    queryFn: () => apiGet<PolicyDto[]>(`/history/${selectedExecution?.id}/policies`),
+    queryFn: () => apiGet<PolicyDto[]>(`/history/${selectedExecution?.id}/policies?limit=10000`),
     enabled: !!selectedExecution,
-    refetchInterval: isSelectedRunning ? 2000 : false,
+    refetchInterval: isSelectedRunning && !hasLiveStream ? 2000 : false,
   })
+
+  // When stream completes, refetch from DB to get authoritative data
+  const streamCompleted = stream?.completed ?? false
+  const selectedExecutionId = selectedExecution?.id ?? null
+  useEffect(() => {
+    if (streamCompleted) {
+      void queryClient.invalidateQueries({ queryKey: ['policies', selectedExecutionId] })
+      void queryClient.invalidateQueries({ queryKey: ['history', date] })
+    }
+  }, [streamCompleted, selectedExecutionId, date, queryClient])
+
+  // Merge DB policies with live WS items (dedup by id, WS items take precedence)
+  const streamPolicies = stream?.livePolicies
+  const policies = useMemo(() => {
+    if (!streamPolicies?.length) return dbPolicies
+    const byId = new Map(dbPolicies.map((p) => [p.id, p]))
+    for (const item of streamPolicies) {
+      byId.set(item.id, item)
+    }
+    return Array.from(byId.values())
+  }, [dbPolicies, streamPolicies])
 
   // Filter executions by tab
   const filteredExecutions = useMemo(() => {
@@ -633,7 +678,9 @@ function HistoryPage() {
 
   // Group executions: standalone items + RunGroup items
   const groupedItems = useMemo(() => {
-    const items: Array<{ type: 'single'; execution: ExecutionDto } | { type: 'group'; group: RunGroup }> = []
+    const items: Array<
+      { type: 'single'; execution: ExecutionDto } | { type: 'group'; group: RunGroup }
+    > = []
     const runMap = new Map<string, ExecutionDto[]>()
 
     for (const exec of filteredExecutions) {
