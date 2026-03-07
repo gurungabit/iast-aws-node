@@ -1,7 +1,8 @@
 import { createFileRoute } from '@tanstack/react-router'
 import { useState, useMemo } from 'react'
+import { useQuery } from '@tanstack/react-query'
 import { Check, X, Clock, Loader2, Pause, Ban, Circle, ChevronRight } from 'lucide-react'
-import { useApiQuery } from '../../hooks/useApi'
+import { apiGet } from '../../services/api'
 import { cn, formatDuration } from '../../utils'
 import { DatePicker } from '../../components/ui/DatePicker'
 
@@ -603,16 +604,26 @@ function HistoryPage() {
   const [selectedExecution, setSelectedExecution] = useState<ExecutionDto | null>(null)
   const [selectedPolicy, setSelectedPolicy] = useState<PolicyDto | null>(null)
 
-  const { data: executions = [], isLoading: isLoadingExecs } = useApiQuery<ExecutionDto[]>(
-    ['history', date],
-    `/history?date=${date}`,
-  )
+  const { data: executions = [], isLoading: isLoadingExecs } = useQuery({
+    queryKey: ['history', date],
+    queryFn: () => apiGet<ExecutionDto[]>(`/history?date=${date}`),
+    refetchInterval: (query) => {
+      const data = query.state.data
+      if (data?.some((e) => e.status === 'running')) return 3000
+      return false
+    },
+  })
 
-  const { data: policies = [], isLoading: isLoadingPolicies } = useApiQuery<PolicyDto[]>(
-    ['policies', selectedExecution?.id],
-    `/history/${selectedExecution?.id}/policies`,
-    !!selectedExecution,
-  )
+  const isSelectedRunning = selectedExecution
+    ? executions.find((e) => e.id === selectedExecution.id)?.status === 'running'
+    : false
+
+  const { data: policies = [], isLoading: isLoadingPolicies } = useQuery({
+    queryKey: ['policies', selectedExecution?.id],
+    queryFn: () => apiGet<PolicyDto[]>(`/history/${selectedExecution?.id}/policies`),
+    enabled: !!selectedExecution,
+    refetchInterval: isSelectedRunning ? 2000 : false,
+  })
 
   // Filter executions by tab
   const filteredExecutions = useMemo(() => {
@@ -668,6 +679,12 @@ function HistoryPage() {
 
     return orderedItems
   }, [filteredExecutions])
+
+  // Keep selectedExecution in sync with refreshed data
+  const liveSelectedExecution = useMemo(() => {
+    if (!selectedExecution) return null
+    return executions.find((e) => e.id === selectedExecution.id) ?? selectedExecution
+  }, [executions, selectedExecution])
 
   const handleSelectExecution = (execution: ExecutionDto) => {
     setSelectedExecution(execution)
@@ -735,9 +752,9 @@ function HistoryPage() {
 
       {/* Panel 2: Policies List */}
       <div className="w-[480px] flex-shrink-0 bg-gray-50 dark:bg-zinc-900/50 border-r border-gray-200 dark:border-zinc-800">
-        {selectedExecution ? (
+        {liveSelectedExecution ? (
           <PoliciesList
-            execution={selectedExecution}
+            execution={liveSelectedExecution}
             policies={policies}
             selectedPolicy={selectedPolicy}
             onSelectPolicy={setSelectedPolicy}
@@ -751,13 +768,13 @@ function HistoryPage() {
 
       {/* Panel 3: Policy Detail */}
       <div className="flex-1 bg-white dark:bg-zinc-900">
-        {selectedPolicy && selectedExecution ? (
+        {selectedPolicy && liveSelectedExecution ? (
           <PolicyDetail
             policy={selectedPolicy}
-            execution={selectedExecution}
+            execution={liveSelectedExecution}
             onBack={handleBackToPolicies}
           />
-        ) : selectedExecution ? (
+        ) : liveSelectedExecution ? (
           <EmptyPanel message="Select a policy to view details" />
         ) : (
           <EmptyPanel message="Select an execution to get started" />
