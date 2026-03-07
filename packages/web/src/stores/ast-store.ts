@@ -214,8 +214,8 @@ export const useASTStore = create<ASTStore>((set) => ({
       if (!tab) return state
 
       const updates: Partial<TabASTState> = { status: info.status }
-      if (info.status === 'running') {
-        updates.runningAST = info.astName
+      if (info.status === 'running' || info.status === 'paused') {
+        if (info.astName) updates.runningAST = info.astName
       }
       if (info.message) {
         updates.statusMessages = [...tab.statusMessages, info.message]
