@@ -32,6 +32,7 @@ interface RunDto {
   id: string
   launcherId: string
   launcherName?: string
+  sessionId: string
   status: string
   steps: RunStep[]
   currentStepIndex: string
@@ -86,16 +87,11 @@ function stepDuration(step: RunStep): string | null {
   return formatDuration(end - start)
 }
 
-/** Returns live progress for a run by matching runId in the AST store. */
-function useLiveProgress(runId: string | null) {
+/** Returns live progress for a run by matching its sessionId in the AST store. */
+function useLiveProgress(sessionId: string | null) {
   return useASTStore((s) => {
-    if (!runId) return null
-    for (const tab of Object.values(s.tabs)) {
-      if (tab.autoLauncherRun?.runId === runId && tab.progress) {
-        return tab.progress
-      }
-    }
-    return null
+    if (!sessionId) return null
+    return s.tabs[sessionId]?.progress ?? null
   })
 }
 
@@ -301,8 +297,8 @@ function AutoLauncherRunsPage() {
     [runs, effectiveRunId],
   )
 
-  // Live progress from AST store for the selected run
-  const liveProgress = useLiveProgress(effectiveRunId)
+  // Live progress from AST store for the selected run's session
+  const liveProgress = useLiveProgress(selectedRun?.sessionId ?? null)
 
   // Poll while there are running runs
   const shouldPoll = runs.some((r) => r.status === 'running') || selectedRun?.status === 'running'

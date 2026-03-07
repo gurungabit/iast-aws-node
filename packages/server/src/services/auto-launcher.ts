@@ -98,6 +98,7 @@ export const autoLauncherService = {
         id: autoLauncherRuns.id,
         launcherId: autoLauncherRuns.launcherId,
         launcherName: autoLaunchers.name,
+        sessionId: autoLauncherRuns.sessionId,
         status: autoLauncherRuns.status,
         steps: autoLauncherRuns.steps,
         currentStepIndex: autoLauncherRuns.currentStepIndex,

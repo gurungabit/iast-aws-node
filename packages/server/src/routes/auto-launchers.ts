@@ -218,6 +218,7 @@ export async function autoLauncherRoutes(app: FastifyInstance) {
               id: z.string(),
               launcherId: z.string(),
               launcherName: z.string().nullable(),
+              sessionId: z.string(),
               status: z.string(),
               steps: z.unknown(),
               currentStepIndex: z.string(),

@@ -327,6 +327,7 @@ describe('auto-launcher routes', () => {
           id: 'run1',
           launcherId: 'al1',
           launcherName: 'My Launcher',
+          sessionId: 'sess1',
           status: 'completed',
           steps: [],
           currentStepIndex: '0',
