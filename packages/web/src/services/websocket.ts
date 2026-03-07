@@ -26,11 +26,15 @@ export interface ASTItemResult {
 
 type MessageHandler = (msg: ServerMessage) => void
 
+const MAX_RECONNECT_ATTEMPTS = 5
+
 export class TerminalWebSocket {
   private ws: WebSocket | null = null
   private sessionId: string
   private handlers = new Set<MessageHandler>()
   private reconnectTimer: number | null = null
+  private reconnectAttempts = 0
+  private intentionalClose = false
 
   constructor(sessionId: string) {
     this.sessionId = sessionId
@@ -38,40 +42,70 @@ export class TerminalWebSocket {
 
   async connect() {
     if (this.ws?.readyState === WebSocket.OPEN) return
+    this.intentionalClose = false
 
     const token = await getAccessToken()
     const url = `${config.wsUrl}/api/terminal/${this.sessionId}?token=${encodeURIComponent(token)}`
-    this.ws = new WebSocket(url)
+    const ws = new WebSocket(url)
 
-    this.ws.onmessage = (event) => {
+    // Wait for connection to open
+    await new Promise<void>((resolve, reject) => {
+      ws.onopen = () => resolve()
+      ws.onerror = () => reject(new Error('WebSocket connection failed'))
+    })
+
+    // Connected — set up persistent handlers
+    this.reconnectAttempts = 0
+
+    ws.onmessage = (event) => {
       try {
-        const msg: ServerMessage = JSON.parse(event.data)
-        for (const handler of this.handlers) {
-          handler(msg)
-        }
+        this.emit(JSON.parse(event.data) as ServerMessage)
       } catch {
         // ignore malformed messages
       }
     }
 
-    this.ws.onclose = () => {
+    ws.onclose = () => {
       this.ws = null
-    }
-
-    this.ws.onerror = () => {
-      this.ws?.close()
-    }
-
-    // Wait for open
-    await new Promise<void>((resolve, reject) => {
-      if (!this.ws) return reject(new Error('No WebSocket'))
-      this.ws.onopen = () => resolve()
-      const prevOnError = this.ws.onerror
-      this.ws.onerror = (e) => {
-        prevOnError?.call(this.ws!, e)
-        reject(new Error('WebSocket connection failed'))
+      if (!this.intentionalClose) {
+        this.emit({ type: 'disconnected', reason: 'connection_lost' })
+        this.scheduleReconnect()
       }
-    })
+    }
+
+    ws.onerror = () => {
+      ws.close()
+    }
+
+    this.ws = ws
+  }
+
+  private emit(msg: ServerMessage) {
+    for (const handler of this.handlers) {
+      handler(msg)
+    }
+  }
+
+  private scheduleReconnect() {
+    if (this.reconnectAttempts >= MAX_RECONNECT_ATTEMPTS) {
+      this.emit({
+        type: 'error',
+        message: 'Connection lost after multiple retries. Please refresh the page.',
+      })
+      return
+    }
+    const delay = Math.min(1000 * 2 ** this.reconnectAttempts, 10000)
+    this.reconnectTimer = window.setTimeout(() => {
+      this.reconnectAttempts++
+      this.connect()
+        .then(() => {
+          // Re-attach to the mainframe session on the server
+          this.send({ type: 'connect' })
+        })
+        .catch(() => {
+          this.scheduleReconnect()
+        })
+    }, delay)
   }
 
   send(msg: Record<string, unknown>) {
@@ -86,10 +120,12 @@ export class TerminalWebSocket {
   }
 
   disconnect() {
+    this.intentionalClose = true
     if (this.reconnectTimer) {
       clearTimeout(this.reconnectTimer)
       this.reconnectTimer = null
     }
+    this.reconnectAttempts = 0
     this.ws?.close()
     this.ws = null
   }

@@ -224,6 +224,69 @@ describe('TerminalWebSocket', () => {
     })
   })
 
+  describe('auto-reconnect', () => {
+    it('emits disconnected on unexpected close', async () => {
+      const tws = new TerminalWebSocket('session-1')
+      await tws.connect()
+
+      const handler = vi.fn()
+      tws.onMessage(handler)
+
+      // Simulate unexpected close
+      wsInstances[0].onclose?.()
+
+      expect(handler).toHaveBeenCalledWith({ type: 'disconnected', reason: 'connection_lost' })
+      expect(tws.isConnected).toBe(false)
+
+      // Clean up — disconnect to cancel any pending reconnect timers
+      tws.disconnect()
+    })
+
+    it('does not emit disconnected on intentional disconnect', async () => {
+      const tws = new TerminalWebSocket('session-1')
+      await tws.connect()
+
+      const handler = vi.fn()
+      tws.onMessage(handler)
+
+      tws.disconnect()
+
+      expect(handler).not.toHaveBeenCalled()
+    })
+
+    it('attempts reconnect after unexpected close', async () => {
+      const tws = new TerminalWebSocket('session-1')
+      await tws.connect()
+
+      // Simulate unexpected close
+      wsInstances[0].onclose?.()
+
+      // Wait for the reconnect timer (1s delay for first attempt)
+      await new Promise((r) => setTimeout(r, 1100))
+
+      // A new WebSocket should have been created for the reconnect
+      expect(wsInstances.length).toBeGreaterThanOrEqual(2)
+
+      tws.disconnect()
+    }, 10000)
+
+    it('sends connect message after successful reconnect', async () => {
+      const tws = new TerminalWebSocket('session-1')
+      await tws.connect()
+
+      // Simulate unexpected close
+      wsInstances[0].onclose?.()
+
+      // Wait for reconnect
+      await new Promise((r) => setTimeout(r, 1100))
+
+      const reconnectedWs = wsInstances[1]
+      expect(reconnectedWs.send).toHaveBeenCalledWith(JSON.stringify({ type: 'connect' }))
+
+      tws.disconnect()
+    }, 10000)
+  })
+
   describe('isConnected', () => {
     it('returns true when WebSocket is open', async () => {
       const tws = new TerminalWebSocket('session-1')

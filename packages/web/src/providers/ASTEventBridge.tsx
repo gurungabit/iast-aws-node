@@ -48,6 +48,14 @@ export function ASTEventBridge(): React.ReactNode {
               message: msg.error,
             })
             break
+          case 'disconnected': {
+            const store = useASTStore.getState()
+            const tab = store.tabs[tabId]
+            if (tab?.status === 'running') {
+              store.addStatusMessage(tabId, 'Connection lost — attempting to reconnect...')
+            }
+            break
+          }
           case 'error': {
             const store = useASTStore.getState()
             store.addStatusMessage(tabId, `Error: ${msg.message}`)
