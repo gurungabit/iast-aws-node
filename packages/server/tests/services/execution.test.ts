@@ -6,6 +6,7 @@ const mockDb = vi.hoisted(() => ({
   update: vi.fn().mockReturnThis(),
   delete: vi.fn().mockReturnThis(),
   from: vi.fn().mockReturnThis(),
+  leftJoin: vi.fn().mockReturnThis(),
   where: vi.fn().mockReturnThis(),
   limit: vi.fn().mockReturnThis(),
   offset: vi.fn().mockReturnThis(),
@@ -19,9 +20,15 @@ vi.mock('@src/db/index.js', () => ({ db: mockDb }))
 vi.mock('@src/db/schema/index.js', () => ({
   executions: {
     id: 'id',
+    sessionId: 'sessionId',
     userId: 'userId',
+    astName: 'astName',
+    status: 'status',
+    hostUser: 'hostUser',
+    runId: 'runId',
     executionDate: 'executionDate',
     startedAt: 'startedAt',
+    completedAt: 'completedAt',
     totalPolicies: 'totalPolicies',
     successCount: 'successCount',
     failureCount: 'failureCount',
@@ -30,6 +37,14 @@ vi.mock('@src/db/schema/index.js', () => ({
   policyResults: {
     executionId: 'executionId',
     status: 'status',
+  },
+  autoLauncherRuns: {
+    id: 'id',
+    launcherId: 'launcherId',
+  },
+  autoLaunchers: {
+    id: 'id',
+    name: 'name',
   },
 }))
 vi.mock('drizzle-orm', () => ({
@@ -49,6 +64,7 @@ describe('executionService', () => {
     mockDb.update.mockReturnThis()
     mockDb.delete.mockReturnThis()
     mockDb.from.mockReturnThis()
+    mockDb.leftJoin.mockReturnThis()
     mockDb.where.mockReturnThis()
     mockDb.limit.mockReturnThis()
     mockDb.offset.mockReturnThis()
@@ -151,13 +167,17 @@ describe('executionService', () => {
 
   describe('findByUser', () => {
     it('returns executions for a user without date filter', async () => {
-      const executions = [{ id: 'e1' }, { id: 'e2' }]
-      mockDb.offset.mockResolvedValueOnce(executions)
+      const rows = [{ id: 'e1', launcherName: null }, { id: 'e2', launcherName: 'MyLauncher' }]
+      mockDb.offset.mockResolvedValueOnce(rows)
 
       const result = await executionService.findByUser('u1')
 
-      expect(result).toEqual(executions)
+      expect(result).toEqual([
+        { id: 'e1', launcherName: null },
+        { id: 'e2', launcherName: 'MyLauncher' },
+      ])
       expect(mockDb.select).toHaveBeenCalled()
+      expect(mockDb.leftJoin).toHaveBeenCalled()
       expect(mockDb.limit).toHaveBeenCalledWith(50)
       expect(mockDb.offset).toHaveBeenCalledWith(0)
     })

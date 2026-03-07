@@ -57,6 +57,8 @@ describe('history routes', () => {
           astName: 'ast1',
           status: 'completed',
           hostUser: null,
+          runId: null,
+          launcherName: null,
           executionDate: '2026-01-01',
           startedAt: new Date('2026-01-01T10:00:00Z'),
           completedAt: new Date('2026-01-01T10:05:00Z'),

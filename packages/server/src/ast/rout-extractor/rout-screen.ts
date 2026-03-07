@@ -287,7 +287,7 @@ export class RoutScreen {
       }
 
       // FSS -> PDQControl
-      await this.session.waitForKeyboard(3)
+      await this.session.waitForKeyboard(1)
       await this.session.fillFieldAtPosition(40, 36, 'PDQ')
       await this.session.enter()
 
@@ -297,7 +297,7 @@ export class RoutScreen {
       }
 
       // PDQControl -> PDQName
-      await this.session.waitForKeyboard(3)
+      await this.session.waitForKeyboard(1)
       await this.session.fillFieldAtPosition(6, 10, ho)
       await this.session.fillFieldAtPosition(6, 12, term)
       await this.session.fillFieldAtPosition(6, 17, pui)
@@ -308,7 +308,7 @@ export class RoutScreen {
       await this.session.fillFieldAtPosition(27, 42, 'NAME')
       await this.session.enter()
 
-      const matched = await this.session.waitForAnyText([PDQ_NAME_TITLE, PDQ_NO_RECORD], 5)
+      const matched = await this.session.waitForAnyText([PDQ_NAME_TITLE, PDQ_NO_RECORD], 1)
 
       if (matched === PDQ_NO_RECORD || (!matched && this.session.screenContains(PDQ_NO_RECORD))) {
         await this.backOutToFss()

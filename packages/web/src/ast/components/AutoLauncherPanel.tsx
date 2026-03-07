@@ -427,9 +427,10 @@ export const AutoLauncherPanel = memo(function AutoLauncherPanel() {
           stepLabel: s.stepLabel,
           configName: s.configName,
         })),
+        displayName: selectedLauncher.name,
       })
 
-      useASTStore.getState().addStatusMessage(activeTabId, `AutoLauncher kicked off (runId=${result.runId})`)
+      useASTStore.getState().addStatusMessage(activeTabId, `AutoLauncher "${selectedLauncher.name}" started`)
     } catch (err) {
       setRunError(err instanceof Error ? err.message : 'Failed to run')
     } finally {
@@ -800,9 +801,15 @@ const AutoLauncherLiveOutput = memo(function AutoLauncherLiveOutput(props: { tab
       {autoLauncherRun && (
         <div className="space-y-2">
           <div className="flex items-center justify-between gap-2">
-            <div className="text-xs font-medium text-gray-700 dark:text-zinc-300">AutoLauncher Steps</div>
-            <div className="text-[11px] text-gray-500 dark:text-zinc-400 truncate">
-              runId={autoLauncherRun.runId}
+            <div className="text-xs font-medium text-gray-700 dark:text-zinc-300">
+              {autoLauncherRun.displayName ?? 'AutoLauncher'} — Steps
+            </div>
+            <div className={`text-[11px] font-medium ${
+              autoLauncherRun.status === 'completed' ? 'text-green-600 dark:text-green-400'
+              : autoLauncherRun.status === 'failed' ? 'text-red-600 dark:text-red-400'
+              : 'text-blue-600 dark:text-blue-400'
+            }`}>
+              {autoLauncherRun.status}
             </div>
           </div>
 

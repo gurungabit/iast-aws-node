@@ -24,6 +24,8 @@ export async function historyRoutes(app: FastifyInstance) {
               astName: z.string(),
               status: z.string(),
               hostUser: z.string().nullable(),
+              runId: z.string().nullable(),
+              launcherName: z.string().nullable(),
               executionDate: z.string(),
               startedAt: z.coerce.date(),
               completedAt: z.coerce.date().nullable(),

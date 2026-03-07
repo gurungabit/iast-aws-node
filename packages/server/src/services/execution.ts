@@ -1,6 +1,6 @@
 import { eq, and, or, desc, asc, sql } from 'drizzle-orm'
 import { db } from '../db/index.js'
-import { executions, policyResults } from '../db/schema/index.js'
+import { executions, policyResults, autoLauncherRuns, autoLaunchers } from '../db/schema/index.js'
 import type { ASTItemResult, ASTStatus } from '@iast/shared'
 
 export const executionService = {
@@ -43,9 +43,26 @@ export const executionService = {
   },
 
   async findByUser(userId: string, executionDate?: string, limit = 50, offset = 0) {
-    const query = db
-      .select()
+    const rows = await db
+      .select({
+        id: executions.id,
+        sessionId: executions.sessionId,
+        astName: executions.astName,
+        status: executions.status,
+        hostUser: executions.hostUser,
+        runId: executions.runId,
+        launcherName: autoLaunchers.name,
+        executionDate: executions.executionDate,
+        startedAt: executions.startedAt,
+        completedAt: executions.completedAt,
+        totalPolicies: executions.totalPolicies,
+        successCount: executions.successCount,
+        failureCount: executions.failureCount,
+        errorCount: executions.errorCount,
+      })
       .from(executions)
+      .leftJoin(autoLauncherRuns, eq(executions.runId, autoLauncherRuns.id))
+      .leftJoin(autoLaunchers, eq(autoLauncherRuns.launcherId, autoLaunchers.id))
       .where(
         executionDate
           ? and(eq(executions.userId, userId), eq(executions.executionDate, executionDate))
@@ -55,7 +72,10 @@ export const executionService = {
       .limit(limit)
       .offset(offset)
 
-    return query
+    return rows.map((r) => ({
+      ...r,
+      launcherName: r.launcherName ?? null,
+    }))
   },
 
   async findById(executionId: string) {

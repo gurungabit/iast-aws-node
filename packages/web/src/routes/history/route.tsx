@@ -1,6 +1,6 @@
 import { createFileRoute } from '@tanstack/react-router'
 import { useState, useMemo } from 'react'
-import { Check, X, Clock, Loader2, Pause, Ban, Circle } from 'lucide-react'
+import { Check, X, Clock, Loader2, Pause, Ban, Circle, ChevronRight } from 'lucide-react'
 import { useApiQuery } from '../../hooks/useApi'
 import { cn, formatDuration } from '../../utils'
 import { DatePicker } from '../../components/ui/DatePicker'
@@ -22,6 +22,8 @@ interface ExecutionDto {
   astName: string
   status: string
   hostUser: string | null
+  runId: string | null
+  launcherName: string | null
   executionDate: string
   startedAt: string
   completedAt: string | null
@@ -29,7 +31,6 @@ interface ExecutionDto {
   successCount: number
   failureCount: number
   errorCount: number
-  runId?: string
 }
 
 interface PolicyDto {
@@ -176,10 +177,12 @@ function ExecutionListItem({
   execution,
   isSelected,
   onClick,
+  compact = false,
 }: {
   execution: ExecutionDto
   isSelected: boolean
   onClick: () => void
+  compact?: boolean
 }) {
   const startTime = new Date(execution.startedAt)
   const fmtTime = (date: Date) =>
@@ -193,14 +196,15 @@ function ExecutionListItem({
     <button
       onClick={onClick}
       className={cn(
-        'cursor-pointer w-full text-left p-3 rounded-lg transition-all duration-150 border',
+        'cursor-pointer w-full text-left rounded-lg transition-all duration-150 border',
+        compact ? 'p-2' : 'p-3',
         isSelected
           ? 'bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800 ring-1 ring-blue-300 dark:ring-blue-700'
           : 'bg-white dark:bg-zinc-900 hover:bg-gray-50 dark:hover:bg-zinc-800 border-gray-200 dark:border-zinc-800',
       )}
     >
       <div className="flex items-center justify-between mb-1">
-        <span className="font-medium text-gray-900 dark:text-zinc-100 text-sm truncate">
+        <span className={cn('font-medium text-gray-900 dark:text-zinc-100 truncate', compact ? 'text-xs' : 'text-sm')}>
           {execution.astName}
         </span>
         <span
@@ -236,6 +240,104 @@ function ExecutionListItem({
         )}
       </div>
     </button>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// RunGroupRow (collapsible parent for AutoLauncher executions)
+// ---------------------------------------------------------------------------
+
+interface RunGroup {
+  runId: string
+  launcherName: string
+  executions: ExecutionDto[]
+}
+
+function RunGroupRow({
+  group,
+  selectedExecutionId,
+  onSelectExecution,
+}: {
+  group: RunGroup
+  selectedExecutionId: string | null
+  onSelectExecution: (e: ExecutionDto) => void
+}) {
+  const [collapsed, setCollapsed] = useState(false)
+
+  const allCompleted = group.executions.every((e) => e.status === 'completed' || e.status === 'success')
+  const anyFailed = group.executions.some((e) => e.status === 'failed')
+  const anyRunning = group.executions.some((e) => e.status === 'running')
+  const groupStatus = anyRunning ? 'running' : anyFailed ? 'failed' : allCompleted ? 'completed' : 'running'
+
+  const totalPolicies = group.executions.reduce((sum, e) => sum + e.totalPolicies, 0)
+  const totalSuccess = group.executions.reduce((sum, e) => sum + e.successCount, 0)
+  const totalFailed = group.executions.reduce((sum, e) => sum + e.failureCount, 0)
+
+  return (
+    <div className="space-y-1">
+      <button
+        type="button"
+        onClick={() => setCollapsed((c) => !c)}
+        className={cn(
+          'cursor-pointer w-full text-left p-3 rounded-lg transition-all duration-150 border',
+          'bg-gray-50 dark:bg-zinc-800/50 hover:bg-gray-100 dark:hover:bg-zinc-800 border-gray-200 dark:border-zinc-800',
+        )}
+      >
+        <div className="flex items-center justify-between mb-1">
+          <div className="flex items-center gap-2">
+            <ChevronRight
+              className={cn(
+                'w-3.5 h-3.5 text-gray-500 dark:text-zinc-400 transition-transform',
+                !collapsed && 'rotate-90',
+              )}
+            />
+            <span className="font-medium text-gray-900 dark:text-zinc-100 text-sm truncate">
+              {group.launcherName}
+            </span>
+            <span className="text-xs text-gray-500 dark:text-zinc-500">
+              ({group.executions.length} steps)
+            </span>
+          </div>
+          <span
+            className={cn(
+              'px-2 py-0.5 text-xs font-medium rounded-full flex items-center gap-1',
+              STATUS_COLORS[groupStatus] ?? STATUS_COLORS.cancelled,
+            )}
+          >
+            <StatusIcon status={groupStatus} />
+            {groupStatus}
+          </span>
+        </div>
+        <div className="flex items-center gap-3 text-xs text-gray-500 dark:text-zinc-500 pl-5.5">
+          <span>{totalPolicies} policies</span>
+          {totalFailed > 0 && (
+            <span className="text-red-500 flex items-center gap-0.5">
+              <X className="w-3 h-3" />
+              {totalFailed}
+            </span>
+          )}
+          {totalSuccess > 0 && (
+            <span className="text-emerald-500 flex items-center gap-0.5">
+              <Check className="w-3 h-3" />
+              {totalSuccess}
+            </span>
+          )}
+        </div>
+      </button>
+      {!collapsed && (
+        <div className="pl-4 space-y-1">
+          {group.executions.map((exec) => (
+            <ExecutionListItem
+              key={exec.id}
+              execution={exec}
+              isSelected={selectedExecutionId === exec.id}
+              onClick={() => onSelectExecution(exec)}
+              compact
+            />
+          ))}
+        </div>
+      )}
+    </div>
   )
 }
 
@@ -518,6 +620,55 @@ function HistoryPage() {
     return executions.filter((e) => e.status === activeTab)
   }, [executions, activeTab])
 
+  // Group executions: standalone items + RunGroup items
+  const groupedItems = useMemo(() => {
+    const items: Array<{ type: 'single'; execution: ExecutionDto } | { type: 'group'; group: RunGroup }> = []
+    const runMap = new Map<string, ExecutionDto[]>()
+
+    for (const exec of filteredExecutions) {
+      if (exec.runId) {
+        const arr = runMap.get(exec.runId) ?? []
+        arr.push(exec)
+        runMap.set(exec.runId, arr)
+      } else {
+        items.push({ type: 'single', execution: exec })
+      }
+    }
+
+    // Insert run groups at the position of their first execution
+    const runGroupPositions = new Map<string, number>()
+    for (let i = 0; i < filteredExecutions.length; i++) {
+      const runId = filteredExecutions[i].runId
+      if (runId && !runGroupPositions.has(runId)) {
+        runGroupPositions.set(runId, i)
+      }
+    }
+
+    // Rebuild items in correct order
+    const orderedItems: typeof items = []
+    const processedRunIds = new Set<string>()
+    for (const exec of filteredExecutions) {
+      if (exec.runId) {
+        if (!processedRunIds.has(exec.runId)) {
+          processedRunIds.add(exec.runId)
+          const groupExecs = runMap.get(exec.runId)!
+          orderedItems.push({
+            type: 'group',
+            group: {
+              runId: exec.runId,
+              launcherName: exec.launcherName ?? 'AutoLauncher Run',
+              executions: groupExecs,
+            },
+          })
+        }
+      } else {
+        orderedItems.push({ type: 'single', execution: exec })
+      }
+    }
+
+    return orderedItems
+  }, [filteredExecutions])
+
   const handleSelectExecution = (execution: ExecutionDto) => {
     setSelectedExecution(execution)
     setSelectedPolicy(null)
@@ -562,14 +713,23 @@ function HistoryPage() {
             />
           )}
 
-          {filteredExecutions.map((exec) => (
-            <ExecutionListItem
-              key={exec.id}
-              execution={exec}
-              isSelected={selectedExecution?.id === exec.id}
-              onClick={() => handleSelectExecution(exec)}
-            />
-          ))}
+          {groupedItems.map((item) =>
+            item.type === 'group' ? (
+              <RunGroupRow
+                key={item.group.runId}
+                group={item.group}
+                selectedExecutionId={selectedExecution?.id ?? null}
+                onSelectExecution={handleSelectExecution}
+              />
+            ) : (
+              <ExecutionListItem
+                key={item.execution.id}
+                execution={item.execution}
+                isSelected={selectedExecution?.id === item.execution.id}
+                onClick={() => handleSelectExecution(item.execution)}
+              />
+            ),
+          )}
         </div>
       </div>
 
