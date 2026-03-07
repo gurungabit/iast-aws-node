@@ -119,6 +119,9 @@ function attachLocal(
         if (totalBuffered >= DB_FLUSH_SIZE) {
           flushDbBuffer()
         }
+
+        // persistOnly batches: DB only, don't forward items to browser
+        if (msg.persistOnly) return
       }
       if (msg.type === 'ast.complete') {
         // Flush remaining items before completion

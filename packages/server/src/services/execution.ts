@@ -3,6 +3,14 @@ import { db } from '../db/index.js'
 import { executions, policyResults } from '../db/schema/index.js'
 import type { ASTItemResult, ASTStatus } from '@iast/shared'
 
+/** Strip \u0000 null bytes from JSONB data — PostgreSQL rejects them. */
+function stripNullChars(data: Record<string, unknown>): Record<string, unknown> {
+  const json = JSON.stringify(data)
+  // eslint-disable-next-line no-control-regex
+  const cleaned = json.replace(/\u0000/g, '')
+  return JSON.parse(cleaned)
+}
+
 export const executionService = {
   async create(data: {
     id: string
@@ -78,7 +86,7 @@ export const executionService = {
         status: item.status,
         durationMs: item.durationMs,
         error: item.error ?? null,
-        data: item.data ?? null,
+        data: item.data ? stripNullChars(item.data) : null,
       }))
 
       // Chunk to stay under PostgreSQL's 65,535 param limit (6 params/row → max ~10k rows)

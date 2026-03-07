@@ -78,10 +78,10 @@ export async function runRoutExtractorAST(
   const bulkItems = workItems.filter((w) => w.bulkResult)
   const hostItems = workItems.filter((w) => !w.bulkResult)
 
-  // Report bulk items immediately (no host session needed)
+  // Persist bulk items to DB only (no need to send to browser individually)
   if (bulkItems.length > 0) {
     reporter.reportProgress(0, workItems.length, `Storing ${bulkItems.length} pre-computed records...`)
-    reporter.addItems(bulkItems.map((item) => ({
+    reporter.addItemsPersistOnly(bulkItems.map((item) => ({
       id: randomUUID(),
       policyNumber: item.id,
       status: 'success' as const,
