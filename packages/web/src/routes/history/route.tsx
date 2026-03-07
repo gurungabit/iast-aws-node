@@ -1,10 +1,11 @@
 import { createFileRoute } from '@tanstack/react-router'
 import { useState, useMemo, useEffect } from 'react'
 import { useQuery, useInfiniteQuery, useQueryClient } from '@tanstack/react-query'
-import { Check, X, Clock, Loader2, Pause, Ban, Circle, ChevronRight } from 'lucide-react'
+import { Check, X, Clock, Loader2, Pause, Play, Square, Ban, Circle, ChevronRight } from 'lucide-react'
 import { apiGet } from '../../services/api'
 import { cn, formatDuration } from '../../utils'
 import { useASTStore } from '../../stores/ast-store'
+import { useSessionStore } from '../../stores/session-store'
 import { DatePicker } from '../../components/ui/DatePicker'
 import { useExecutionStream } from '../../hooks/useExecutionStream'
 
@@ -138,6 +139,60 @@ function EmptyPanel({ message, subtitle }: { message: string; subtitle?: string 
       </svg>
       <p className="text-sm">{message}</p>
       {subtitle && <p className="text-xs mt-1">{subtitle}</p>}
+    </div>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// ASTControls (pause/resume/stop for running/paused executions)
+// ---------------------------------------------------------------------------
+
+function ASTControls({ sessionId, status }: { sessionId: string; status: string }) {
+  // Prefer live AST store status (reflects pause/resume in real-time)
+  const liveStatus = useASTStore((s) => s.tabs[sessionId]?.status ?? null)
+  const effectiveStatus = liveStatus ?? status
+  const isPaused = effectiveStatus === 'paused'
+  const isActive = effectiveStatus === 'running' || effectiveStatus === 'paused'
+
+  if (!isActive) return null
+
+  const sendControl = (action: 'pause' | 'resume' | 'cancel') => {
+    const tab = useSessionStore.getState().tabs.get(sessionId)
+    tab?.ws?.send({ type: 'ast.control', action })
+  }
+
+  return (
+    <div className="flex items-center gap-1.5">
+      {isPaused ? (
+        <button
+          type="button"
+          onClick={() => sendControl('resume')}
+          className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded border cursor-pointer transition-colors
+            bg-emerald-600 text-white border-emerald-600 hover:bg-emerald-700"
+        >
+          <Play className="w-3.5 h-3.5" fill="currentColor" />
+          Resume
+        </button>
+      ) : (
+        <button
+          type="button"
+          onClick={() => sendControl('pause')}
+          className="flex items-center gap-1.5 px-3 py-1.5 text-xs rounded border cursor-pointer transition-colors
+            bg-yellow-600 text-white border-yellow-600 hover:bg-yellow-700"
+        >
+          <Pause className="w-3.5 h-3.5" />
+          Pause
+        </button>
+      )}
+      <button
+        type="button"
+        onClick={() => sendControl('cancel')}
+        className="flex items-center gap-1.5 px-3 py-1.5 text-xs rounded border cursor-pointer transition-colors
+          bg-red-600 text-white border-red-600 hover:bg-red-700"
+      >
+        <Square className="w-3 h-3" fill="currentColor" />
+        Stop
+      </button>
     </div>
   )
 }
@@ -438,15 +493,18 @@ function PoliciesList({
               {new Date(execution.startedAt).toLocaleString()}
             </p>
           </div>
-          <span
-            className={cn(
-              'px-2.5 py-1 text-xs font-medium rounded-full flex items-center gap-1.5',
-              STATUS_COLORS[execution.status] ?? STATUS_COLORS.cancelled,
-            )}
-          >
-            <StatusIcon status={execution.status} />
-            {execution.status}
-          </span>
+          <div className="flex items-center gap-2">
+            <ASTControls sessionId={execution.sessionId} status={execution.status} />
+            <span
+              className={cn(
+                'px-2.5 py-1 text-xs font-medium rounded-full flex items-center gap-1.5',
+                STATUS_COLORS[execution.status] ?? STATUS_COLORS.cancelled,
+              )}
+            >
+              <StatusIcon status={execution.status} />
+              {execution.status}
+            </span>
+          </div>
         </div>
 
         {/* Stats */}
