@@ -657,11 +657,9 @@ function HistoryPage() {
     selectedExecution?.sessionId ?? null,
     isSelectedRunning,
   )
-  const hasLiveStream = stream !== null
-
   const PAGE_SIZE = 100
 
-  // Fetch from DB with pagination (live data comes via WS when available)
+  // Fetch from DB with pagination
   const {
     data: policyPages,
     isLoading: isLoadingPolicies,
@@ -678,16 +676,7 @@ function HistoryPage() {
     getNextPageParam: (lastPage, allPages) =>
       lastPage.length < PAGE_SIZE ? undefined : allPages.length * PAGE_SIZE,
     enabled: !!selectedExecution,
-    refetchInterval: isSelectedRunning && !hasLiveStream ? 3000 : false,
   })
-
-  // Auto-load next pages for running executions using polling fallback
-  const autoLoadNextPage = hasNextPage && !isFetchingNextPage && isSelectedRunning && !hasLiveStream
-  useEffect(() => {
-    if (autoLoadNextPage) {
-      void fetchNextPage()
-    }
-  }, [autoLoadNextPage, fetchNextPage])
 
   const dbPolicies = useMemo(
     () => policyPages?.pages.flat() ?? [],
