@@ -13,6 +13,7 @@ import {
 import { Modal } from '../../components/ui/Modal'
 import { Button } from '../../components/ui/Button'
 import { DatePicker } from '../../components/ui/DatePicker'
+import { Select } from '../../components/ui/Select'
 import { apiPost } from '../../services/api'
 import { cn } from '../../utils'
 
@@ -188,9 +189,6 @@ function exportCsv(rows: ServerRow[]): void {
 
 const inputCls =
   'w-full px-2 py-1.5 text-sm rounded-md border border-gray-300 dark:border-zinc-600 bg-white dark:bg-zinc-800 text-gray-900 dark:text-zinc-100 placeholder-gray-400 dark:placeholder-zinc-500 focus:outline-none focus:ring-2 focus:ring-blue-500/40'
-
-const selectCls =
-  'w-full px-2 py-1.5 text-sm rounded-md border border-gray-300 dark:border-zinc-600 bg-white dark:bg-zinc-800 text-gray-900 dark:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-blue-500/40 cursor-pointer'
 
 const labelCls = 'block text-[11px] font-medium text-gray-500 dark:text-zinc-400 mb-0.5'
 
@@ -398,18 +396,13 @@ export function DataInquiryModal({ isOpen, onClose }: DataInquiryModalProps): Re
     return (
       <div>
         <label className={labelCls}>{label}</label>
-        <select
+        <Select
+          options={options}
           value={filters[key]}
-          onChange={(e) => setFilter(key, e.target.value)}
-          className={selectCls}
-        >
-          <option value="">All</option>
-          {options.map((o) => (
-            <option key={o.value} value={o.value}>
-              {o.label}
-            </option>
-          ))}
-        </select>
+          onChange={(v) => setFilter(key, v)}
+          placeholder="All"
+          size="sm"
+        />
       </div>
     )
   }
@@ -464,7 +457,7 @@ export function DataInquiryModal({ isOpen, onClose }: DataInquiryModalProps): Re
   )
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} title="Data Inquiry" size="full" footer={footer}>
+    <Modal isOpen={isOpen} onClose={onClose} title="Data Inquiry" size="full" compact footer={footer}>
       <div className="space-y-4">
         {/* Filter grid */}
         <div className="grid grid-cols-4 gap-x-3 gap-y-2">
@@ -555,7 +548,7 @@ export function DataInquiryModal({ isOpen, onClose }: DataInquiryModalProps): Re
           </p>
         )}
 
-        {/* Results table */}
+        {/* Results table + pagination */}
         {hasSearched && rows.length > 0 && (
           <div className="border border-gray-200 dark:border-zinc-700 rounded-lg overflow-hidden">
             <div className="overflow-scroll max-h-[45vh] scrollbar-visible">
@@ -610,9 +603,9 @@ export function DataInquiryModal({ isOpen, onClose }: DataInquiryModalProps): Re
           </div>
         )}
 
-        {/* Pagination */}
+        {/* Pagination — directly under table, no gap */}
         {hasSearched && total > 0 && (
-          <div className="sticky bottom-0 flex items-center justify-between gap-4 pt-3 pb-3 bg-white dark:bg-zinc-900 border-t border-gray-100 dark:border-zinc-800 -mx-6 px-6 -mb-6">
+          <div className="sticky bottom-0 flex items-center justify-between gap-4 pt-2 pb-3 bg-white dark:bg-zinc-900 -mx-4 px-4 -mb-3 -mt-2">
             <div className="flex items-center gap-2">
               <span className="text-xs text-gray-500 dark:text-zinc-400">Per page:</span>
               {PAGE_SIZE_OPTIONS.map((size) => (
