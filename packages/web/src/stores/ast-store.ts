@@ -327,7 +327,6 @@ export const useASTStore = create<ASTStore>((set) => ({
             ...tab,
             status: keepRunning ? 'running' : result.status,
             runningAST: keepRunning ? tab.runningAST : null,
-            executionId: keepRunning ? tab.executionId : null,
             lastResult: keepRunning ? null : resultWithDuration,
             progress: keepRunning ? null : tab.progress,
             startedAt: keepRunning ? tab.startedAt : null,
