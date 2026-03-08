@@ -77,13 +77,31 @@ export async function runRoutExtractorAST(
   }
 
   // Separate bulk items (pre-computed) from items needing host interaction
-  const bulkItems = workItems.filter((w) => w.bulkResult)
-  const hostItems = workItems.filter((w) => !w.bulkResult)
+  const allBulkItems = workItems.filter((w) => w.bulkResult)
+  const allHostItems = workItems.filter((w) => !w.bulkResult)
+
+  // On resume, filter out already-completed items
+  const isResuming = ctx.completedPolicies.size > 0
+  const bulkItems = isResuming
+    ? allBulkItems.filter((w) => !ctx.completedPolicies.has(w.id))
+    : allBulkItems
+  const hostItems = isResuming
+    ? allHostItems.filter((w) => !ctx.completedPolicies.has(w.id))
+    : allHostItems
+  const resumeSkipped = workItems.length - bulkItems.length - hostItems.length
+
+  if (isResuming && resumeSkipped > 0) {
+    reporter.reportProgress(
+      0,
+      workItems.length,
+      `Resuming: skipped ${resumeSkipped} already-completed items`,
+    )
+  }
 
   // Persist bulk items to DB only (no need to send to browser individually)
   if (bulkItems.length > 0) {
     reporter.reportProgress(
-      0,
+      resumeSkipped,
       workItems.length,
       `Storing ${bulkItems.length} pre-computed records...`,
     )
@@ -101,7 +119,7 @@ export async function runRoutExtractorAST(
   // Report bulk storage complete
   if (bulkItems.length > 0) {
     reporter.reportProgress(
-      bulkItems.length,
+      resumeSkipped + bulkItems.length,
       workItems.length,
       `Stored ${bulkItems.length} records`,
     )
@@ -118,12 +136,13 @@ export async function runRoutExtractorAST(
   }
 
   // Authenticate for items needing host interaction
+  const processedBefore = resumeSkipped + bulkItems.length
   reporter.reportProgress(
-    bulkItems.length,
+    processedBefore,
     workItems.length,
     `PDQ enrichment: processing ${hostItems.length} items with blank PolicyType...`,
   )
-  reporter.reportProgress(bulkItems.length, workItems.length, 'Logging in...')
+  reporter.reportProgress(processedBefore, workItems.length, 'Logging in...')
 
   const auth = await session.authenticate({
     username,
@@ -146,7 +165,7 @@ export async function runRoutExtractorAST(
 
     const item = hostItems[i]
     const startTime = Date.now()
-    const itemIndex = bulkItems.length + i + 1
+    const itemIndex = processedBefore + i + 1
 
     reporter.reportProgress(itemIndex, workItems.length, `Processing ${item.id}`)
 

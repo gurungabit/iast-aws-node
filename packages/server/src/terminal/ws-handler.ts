@@ -46,8 +46,20 @@ function attachLocal(
     if (msg.type === 'ast.run') {
       const executionId = `exec_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
       const today = new Date().toISOString().slice(0, 10)
+      const params = (msg.params ?? {}) as Record<string, unknown>
+      const resumeExecutionId = typeof msg.resumeExecutionId === 'string' ? msg.resumeExecutionId : undefined
+
+      // Strip sensitive fields (password) before persisting params
+      const { password: _pw, ...persistableParams } = params
+
+      let completedPolicies: string[] | undefined
+
       try {
-        const params = (msg.params ?? {}) as Record<string, unknown>
+        // If resuming, load completed policies from the previous execution
+        if (resumeExecutionId) {
+          completedPolicies = await executionService.getCompletedPolicies(resumeExecutionId)
+        }
+
         await executionService.create({
           id: executionId,
           sessionId,
@@ -56,6 +68,8 @@ function attachLocal(
           configName: typeof params.configName === 'string' ? params.configName : undefined,
           hostUser: typeof params.username === 'string' ? params.username : undefined,
           executionDate: today,
+          params: persistableParams,
+          resumedFromId: resumeExecutionId,
         })
       } catch (err) {
         console.error(
@@ -63,7 +77,7 @@ function attachLocal(
           err instanceof Error ? err.message : String(err),
         )
       }
-      worker.postMessage({ ...msg, executionId })
+      worker.postMessage({ ...msg, executionId, completedPolicies })
     } else {
       worker.postMessage(msg)
     }

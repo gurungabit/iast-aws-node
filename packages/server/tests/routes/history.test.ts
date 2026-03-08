@@ -8,6 +8,7 @@ const { mockExecutionService } = vi.hoisted(() => ({
     updateStatus: vi.fn(),
     findById: vi.fn(),
     batchInsertPolicies: vi.fn(),
+    getCompletedPolicies: vi.fn(),
   },
 }))
 
@@ -67,6 +68,7 @@ describe('history routes', () => {
           successCount: 8,
           failureCount: 1,
           errorCount: 1,
+          resumedFromId: null,
         },
       ]
       mockExecutionService.findByUser.mockResolvedValueOnce(executions)
@@ -184,6 +186,159 @@ describe('history routes', () => {
       })
 
       expect(mockExecutionService.getPolicies).toHaveBeenCalledWith('exec-123', 'error', 5, 3)
+    })
+  })
+
+  describe('GET /history/:id/resume-info', () => {
+    it('returns resume info for a failed execution', async () => {
+      mockExecutionService.findById.mockResolvedValueOnce({
+        id: 'e1',
+        astName: 'login',
+        status: 'failed',
+        params: { username: 'user', policyNumbers: ['POL1'] },
+        successCount: 5,
+        totalPolicies: 10,
+      })
+
+      const response = await app.inject({
+        method: 'GET',
+        url: '/history/e1/resume-info',
+      })
+
+      expect(response.statusCode).toBe(200)
+      const body = response.json()
+      expect(body.canResume).toBe(true)
+      expect(body.astName).toBe('login')
+      expect(body.params).toEqual({ username: 'user', policyNumbers: ['POL1'] })
+      expect(body.completedCount).toBe(5)
+      expect(body.totalPolicies).toBe(10)
+      expect(body.status).toBe('failed')
+    })
+
+    it('returns canResume=true for cancelled status', async () => {
+      mockExecutionService.findById.mockResolvedValueOnce({
+        id: 'e2',
+        astName: 'bi-renew',
+        status: 'cancelled',
+        params: null,
+        successCount: 3,
+        totalPolicies: 8,
+      })
+
+      const response = await app.inject({
+        method: 'GET',
+        url: '/history/e2/resume-info',
+      })
+
+      expect(response.statusCode).toBe(200)
+      expect(response.json().canResume).toBe(true)
+    })
+
+    it('returns canResume=true for paused status', async () => {
+      mockExecutionService.findById.mockResolvedValueOnce({
+        id: 'e3',
+        astName: 'rout-extractor',
+        status: 'paused',
+        params: { sourceMode: 'rout' },
+        successCount: 1,
+        totalPolicies: 6,
+      })
+
+      const response = await app.inject({
+        method: 'GET',
+        url: '/history/e3/resume-info',
+      })
+
+      expect(response.statusCode).toBe(200)
+      expect(response.json().canResume).toBe(true)
+    })
+
+    it('returns canResume=false for completed status', async () => {
+      mockExecutionService.findById.mockResolvedValueOnce({
+        id: 'e4',
+        astName: 'login',
+        status: 'completed',
+        params: null,
+        successCount: 10,
+        totalPolicies: 10,
+      })
+
+      const response = await app.inject({
+        method: 'GET',
+        url: '/history/e4/resume-info',
+      })
+
+      expect(response.statusCode).toBe(200)
+      expect(response.json().canResume).toBe(false)
+    })
+
+    it('returns 404 when execution not found', async () => {
+      mockExecutionService.findById.mockResolvedValueOnce(null)
+
+      const response = await app.inject({
+        method: 'GET',
+        url: '/history/nonexistent/resume-info',
+      })
+
+      expect(response.statusCode).toBe(404)
+      expect(response.json()).toEqual({ error: 'Execution not found' })
+    })
+
+    it('returns null params when execution has no params', async () => {
+      mockExecutionService.findById.mockResolvedValueOnce({
+        id: 'e5',
+        astName: 'login',
+        status: 'failed',
+        params: undefined,
+        successCount: 0,
+        totalPolicies: 5,
+      })
+
+      const response = await app.inject({
+        method: 'GET',
+        url: '/history/e5/resume-info',
+      })
+
+      expect(response.statusCode).toBe(200)
+      expect(response.json().params).toBeNull()
+    })
+
+    it('returns canResume=true for running status', async () => {
+      mockExecutionService.findById.mockResolvedValueOnce({
+        id: 'e6',
+        astName: 'bi-renew',
+        status: 'running',
+        params: null,
+        successCount: 2,
+        totalPolicies: 5,
+      })
+
+      const response = await app.inject({
+        method: 'GET',
+        url: '/history/e6/resume-info',
+      })
+
+      expect(response.statusCode).toBe(200)
+      expect(response.json().canResume).toBe(true)
+    })
+
+    it('returns canResume=false for pending status', async () => {
+      mockExecutionService.findById.mockResolvedValueOnce({
+        id: 'e7',
+        astName: 'login',
+        status: 'pending',
+        params: null,
+        successCount: 0,
+        totalPolicies: 0,
+      })
+
+      const response = await app.inject({
+        method: 'GET',
+        url: '/history/e7/resume-info',
+      })
+
+      expect(response.statusCode).toBe(200)
+      expect(response.json().canResume).toBe(false)
     })
   })
 })

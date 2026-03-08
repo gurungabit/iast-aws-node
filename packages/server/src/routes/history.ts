@@ -34,6 +34,7 @@ export async function historyRoutes(app: FastifyInstance) {
               successCount: z.number(),
               failureCount: z.number(),
               errorCount: z.number(),
+              resumedFromId: z.string().nullable(),
             }),
           ),
         },
@@ -81,6 +82,46 @@ export async function historyRoutes(app: FastifyInstance) {
         request.query.limit,
         request.query.offset,
       )
+    },
+  )
+
+  // Get resume info for a past execution (params + completed count)
+  typed.get(
+    '/history/:id/resume-info',
+    {
+      schema: {
+        tags: ['History'],
+        params: z.object({ id: z.string() }),
+        response: {
+          200: z.object({
+            canResume: z.boolean(),
+            astName: z.string(),
+            params: z.unknown().nullable(),
+            completedCount: z.number(),
+            totalPolicies: z.number(),
+            status: z.string(),
+          }),
+          404: z.object({ error: z.string() }),
+        },
+      },
+    },
+    async (request, reply) => {
+      const execution = await executionService.findById(request.params.id)
+      if (!execution) {
+        return reply.status(404).send({ error: 'Execution not found' })
+      }
+
+      const resumableStatuses = new Set(['failed', 'cancelled', 'paused', 'running'])
+      const canResume = resumableStatuses.has(execution.status)
+
+      return {
+        canResume,
+        astName: execution.astName,
+        params: execution.params ?? null,
+        completedCount: execution.successCount,
+        totalPolicies: execution.totalPolicies,
+        status: execution.status,
+      }
     },
   )
 }

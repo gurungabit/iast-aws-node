@@ -81,6 +81,12 @@ interface ASTStore {
 
   // Execution
   executeAST: (tabId: string, astName: string, params?: Record<string, unknown>) => void
+  resumeAST: (
+    tabId: string,
+    astName: string,
+    resumeExecutionId: string,
+    params: Record<string, unknown>,
+  ) => void
   handleASTStatus: (
     tabId: string,
     info: {
@@ -208,6 +214,36 @@ export const useASTStore = create<ASTStore>((set) => ({
     if (sessionStore) {
       const tab = sessionStore.getState().tabs.get(tabId)
       tab?.ws?.send({ type: 'ast.run', astName, params })
+    }
+  },
+
+  resumeAST: (tabId, astName, resumeExecutionId, params) => {
+    set((state) => {
+      const tab = state.tabs[tabId]
+      if (!tab) return state
+      return {
+        tabs: {
+          ...state.tabs,
+          [tabId]: {
+            ...tab,
+            runningAST: astName,
+            status: 'running',
+            lastResult: null,
+            progress: null,
+            itemResults: [],
+            statusMessages: [`Resuming ${astName} from previous execution...`],
+            startedAt: Date.now(),
+          },
+        },
+      }
+    })
+
+    const sessionStore = (window as unknown as Record<string, unknown>).__sessionStoreRef as
+      | { getState: () => { tabs: Map<string, { ws?: { send: (msg: unknown) => void } }> } }
+      | undefined
+    if (sessionStore) {
+      const tab = sessionStore.getState().tabs.get(tabId)
+      tab?.ws?.send({ type: 'ast.run', astName, params, resumeExecutionId })
     }
   },
 

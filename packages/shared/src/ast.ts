@@ -64,4 +64,6 @@ export interface Execution {
   successCount: number
   failureCount: number
   errorCount: number
+  params?: Record<string, unknown>
+  resumedFromId?: string | null
 }

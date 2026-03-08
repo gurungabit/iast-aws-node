@@ -28,7 +28,7 @@ import type { ASTContext } from '@src/ast/executor.js'
 describe('executeAST', () => {
   const mockAti = new Ati()
   const mockReporter = {} as ProgressReporter
-  const mockCtx: ASTContext = { checkpoint: vi.fn() }
+  const mockCtx: ASTContext = { checkpoint: vi.fn(), completedPolicies: new Set() }
   const params = { foo: 'bar' }
 
   beforeEach(() => {

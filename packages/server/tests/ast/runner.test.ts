@@ -53,7 +53,10 @@ describe('runAST', () => {
       'login',
       { user: 'test' },
       expect.anything(), // reporter
-      expect.objectContaining({ checkpoint: expect.any(Function) }),
+      expect.objectContaining({
+        checkpoint: expect.any(Function),
+        completedPolicies: expect.any(Set),
+      }),
     )
   })
 
@@ -79,6 +82,70 @@ describe('runAST', () => {
     await runAST(mockAti, 'rout-extractor', {}, 'exe_003', mockPort)
 
     expect(mockReportComplete).toHaveBeenCalledWith('cancelled')
+  })
+
+  it('passes completedPolicies array as a Set to executeAST', async () => {
+    mockExecuteAST.mockResolvedValue(undefined)
+
+    await runAST(mockAti, 'login', { user: 'test' }, 'exe_010', mockPort, ['POL1', 'POL2'])
+
+    expect(mockExecuteAST).toHaveBeenCalledWith(
+      mockAti,
+      'login',
+      { user: 'test' },
+      expect.anything(),
+      expect.objectContaining({
+        completedPolicies: new Set(['POL1', 'POL2']),
+      }),
+    )
+  })
+
+  it('passes empty Set when no completedPolicies provided', async () => {
+    mockExecuteAST.mockResolvedValue(undefined)
+
+    await runAST(mockAti, 'bi-renew', {}, 'exe_011', mockPort)
+
+    expect(mockExecuteAST).toHaveBeenCalledWith(
+      mockAti,
+      'bi-renew',
+      {},
+      expect.anything(),
+      expect.objectContaining({
+        completedPolicies: new Set(),
+      }),
+    )
+  })
+
+  it('passes empty Set when completedPolicies is undefined', async () => {
+    mockExecuteAST.mockResolvedValue(undefined)
+
+    await runAST(mockAti, 'rout-extractor', {}, 'exe_012', mockPort, undefined)
+
+    expect(mockExecuteAST).toHaveBeenCalledWith(
+      mockAti,
+      'rout-extractor',
+      {},
+      expect.anything(),
+      expect.objectContaining({
+        completedPolicies: new Set(),
+      }),
+    )
+  })
+
+  it('passes empty Set when completedPolicies is empty array', async () => {
+    mockExecuteAST.mockResolvedValue(undefined)
+
+    await runAST(mockAti, 'login', {}, 'exe_013', mockPort, [])
+
+    expect(mockExecuteAST).toHaveBeenCalledWith(
+      mockAti,
+      'login',
+      {},
+      expect.anything(),
+      expect.objectContaining({
+        completedPolicies: new Set(),
+      }),
+    )
   })
 
   it('reports initial running status with the AST name', async () => {

@@ -13,6 +13,8 @@ export const executionService = {
     hostUser?: string
     runId?: string
     configName?: string
+    params?: Record<string, unknown>
+    resumedFromId?: string
   }) {
     const [execution] = await db.insert(executions).values(data).returning()
     return execution
@@ -61,6 +63,7 @@ export const executionService = {
         successCount: executions.successCount,
         failureCount: executions.failureCount,
         errorCount: executions.errorCount,
+        resumedFromId: executions.resumedFromId,
       })
       .from(executions)
       .leftJoin(autoLauncherRuns, eq(executions.runId, autoLauncherRuns.id))
@@ -135,6 +138,17 @@ export const executionService = {
         errorCount: sql`${executions.errorCount} + ${errorCount}`,
       })
       .where(eq(executions.id, executionId))
+  },
+
+  /** Get all successfully completed policy numbers for an execution (for resume) */
+  async getCompletedPolicies(executionId: string): Promise<string[]> {
+    const rows = await db
+      .select({ policyNumber: policyResults.policyNumber })
+      .from(policyResults)
+      .where(
+        and(eq(policyResults.executionId, executionId), eq(policyResults.status, 'success')),
+      )
+    return rows.map((r) => r.policyNumber)
   },
 
   async getPolicies(executionId: string, status?: string, limit = 100, offset = 0) {

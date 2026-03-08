@@ -176,7 +176,9 @@ port.on('message', async (msg: MainToWorkerMessage) => {
         if (!astRunner) {
           astRunner = await import('../ast/runner.js')
         }
-        astRunner.runAST(ati, msg.astName, msg.params, msg.executionId, port).catch((err) => {
+        astRunner
+          .runAST(ati, msg.astName, msg.params, msg.executionId, port, msg.completedPolicies)
+          .catch((err) => {
           send({ type: 'error', message: `AST crashed: ${err}` })
         })
         break

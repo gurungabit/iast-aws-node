@@ -50,6 +50,7 @@ describe('runLoginAST', () => {
 
     mockCtx = {
       checkpoint: vi.fn().mockResolvedValue(undefined),
+      completedPolicies: new Set(),
     }
   })
 
@@ -214,6 +215,115 @@ describe('runLoginAST', () => {
     expect(mockReporter.reportProgress).toHaveBeenCalledWith(1, 1, 'No policies to process')
     expect(mockCtx.checkpoint).not.toHaveBeenCalled()
     expect(mockSession.logoff).toHaveBeenCalled()
+  })
+
+  describe('resume: completedPolicies filtering', () => {
+    it('skips policies in completedPolicies', async () => {
+      mockCtx.completedPolicies = new Set(['ABC123456'])
+
+      const params = {
+        username: 'user',
+        password: 'pass',
+        policyNumbers: ['ABC123456', 'DEF789012'],
+      }
+
+      await runLoginAST(mockAti, params, mockReporter, mockCtx)
+
+      // Only DEF789012 should be processed
+      expect(mockReporter.addItem).toHaveBeenCalledTimes(1)
+      expect(mockReporter.addItem).toHaveBeenCalledWith(
+        expect.objectContaining({
+          policyNumber: 'DEF789012',
+          status: 'success',
+        }),
+      )
+    })
+
+    it('processes ALL policies when completedPolicies is empty (backward compat)', async () => {
+      // completedPolicies is empty Set by default
+      const params = {
+        username: 'user',
+        password: 'pass',
+        policyNumbers: ['ABC123456', 'DEF789012'],
+      }
+
+      await runLoginAST(mockAti, params, mockReporter, mockCtx)
+
+      expect(mockReporter.addItem).toHaveBeenCalledTimes(2)
+      expect(mockReporter.addItem).toHaveBeenCalledWith(
+        expect.objectContaining({ policyNumber: 'ABC123456', status: 'success' }),
+      )
+      expect(mockReporter.addItem).toHaveBeenCalledWith(
+        expect.objectContaining({ policyNumber: 'DEF789012', status: 'success' }),
+      )
+    })
+
+    it('reports resume skip message when completedPolicies is non-empty', async () => {
+      mockCtx.completedPolicies = new Set(['ABC123456'])
+
+      const params = {
+        username: 'user',
+        password: 'pass',
+        policyNumbers: ['ABC123456', 'DEF789012'],
+      }
+
+      await runLoginAST(mockAti, params, mockReporter, mockCtx)
+
+      expect(mockReporter.reportProgress).toHaveBeenCalledWith(
+        2,
+        2,
+        'Resuming: skipped 1 already-completed items',
+      )
+    })
+
+    it('does not report resume message when completedPolicies is empty', async () => {
+      const params = {
+        username: 'user',
+        password: 'pass',
+        policyNumbers: ['ABC123456'],
+      }
+
+      await runLoginAST(mockAti, params, mockReporter, mockCtx)
+
+      expect(mockReporter.reportProgress).not.toHaveBeenCalledWith(
+        expect.anything(),
+        expect.anything(),
+        expect.stringContaining('Resuming'),
+      )
+    })
+
+    it('skips multiple completed policies and processes the rest', async () => {
+      mockCtx.completedPolicies = new Set(['ABC123456', 'DEF789012'])
+
+      const params = {
+        username: 'user',
+        password: 'pass',
+        policyNumbers: ['ABC123456', 'DEF789012', 'GHI345678'],
+      }
+
+      await runLoginAST(mockAti, params, mockReporter, mockCtx)
+
+      // Only GHI345678 should be processed
+      expect(mockReporter.addItem).toHaveBeenCalledTimes(1)
+      expect(mockReporter.addItem).toHaveBeenCalledWith(
+        expect.objectContaining({ policyNumber: 'GHI345678', status: 'success' }),
+      )
+    })
+
+    it('still calls checkpoint for skipped policies', async () => {
+      mockCtx.completedPolicies = new Set(['ABC123456'])
+
+      const params = {
+        username: 'user',
+        password: 'pass',
+        policyNumbers: ['ABC123456', 'DEF789012'],
+      }
+
+      await runLoginAST(mockAti, params, mockReporter, mockCtx)
+
+      // checkpoint called for every policy in the loop (2 total)
+      expect(mockCtx.checkpoint).toHaveBeenCalledTimes(2)
+    })
   })
 
   it('uses items param as fallback for policyNumbers', async () => {
