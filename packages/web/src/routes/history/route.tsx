@@ -1,7 +1,7 @@
 import { createFileRoute } from '@tanstack/react-router'
 import { useState, useMemo, useEffect } from 'react'
 import { useQuery, useInfiniteQuery, useQueryClient } from '@tanstack/react-query'
-import { Check, X, Clock, Loader2, Pause, Play, Square, Ban, Circle, ChevronRight } from 'lucide-react'
+import { Check, X, Clock, Loader2, Pause, Play, Square, Ban, Circle, ChevronRight, RotateCcw } from 'lucide-react'
 import { apiGet } from '../../services/api'
 import { cn, formatDuration } from '../../utils'
 import { useASTStore } from '../../stores/ast-store'
@@ -36,6 +36,16 @@ interface ExecutionDto {
   successCount: number
   failureCount: number
   errorCount: number
+  resumedFromId: string | null
+}
+
+interface ResumeInfo {
+  canResume: boolean
+  astName: string
+  params: Record<string, unknown> | null
+  completedCount: number
+  totalPolicies: number
+  status: string
 }
 
 interface PolicyDto {
@@ -199,6 +209,115 @@ function ASTControls({ sessionId, executionId, status }: { sessionId: string; ex
 }
 
 // ---------------------------------------------------------------------------
+// ResumeButton (for failed/cancelled/paused executions)
+// ---------------------------------------------------------------------------
+
+function ResumeButton({ execution }: { execution: ExecutionDto }) {
+  const [loading, setLoading] = useState(false)
+  const [showPasswordPrompt, setShowPasswordPrompt] = useState(false)
+  const [password, setPassword] = useState('')
+  const activeTabId = useASTStore((s) => s.activeTabId)
+
+  const resumableStatuses = new Set(['failed', 'cancelled', 'paused'])
+  const isActive = useASTStore(
+    (s) => s.tabs[execution.sessionId]?.executionId === execution.id,
+  )
+
+  if (!resumableStatuses.has(execution.status) || isActive) return null
+
+  const handleResume = async () => {
+    if (!activeTabId) return
+    setLoading(true)
+    try {
+      const info = await apiGet<ResumeInfo>(`/history/${execution.id}/resume-info`)
+      if (!info.canResume) return
+
+      // Pre-fill params from previous execution, prompt for password
+      if (info.params) {
+        setShowPasswordPrompt(true)
+      }
+    } catch {
+      // ignore
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleConfirmResume = async () => {
+    if (!activeTabId || !password) return
+    setLoading(true)
+    try {
+      const info = await apiGet<ResumeInfo>(`/history/${execution.id}/resume-info`)
+      if (!info.canResume || !info.params) return
+
+      const params = { ...info.params, password }
+      useASTStore.getState().resumeAST(activeTabId, execution.astName, execution.id, params)
+      setShowPasswordPrompt(false)
+      setPassword('')
+    } catch {
+      // ignore
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  if (showPasswordPrompt) {
+    return (
+      <div className="flex items-center gap-1.5">
+        <input
+          type="password"
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+          placeholder="Host password"
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') void handleConfirmResume()
+          }}
+          className="px-2 py-1 text-xs rounded border border-gray-300 dark:border-zinc-600 bg-white dark:bg-zinc-800 text-gray-900 dark:text-zinc-100 w-32"
+        />
+        <button
+          type="button"
+          onClick={() => void handleConfirmResume()}
+          disabled={loading || !password}
+          className="flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium rounded border cursor-pointer transition-colors
+            bg-blue-600 text-white border-blue-600 hover:bg-blue-700 disabled:opacity-50"
+        >
+          {loading ? <Loader2 className="w-3 h-3 animate-spin" /> : <Play className="w-3 h-3" />}
+          Go
+        </button>
+        <button
+          type="button"
+          onClick={() => {
+            setShowPasswordPrompt(false)
+            setPassword('')
+          }}
+          className="px-2 py-1.5 text-xs rounded border cursor-pointer transition-colors
+            border-gray-300 dark:border-zinc-600 text-gray-600 dark:text-zinc-400 hover:bg-gray-100 dark:hover:bg-zinc-800"
+        >
+          Cancel
+        </button>
+      </div>
+    )
+  }
+
+  return (
+    <button
+      type="button"
+      onClick={() => void handleResume()}
+      disabled={loading}
+      className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded border cursor-pointer transition-colors
+        bg-blue-600 text-white border-blue-600 hover:bg-blue-700 disabled:opacity-50"
+    >
+      {loading ? (
+        <Loader2 className="w-3.5 h-3.5 animate-spin" />
+      ) : (
+        <RotateCcw className="w-3.5 h-3.5" />
+      )}
+      Resume
+    </button>
+  )
+}
+
+// ---------------------------------------------------------------------------
 // TabBar
 // ---------------------------------------------------------------------------
 
@@ -321,6 +440,12 @@ function ExecutionListItem({
           <span className="text-emerald-500 flex items-center gap-0.5">
             <Check className="w-3 h-3" />
             {execution.successCount}
+          </span>
+        )}
+        {execution.resumedFromId && (
+          <span className="text-blue-500 dark:text-blue-400 flex items-center gap-0.5">
+            <RotateCcw className="w-3 h-3" />
+            resumed
           </span>
         )}
       </div>
@@ -504,6 +629,7 @@ function PoliciesList({
           </div>
           <div className="flex items-center gap-2">
             <ASTControls sessionId={execution.sessionId} executionId={execution.id} status={execution.status} />
+            <ResumeButton execution={execution} />
             <span
               className={cn(
                 'px-2.5 py-1 text-xs font-medium rounded-full flex items-center gap-1.5',

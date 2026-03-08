@@ -7,6 +7,8 @@ import { runRoutExtractorAST } from './rout-extractor/index.js'
 
 export interface ASTContext {
   checkpoint: () => Promise<void>
+  /** Set of policy numbers already completed in a previous execution (for resume) */
+  completedPolicies: Set<string>
 }
 
 export async function executeAST(

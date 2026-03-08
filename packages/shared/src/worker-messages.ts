@@ -13,6 +13,7 @@ export type MainToWorkerMessage =
       astName: ASTName
       params: Record<string, unknown>
       executionId: string
+      completedPolicies?: string[]
     }
   | { type: 'ast.control'; action: 'pause' | 'resume' | 'cancel' }
 

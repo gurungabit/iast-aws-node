@@ -16,6 +16,7 @@ export async function runAST(
   params: Record<string, unknown>,
   executionId: string,
   port: MessagePort,
+  completedPolicies?: string[],
 ) {
   // Normalize: frontend sends underscores (rout_extractor), server uses hyphens (rout-extractor)
   const normalizedName = astName.replace(/_/g, '-') as ASTName
@@ -29,6 +30,8 @@ export async function runAST(
 
   reporter.reportStatus('running', normalizedName)
 
+  const completedSet = new Set(completedPolicies ?? [])
+
   try {
     await executeAST(ati, normalizedName, params, reporter, {
       checkpoint: async () => {
@@ -38,6 +41,7 @@ export async function runAST(
           if (cancelled) throw new Error('AST_CANCELLED')
         }
       },
+      completedPolicies: completedSet,
     })
     reporter.reportComplete('completed')
   } catch (err) {

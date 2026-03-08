@@ -17,7 +17,13 @@ export type MainToWorkerMessage =
   | { type: 'key'; key: string }
   | { type: 'data'; text: string }
   | { type: 'cursor'; row: number; col: number }
-  | { type: 'ast.run'; astName: ASTName; params: Record<string, unknown>; executionId: string }
+  | {
+      type: 'ast.run'
+      astName: ASTName
+      params: Record<string, unknown>
+      executionId: string
+      completedPolicies?: string[]
+    }
   | { type: 'ast.control'; action: 'pause' | 'resume' | 'cancel' }
   | { type: 'ast.getStatus' }
 

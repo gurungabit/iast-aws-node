@@ -307,11 +307,29 @@ export async function runBiRenewAST(
   }
 
   // -- Process items --
+  const isResuming = ctx.completedPolicies.size > 0
+  let skippedCount = 0
+
   for (let i = 0; i < processableItems.length; i++) {
     await ctx.checkpoint()
 
     const item = processableItems[i]
     const policyNumber = item.policy
+
+    // Skip already-completed policies on resume
+    if (ctx.completedPolicies.has(policyNumber)) {
+      skippedCount++
+      continue
+    }
+
+    if (isResuming && skippedCount > 0 && i === skippedCount) {
+      reporter.reportProgress(
+        i + 1,
+        processableItems.length,
+        `Resuming: skipped ${skippedCount} already-completed items`,
+      )
+    }
+
     const startTime = Date.now()
 
     reporter.reportProgress(i + 1, processableItems.length, `Processing ${policyNumber}`)

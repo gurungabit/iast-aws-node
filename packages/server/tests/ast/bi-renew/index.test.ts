@@ -59,6 +59,7 @@ function createMockReporter(): ProgressReporter {
 function createMockCtx(): ASTContext {
   return {
     checkpoint: vi.fn().mockResolvedValue(undefined),
+    completedPolicies: new Set(),
   }
 }
 
@@ -442,6 +443,131 @@ describe('runBiRenewAST', () => {
       expect(reporter.addItem).toHaveBeenCalledWith(
         expect.objectContaining({ policyNumber: 'PASS002', status: 'success' }),
       )
+    })
+  })
+
+  // ---- Resume: completedPolicies filtering ----
+
+  describe('resume: completedPolicies filtering', () => {
+    it('skips policies in completedPolicies', async () => {
+      ctx.completedPolicies = new Set(['POLIC01'])
+
+      await runBiRenewAST(
+        ati,
+        {
+          username: 'user',
+          password: 'pass',
+          policyNumbers: ['POLIC01', 'POLIC02'],
+        },
+        reporter,
+        ctx,
+      )
+
+      // Only POLIC02 should be processed (POLIC01 skipped)
+      expect(reporter.addItem).toHaveBeenCalledTimes(1)
+      expect(reporter.addItem).toHaveBeenCalledWith(
+        expect.objectContaining({ policyNumber: 'POLIC02', status: 'success' }),
+      )
+    })
+
+    it('processes ALL policies when completedPolicies is empty (backward compat)', async () => {
+      // completedPolicies is empty Set by default
+      await runBiRenewAST(
+        ati,
+        {
+          username: 'user',
+          password: 'pass',
+          policyNumbers: ['POLIC01', 'POLIC02'],
+        },
+        reporter,
+        ctx,
+      )
+
+      expect(reporter.addItem).toHaveBeenCalledTimes(2)
+      expect(reporter.addItem).toHaveBeenCalledWith(
+        expect.objectContaining({ policyNumber: 'POLIC01', status: 'success' }),
+      )
+      expect(reporter.addItem).toHaveBeenCalledWith(
+        expect.objectContaining({ policyNumber: 'POLIC02', status: 'success' }),
+      )
+    })
+
+    it('reports resume skip message when completedPolicies is non-empty', async () => {
+      ctx.completedPolicies = new Set(['POLIC01'])
+
+      await runBiRenewAST(
+        ati,
+        {
+          username: 'user',
+          password: 'pass',
+          policyNumbers: ['POLIC01', 'POLIC02'],
+        },
+        reporter,
+        ctx,
+      )
+
+      expect(reporter.reportProgress).toHaveBeenCalledWith(
+        2,
+        2,
+        'Resuming: skipped 1 already-completed items',
+      )
+    })
+
+    it('does not report resume message when completedPolicies is empty', async () => {
+      await runBiRenewAST(
+        ati,
+        {
+          username: 'user',
+          password: 'pass',
+          policyNumbers: ['POLIC01'],
+        },
+        reporter,
+        ctx,
+      )
+
+      expect(reporter.reportProgress).not.toHaveBeenCalledWith(
+        expect.anything(),
+        expect.anything(),
+        expect.stringContaining('Resuming'),
+      )
+    })
+
+    it('skips multiple completed policies and processes the rest', async () => {
+      ctx.completedPolicies = new Set(['POLIC01', 'POLIC02'])
+
+      await runBiRenewAST(
+        ati,
+        {
+          username: 'user',
+          password: 'pass',
+          policyNumbers: ['POLIC01', 'POLIC02', 'POLIC03'],
+        },
+        reporter,
+        ctx,
+      )
+
+      expect(reporter.addItem).toHaveBeenCalledTimes(1)
+      expect(reporter.addItem).toHaveBeenCalledWith(
+        expect.objectContaining({ policyNumber: 'POLIC03', status: 'success' }),
+      )
+    })
+
+    it('still calls checkpoint for skipped policies', async () => {
+      ctx.completedPolicies = new Set(['POLIC01'])
+
+      await runBiRenewAST(
+        ati,
+        {
+          username: 'user',
+          password: 'pass',
+          policyNumbers: ['POLIC01', 'POLIC02'],
+        },
+        reporter,
+        ctx,
+      )
+
+      // checkpoint is called for every iteration (2 total)
+      expect(ctx.checkpoint).toHaveBeenCalledTimes(2)
     })
   })
 

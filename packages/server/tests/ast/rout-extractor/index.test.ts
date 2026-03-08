@@ -173,6 +173,7 @@ describe('runRoutExtractorAST', () => {
 
     mockCtx = {
       checkpoint: vi.fn().mockResolvedValue(undefined),
+      completedPolicies: new Set(),
     }
   })
 
@@ -571,6 +572,182 @@ describe('runRoutExtractorAST', () => {
           policyNumber: 'PDQ004',
           status: 'success',
         }),
+      )
+    })
+  })
+
+  describe('resume: completedPolicies filtering', () => {
+    it('skips bulk items that are in completedPolicies', async () => {
+      const items = [
+        makeRouteItem({ policyNumber: 'DONE01', needsPdqEnrichment: false }),
+        makeRouteItem({ policyNumber: 'TODO01', needsPdqEnrichment: false }),
+      ]
+      vi.mocked(parse412File).mockReturnValueOnce(items)
+
+      mockCtx.completedPolicies = new Set(['DONE01'])
+
+      const params = {
+        username: 'user',
+        password: 'pass',
+        sourceMode: '412',
+        file412Content: Buffer.from('content').toString('base64'),
+      }
+
+      await runRoutExtractorAST(mockAti, params, mockReporter, mockCtx)
+
+      // Only TODO01 should be persisted (DONE01 is already completed)
+      expect(mockReporter.addItemsPersistOnly).toHaveBeenCalledWith(
+        expect.arrayContaining([
+          expect.objectContaining({ policyNumber: 'TODO01' }),
+        ]),
+      )
+      // The persisted array should have exactly 1 item, not 2
+      const persistCall = vi.mocked(mockReporter.addItemsPersistOnly).mock.calls[0][0]
+      expect(persistCall).toHaveLength(1)
+      expect(persistCall[0].policyNumber).toBe('TODO01')
+    })
+
+    it('skips host items that are in completedPolicies', async () => {
+      const items = [
+        makeRouteItem({ policyNumber: 'DONE_H', needsPdqEnrichment: true }),
+        makeRouteItem({ policyNumber: 'TODO_H', needsPdqEnrichment: true }),
+      ]
+      vi.mocked(parse412File).mockReturnValueOnce(items)
+      mockRoutScreen.lookupPdqType.mockResolvedValue(null)
+
+      mockCtx.completedPolicies = new Set(['DONE_H'])
+
+      const params = {
+        username: 'user',
+        password: 'pass',
+        sourceMode: '412',
+        file412Content: Buffer.from('content').toString('base64'),
+        updateRouteItems: true,
+      }
+
+      await runRoutExtractorAST(mockAti, params, mockReporter, mockCtx)
+
+      // Only TODO_H should be processed via host
+      expect(mockReporter.addItem).toHaveBeenCalledTimes(1)
+      expect(mockReporter.addItem).toHaveBeenCalledWith(
+        expect.objectContaining({ policyNumber: 'TODO_H' }),
+      )
+    })
+
+    it('reports resume skip message when completedPolicies is non-empty', async () => {
+      const items = [
+        makeRouteItem({ policyNumber: 'DONE1', needsPdqEnrichment: false }),
+        makeRouteItem({ policyNumber: 'TODO1', needsPdqEnrichment: false }),
+      ]
+      vi.mocked(parse412File).mockReturnValueOnce(items)
+
+      mockCtx.completedPolicies = new Set(['DONE1'])
+
+      const params = {
+        username: 'user',
+        password: 'pass',
+        sourceMode: '412',
+        file412Content: Buffer.from('content').toString('base64'),
+      }
+
+      await runRoutExtractorAST(mockAti, params, mockReporter, mockCtx)
+
+      expect(mockReporter.reportProgress).toHaveBeenCalledWith(
+        0,
+        2,
+        'Resuming: skipped 1 already-completed items',
+      )
+    })
+
+    it('processes ALL items when completedPolicies is empty (backward compat)', async () => {
+      const items = [
+        makeRouteItem({ policyNumber: 'A001', needsPdqEnrichment: false }),
+        makeRouteItem({ policyNumber: 'A002', needsPdqEnrichment: false }),
+      ]
+      vi.mocked(parse412File).mockReturnValueOnce(items)
+
+      // completedPolicies is empty Set by default in beforeEach
+
+      const params = {
+        username: 'user',
+        password: 'pass',
+        sourceMode: '412',
+        file412Content: Buffer.from('content').toString('base64'),
+      }
+
+      await runRoutExtractorAST(mockAti, params, mockReporter, mockCtx)
+
+      // Both items should be persisted
+      expect(mockReporter.addItemsPersistOnly).toHaveBeenCalledWith(
+        expect.arrayContaining([
+          expect.objectContaining({ policyNumber: 'A001' }),
+          expect.objectContaining({ policyNumber: 'A002' }),
+        ]),
+      )
+      // No resume message
+      expect(mockReporter.reportProgress).not.toHaveBeenCalledWith(
+        expect.anything(),
+        expect.anything(),
+        expect.stringContaining('Resuming'),
+      )
+    })
+
+    it('filters out mix of completed bulk and host items correctly', async () => {
+      const bulkDone = makeRouteItem({ policyNumber: 'BULK_D', needsPdqEnrichment: false })
+      const bulkTodo = makeRouteItem({ policyNumber: 'BULK_T', needsPdqEnrichment: false })
+      const hostDone = makeRouteItem({ policyNumber: 'HOST_D', needsPdqEnrichment: true })
+      const hostTodo = makeRouteItem({ policyNumber: 'HOST_T', needsPdqEnrichment: true })
+      vi.mocked(parse412File).mockReturnValueOnce([bulkDone, bulkTodo, hostDone, hostTodo])
+      mockRoutScreen.lookupPdqType.mockResolvedValue(null)
+
+      mockCtx.completedPolicies = new Set(['BULK_D', 'HOST_D'])
+
+      const params = {
+        username: 'user',
+        password: 'pass',
+        sourceMode: '412',
+        file412Content: Buffer.from('content').toString('base64'),
+        updateRouteItems: true,
+      }
+
+      await runRoutExtractorAST(mockAti, params, mockReporter, mockCtx)
+
+      // Only BULK_T persisted (not BULK_D)
+      const persistCall = vi.mocked(mockReporter.addItemsPersistOnly).mock.calls[0][0]
+      expect(persistCall).toHaveLength(1)
+      expect(persistCall[0].policyNumber).toBe('BULK_T')
+
+      // Only HOST_T processed via host (not HOST_D)
+      expect(mockReporter.addItem).toHaveBeenCalledTimes(1)
+      expect(mockReporter.addItem).toHaveBeenCalledWith(
+        expect.objectContaining({ policyNumber: 'HOST_T' }),
+      )
+
+      // Resume message should report 2 skipped
+      expect(mockReporter.reportProgress).toHaveBeenCalledWith(
+        0,
+        4,
+        'Resuming: skipped 2 already-completed items',
+      )
+    })
+
+    it('skips ROUT mode items that are in completedPolicies', async () => {
+      mockCtx.completedPolicies = new Set(['OCC1-ROUTED ITEMS'])
+
+      const params = {
+        username: 'user',
+        password: 'pass',
+        sourceMode: 'rout',
+      }
+
+      await runRoutExtractorAST(mockAti, params, mockReporter, mockCtx)
+
+      // Total work items: 3 OCCs x 2 sections = 6
+      // 1 skipped, 5 remaining host items
+      expect(mockReporter.reportProgress).toHaveBeenCalledWith(
+        0,
+        6,
+        'Resuming: skipped 1 already-completed items',
       )
     })
   })

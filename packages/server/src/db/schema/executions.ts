@@ -1,4 +1,4 @@
-import { index, integer, pgTable, text, timestamp, uuid } from 'drizzle-orm/pg-core'
+import { index, integer, jsonb, pgTable, text, timestamp, uuid } from 'drizzle-orm/pg-core'
 import { users } from './users.js'
 import { sessions } from './sessions.js'
 
@@ -24,6 +24,10 @@ export const executions = pgTable(
     successCount: integer('success_count').notNull().default(0),
     failureCount: integer('failure_count').notNull().default(0),
     errorCount: integer('error_count').notNull().default(0),
+    // Resume support: store the params used so we can replay on resume
+    params: jsonb('params'),
+    // If this execution was resumed from a previous one, link to it
+    resumedFromId: text('resumed_from_id'),
   },
   (t) => [
     index('executions_user_date_idx').on(t.userId, t.executionDate),

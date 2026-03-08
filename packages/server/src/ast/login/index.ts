@@ -43,10 +43,28 @@ export async function runLoginAST(
     reporter.reportProgress(1, 1, 'No policies to process')
   }
 
+  const isResuming = ctx.completedPolicies.size > 0
+  let skippedCount = 0
+
   for (let i = 0; i < policyNumbers.length; i++) {
     await ctx.checkpoint()
 
     const policyNumber = policyNumbers[i]
+
+    // Skip already-completed policies on resume
+    if (ctx.completedPolicies.has(policyNumber)) {
+      skippedCount++
+      continue
+    }
+
+    if (isResuming && skippedCount > 0 && i === skippedCount) {
+      reporter.reportProgress(
+        i + 1,
+        policyNumbers.length,
+        `Resuming: skipped ${skippedCount} already-completed items`,
+      )
+    }
+
     const startTime = Date.now()
 
     reporter.reportProgress(i + 1, policyNumbers.length, `Processing ${policyNumber}`)
